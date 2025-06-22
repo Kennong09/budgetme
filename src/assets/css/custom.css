@@ -1,0 +1,205 @@
+/* Custom styles for BudgetMe app */
+
+/* Ensure circular buttons are properly rounded */
+.btn-circle {
+  border-radius: 100% !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  padding: 0 !important;
+}
+
+.btn-circle.btn-sm {
+  width: 1.8rem !important;
+  height: 1.8rem !important;
+  font-size: 0.75rem !important;
+}
+
+.btn-circle.btn-lg {
+  width: 2.5rem !important;
+  height: 2.5rem !important;
+  font-size: 1.25rem !important;
+}
+
+/* Enhanced mobile card styles */
+.card-mobile {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0.15rem 0.5rem rgba(78, 115, 223, 0.1);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card-mobile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.25rem 0.75rem rgba(78, 115, 223, 0.18);
+}
+
+.card-mobile .card-header {
+  background-color: white;
+  border-bottom: 1px solid rgba(78, 115, 223, 0.1);
+  padding: 0.75rem 1.25rem;
+}
+
+/* Mobile action buttons */
+.mobile-action-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: #4e73df;
+  color: white;
+  box-shadow: 0 4px 8px rgba(78, 115, 223, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  transition: all 0.2s;
+}
+
+.mobile-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(78, 115, 223, 0.4);
+  background-color: #2e59d9;
+  color: white;
+}
+
+/* Mobile bottom navigation */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: white;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1020;
+    padding: 8px 0;
+    border-top: 1px solid rgba(78, 115, 223, 0.15);
+  }
+  
+  .mobile-nav-item {
+    flex: 1;
+    text-align: center;
+    padding: 6px 0;
+    color: #858796;
+    transition: all 0.2s;
+  }
+  
+  .mobile-nav-item.active {
+    color: #4e73df;
+  }
+  
+  .mobile-nav-item i {
+    display: block;
+    font-size: 1.25rem;
+    margin-bottom: 4px;
+  }
+  
+  .mobile-nav-item span {
+    font-size: 0.7rem;
+    display: block;
+  }
+  
+  /* Add padding to content to account for bottom nav */
+  .has-mobile-nav {
+    padding-bottom: 70px !important;
+  }
+}
+
+/* Enhanced inputs for mobile */
+@media (max-width: 576px) {
+  .form-control {
+    height: 44px;
+    font-size: 16px;  /* Prevents iOS zoom on focus */
+  }
+  
+  select.form-control {
+    height: 44px;
+    font-size: 16px;
+  }
+  
+  .btn {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  label {
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+}
+
+/* Collapsible mobile panels */
+.mobile-panel {
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  box-shadow: 0 0.15rem 0.5rem rgba(0, 0, 0, 0.1);
+}
+
+.mobile-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: white;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+}
+
+.mobile-panel-body {
+  padding: 1rem;
+  background-color: white;
+}
+
+.mobile-panel-body.collapsed {
+  display: none;
+}
+
+.mobile-panel-icon {
+  transition: transform 0.2s;
+}
+
+.mobile-panel-icon.rotated {
+  transform: rotate(180deg);
+}
+
+/* Enhanced touchable list items */
+.touchable-list-item {
+  padding: 12px 16px;
+  background-color: white;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.touchable-list-item:hover, 
+.touchable-list-item:active {
+  background-color: #f8f9fc;
+}
+
+.touchable-list-item i {
+  margin-right: 12px;
+  color: #4e73df;
+  font-size: 1.2rem;
+  width: 24px;
+  text-align: center;
+}
+
+/* Improved form group spacing */
+.form-group:last-child {
+  margin-bottom: 0;
+} 

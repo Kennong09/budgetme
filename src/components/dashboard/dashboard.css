@@ -1,0 +1,972 @@
+/* SB Admin Dashboard Custom Styles */
+
+/* Override font to match our app */
+.card-header,
+.card-body,
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/* Ensure our color palette is used */
+:root {
+  --primary: #6366f1;
+  --success: #1cc88a;
+  --info: #36b9cc;
+  --warning: #f6c23e;
+  --danger: #e74a3b;
+  --secondary: #858796;
+  --light: #f8f9fc;
+  --dark: #5a5c69;
+  --danger-color: #e74a3b;
+  --warning-color: #f6c23e;
+  --success-color: #1cc88a;
+  --primary-color: #4e73df;
+  --info-color: #36b9cc;
+}
+
+/* Background Colors */
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+}
+
+.bg-primary {
+  background-color: #6366f1 !important;
+}
+
+.btn-primary {
+  background-color: #6366f1;
+  border-color: #6366f1;
+}
+
+.btn-primary:hover {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+}
+
+.text-primary {
+  color: #6366f1 !important;
+}
+
+/* Enhanced Animation for Cards */
+.card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+  border-radius: 0.7rem;
+  border: none;
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.1);
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Borders for cards */
+.card.border-left-primary {
+  border-left: 0.25rem solid #6366f1 !important;
+}
+
+/* Animated Progress Bars */
+.progress {
+  height: 0.7rem;
+  border-radius: 0.5rem;
+}
+
+.progress .progress-bar {
+  transition: width 1s ease-in-out;
+  border-radius: 0.5rem;
+}
+
+/* Mobile sidebar styles */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 85% !important;
+    position: fixed !important;
+    z-index: 1050 !important;
+    height: 100vh !important;
+    top: 0 !important;
+    left: 0 !important;
+  }
+  
+  .mobile-hidden {
+    display: block !important; /* Override any display:none */
+  }
+  
+  /* Make sure the hamburger button is visible and prominent */
+  #sidebarToggleTop {
+    color: var(--primary) !important;
+    background-color: white !important;
+    display: block !important;
+    font-size: 1.25rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+    z-index: 1060 !important;
+    border-radius: 50% !important;
+    margin-right: 1rem !important;
+    position: relative !important;
+  }
+  
+  /* Add padding to account for mobile nav */
+  .has-mobile-nav {
+    padding-bottom: 70px !important;
+  }
+}
+
+/* Button hover effects */
+.btn-primary:hover,
+.btn-success:hover,
+.btn-info:hover,
+.btn-warning:hover,
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Button link styling */
+.btn-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.nav-link.btn-link {
+  padding: 0.5rem 1rem;
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.dropdown-toggle.btn-link {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+}
+
+.collapse-item.btn-link {
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  color: #3a3b45;
+  white-space: nowrap;
+  border-radius: 0;
+}
+
+.collapse-item.btn-link:hover {
+  background-color: #eaecf4;
+  text-decoration: none;
+}
+
+/* Card border glow effects on hover */
+.card.border-left-primary:hover {
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.5);
+}
+
+.card.border-left-success:hover {
+  box-shadow: 0 0 15px rgba(28, 200, 138, 0.5);
+}
+
+.card.border-left-info:hover {
+  box-shadow: 0 0 15px rgba(54, 185, 204, 0.5);
+}
+
+.card.border-left-warning:hover {
+  box-shadow: 0 0 15px rgba(246, 194, 62, 0.5);
+}
+
+.card.border-left-danger:hover {
+  box-shadow: 0 0 15px rgba(231, 74, 59, 0.5);
+}
+
+/* Animated Icons */
+.fa-2x {
+  transition: all 0.3s ease;
+}
+
+.card:hover .fa-2x {
+  transform: scale(1.2);
+}
+
+/* Ensure buttons have pointer cursor */
+.btn,
+a {
+  cursor: pointer;
+}
+
+/* Custom button circle style */
+.btn-circle {
+  border-radius: 100%;
+  height: 2.5rem;
+  width: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-circle.btn-sm {
+  height: 1.8rem;
+  width: 1.8rem;
+}
+
+/* Table hover animation */
+.table-bordered tr {
+  transition: all 0.2s ease;
+}
+
+.table-bordered tr:hover {
+  background-color: rgba(99, 102, 241, 0.05);
+  transform: translateX(5px);
+}
+
+/* Custom scrollbar for tables */
+.table-responsive::-webkit-scrollbar,
+.card-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track,
+.card-body::-webkit-scrollbar-track {
+  background-color: #f8f9fc;
+  border-radius: 10px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb,
+.card-body::-webkit-scrollbar-thumb {
+  background-color: #6366f1;
+  border-radius: 10px;
+}
+
+/* Goal card styling */
+.goal-card {
+  border-radius: 0.7rem;
+  padding: 1rem;
+  border-left: 4px solid #6366f1;
+  background-color: #fff;
+  transition: all 0.3s ease;
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+}
+
+.goal-card:hover {
+  transform: translateX(5px);
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.25);
+}
+
+/* Animation delays for smoother appearance */
+.animate__fadeInUp:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.animate__fadeInUp:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.animate__fadeInUp:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.animate__fadeInUp:nth-child(4) {
+  animation-delay: 0.4s;
+}
+
+/* Pulse animation for new items */
+@keyframes pulse-border {
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+  }
+}
+
+.pulse-border {
+  animation: pulse-border 2s infinite;
+}
+
+/* Badge styling */
+.badge {
+  padding: 0.25em 0.5em;
+  font-weight: 600;
+  border-radius: 0.35rem;
+}
+
+/* Custom dropdown styling */
+.dropdown-menu {
+  animation: fadeInUp 0.2s ease;
+  border-radius: 0.5rem;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Notification badge pulse animation */
+@keyframes pulse-animation {
+  0% {
+    box-shadow: 0 0 0 0 rgba(231, 74, 59, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(231, 74, 59, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 74, 59, 0);
+  }
+}
+
+.pulse-animation {
+  animation: pulse-animation 1.5s infinite;
+  border-radius: 50%;
+  padding: 0.4rem 0.6rem;
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform: translate(25%, -25%);
+}
+
+/* Dropdown user item styling */
+.dropdown-item-user {
+  background-color: rgba(99, 102, 241, 0.05);
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.dropdown-item-user:hover {
+  background-color: rgba(99, 102, 241, 0.1);
+}
+
+/* Modern welcome message */
+.welcome-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+}
+
+/* Search input styling */
+.navbar-search .form-control {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.navbar-search .btn-primary {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  margin-left: 0 !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+/* Enhanced chart styling */
+.chart-container {
+  min-height: 300px;
+}
+
+.pie-chart-container {
+  position: relative;
+  min-height: 350px;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin: 0.25rem 0.5rem;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  margin-right: 0.5rem;
+}
+
+/* Transaction styles */
+.transaction-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.5rem;
+  background-color: #fff;
+  transition: background-color 0.2s;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.transaction-item:hover {
+  background-color: #f8f9fc;
+  text-decoration: none;
+  color: inherit;
+}
+
+.transaction-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+.transaction-icon.income {
+  background-color: rgba(28, 200, 138, 0.2);
+  color: #1cc88a;
+}
+
+.transaction-icon.expense {
+  background-color: rgba(231, 74, 59, 0.2);
+  color: #e74a3b;
+}
+
+.transaction-details {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.transaction-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-category {
+  font-size: 0.75rem;
+  color: #858796;
+}
+
+.transaction-amount {
+  font-weight: 700;
+  margin: 0 1rem;
+  flex-shrink: 0;
+}
+
+.transaction-amount.income {
+  color: #1cc88a;
+}
+
+.transaction-amount.expense {
+  color: #e74a3b;
+}
+
+.transaction-date {
+  font-size: 0.75rem;
+  color: #858796;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* Budget progress styles */
+.progress-container {
+  margin-top: 0.5rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background-color: #eaecf4;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s ease-in-out;
+}
+
+.progress.success {
+  background-color: #1cc88a;
+}
+
+.progress.warning {
+  background-color: #f6c23e;
+}
+
+.progress.danger {
+  background-color: #e74a3b;
+}
+
+/* Colors for text */
+.text-success-color {
+  color: #1cc88a;
+}
+
+.text-warning-color {
+  color: #f6c23e;
+}
+
+.text-danger-color {
+  color: #e74a3b;
+}
+
+.text-text-muted {
+  color: #858796;
+}
+
+/* Tooltip styles */
+.cursor-pointer {
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.cursor-pointer:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.position-relative {
+  position: relative !important;
+}
+
+.tip-box {
+  position: absolute;
+  z-index: 999;
+  background-color: rgba(0, 0, 0, 0.9);
+  color: white;
+  padding: 12px 15px;
+  border-radius: 6px;
+  max-width: 300px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  pointer-events: none;
+  animation: fadeIn 0.2s;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  margin-top: 10px;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tip-box::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 0 8px 8px 8px;
+  border-style: solid;
+  border-color: transparent transparent rgba(0, 0, 0, 0.9) transparent;
+}
+
+.tip-box.light {
+  background-color: white;
+  color: #333;
+  border: 1px solid #e0e0e0;
+}
+
+.tip-box.light::before {
+  border-color: transparent transparent white transparent;
+}
+
+.tip-box p {
+  margin: 0;
+  padding: 0;
+  font-weight: normal;
+}
+
+.tip-box .tip-title {
+  font-weight: bold;
+  margin-bottom: 5px;
+  font-size: 0.85rem;
+}
+
+.tip-box .tip-description {
+  opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+  .tip-box {
+    max-width: 250px;
+    font-size: 0.75rem;
+  }
+}
+
+/* Insights */
+.insight-card {
+  border-radius: 0.5rem;
+  transition: all 0.3s;
+}
+
+.insight-card:hover {
+  transform: translateY(-5px);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .card {
+    margin-bottom: 1rem;
+  }
+  
+  .transaction-date {
+    display: none;
+  }
+}
+
+/* Additional styles for enhanced insights */
+.insight-card .card-body {
+  position: relative;
+  overflow: hidden;
+}
+
+.insight-card .card-body::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 80px;
+  height: 80px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  z-index: 0;
+}
+
+.insight-card.border-left-success::before {
+  background-color: rgba(28, 200, 138, 0.05);
+}
+
+.insight-card.border-left-warning::before {
+  background-color: rgba(246, 194, 62, 0.05);
+}
+
+.insight-card.border-left-danger::before {
+  background-color: rgba(231, 74, 59, 0.05);
+}
+
+.insight-card.border-left-info::before {
+  background-color: rgba(54, 185, 204, 0.05);
+}
+
+.insight-action {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: #4e73df;
+  transition: all 0.2s;
+}
+
+.insight-action:hover {
+  text-decoration: underline;
+}
+
+/* Animation for new insights */
+@keyframes pulseHighlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(78, 115, 223, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(78, 115, 223, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(78, 115, 223, 0);
+  }
+}
+
+.insights-container {
+  gap: 1rem;
+}
+
+.new-insight {
+  animation: pulseHighlight 2s ease-in-out;
+}
+
+/* Ensure insight cards have equal height */
+.insight-card {
+  height: 100%;
+  transition: all 0.3s ease;
+}
+
+/* Make sure expanded content doesn't break the layout */
+.insight-card .card-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Ensure consistent spacing */
+.insight-card .row {
+  flex: 1;
+}
+
+/* Add spacing between cards */
+.insight-card {
+  margin-right: 10px;
+  margin-left: 10px;
+}
+
+/* Custom status colors */
+.text-danger-color {
+  color: var(--danger-color) !important;
+}
+
+.text-warning-color {
+  color: var(--warning-color) !important;
+}
+
+.text-success-color {
+  color: var(--success-color) !important;
+}
+
+.text-primary-color {
+  color: var(--primary-color) !important;
+}
+
+.text-primary-landing {
+  color: var(--primary) !important;
+}
+
+.text-info-color {
+  color: var(--info-color) !important;
+}
+
+.border-warning-color {
+  border-color: var(--warning-color) !important;
+}
+
+.border-danger-color {
+  border-color: var(--danger-color) !important;
+}
+
+/* Transaction item styles for large transactions */
+.transaction-item.border-warning-color {
+  background-color: rgba(246, 194, 62, 0.05);
+}
+
+.transaction-item.border-danger-color {
+  background-color: rgba(231, 74, 59, 0.05);
+}
+
+/* Financial Insights section */
+.insight-card {
+  border-left-width: 0.25rem;
+  transition: transform 0.2s ease;
+}
+
+.insight-card:hover {
+  transform: translateY(-3px);
+}
+
+.insight-card.success {
+  border-left-color: var(--success-color);
+}
+
+.insight-card.warning {
+  border-left-color: var(--warning-color);
+}
+
+.insight-card.danger {
+  border-left-color: var(--danger-color);
+}
+
+.insight-card.info {
+  border-left-color: var(--info-color);
+}
+
+/* Monthly Spending Trends */
+.trend-card {
+  transition: transform 0.2s ease;
+}
+
+.trend-card:hover {
+  transform: translateY(-3px);
+}
+
+/* Budget progress styles - updates */
+.progress.danger {
+  background-color: var(--danger-color);
+}
+
+.progress.warning {
+  background-color: var(--warning-color);
+}
+
+.progress.success {
+  background-color: var(--success-color);
+}
+
+/* Tooltip styles */
+.tip-box {
+  position: absolute;
+  z-index: 999;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 6px;
+  max-width: 250px;
+  font-size: 0.75rem;
+  pointer-events: none;
+  animation: fadeIn 0.2s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Custom cursor for clickable items */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Animate.css override for faster animations */
+.animate__animated.animate__fadeIn {
+  --animate-duration: 0.5s;
+}
+
+/* Card shadows */
+.shadow-sm {
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+
+.shadow-hover:hover {
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+  transition: box-shadow 0.3s ease;
+}
+
+/* Progress bar hover effects */
+.progress-bar div[role="progressbar"]:hover,
+.progress-bar .progress:hover {
+  cursor: pointer;
+  opacity: 0.9;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+/* Enhance default browser tooltip */
+[title] {
+  position: relative;
+  cursor: pointer;
+}
+
+/* Prevent default title from showing on firefox */
+[title]:before {
+  content: attr(title);
+  position: absolute;
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Create our custom tooltip */
+[title]:hover:after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 1000;
+  margin-bottom: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  animation: fadeIn 0.2s;
+}
+
+/* Add arrow for tooltip */
+[title]:hover:before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent transparent rgba(0, 0, 0, 0.8) transparent;
+  margin-bottom: -5px;
+  z-index: 1001;
+  pointer-events: none;
+}
+
+/* Progress tooltip styling */
+.progress {
+  position: relative;
+}
+
+.progress-tooltip {
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+}
+
+.progress-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px;
+  border-style: solid;
+  border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
+}
+
+.progress:hover .progress-tooltip {
+  opacity: 1;
+}

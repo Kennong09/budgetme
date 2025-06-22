@@ -1,0 +1,307 @@
+@keyframes fadeInDashanimate {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUpDashanimate {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes growBarDashanimate {
+  from { width: 0; }
+  to { width: var(--final-width); }
+}
+
+@keyframes drawChartDashanimate {
+  from { height: 0; }
+  to { height: var(--bar-height); }
+}
+
+@keyframes pulseDashanimate {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.dashboard-preview-dashanimate {
+  width: 100%;
+  height: 100%;
+  background-color: #f8f9fc;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+  font-family: 'Nunito', sans-serif;
+}
+
+.preview-header-dashanimate {
+  background-color: var(--primary);
+  color: white;
+  padding: 12px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.preview-title-dashanimate {
+  font-weight: 700;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-icon-dashanimate {
+  background-color: white;
+  color: var(--primary);
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.preview-content-dashanimate {
+  padding: 12px;
+}
+
+.summary-cards-dashanimate {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.summary-card-dashanimate {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.summary-card-dashanimate.income-dashanimate { border-left: 4px solid var(--primary); }
+.summary-card-dashanimate.expenses-dashanimate { border-left: 4px solid #e74a3b; }
+.summary-card-dashanimate.balance-dashanimate { border-left: 4px solid #36b9cc; }
+.summary-card-dashanimate.savings-dashanimate { border-left: 4px solid #1cc88a; }
+
+.card-title-dashanimate {
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #858796;
+  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+}
+
+.card-value-dashanimate {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5a5c69;
+}
+
+.card-icon-dashanimate {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: #dddfeb;
+  font-size: 20px;
+}
+
+.charts-row-dashanimate {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.chart-card-dashanimate {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.chart-header-dashanimate {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.chart-title-dashanimate {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.bar-chart-dashanimate {
+  height: 120px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  position: relative;
+  margin-top: 10px;
+}
+
+.bar-chart-dashanimate::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background-color: #eaecf4;
+}
+
+.chart-bar-container-dashanimate {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.chart-bar-wrapper-dashanimate {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  height: 100px;
+}
+
+.chart-bar-dashanimate {
+  width: 65%;
+  background: linear-gradient(to top, var(--primary), #6c7ce3);
+  border-radius: 3px 3px 0 0;
+}
+
+.chart-bar-dashanimate.expenses-dashanimate {
+  background: linear-gradient(to top, #e74a3b, #ea7262);
+}
+
+.chart-bar-dashanimate.animate-item-dashanimate {
+  animation: drawChartDashanimate 1.5s ease-out forwards;
+}
+
+.chart-label-dashanimate {
+  font-size: 9px;
+  color: #858796;
+  margin-top: 5px;
+}
+
+.donut-chart-dashanimate {
+  height: 100px;
+  width: 100px;
+  margin: 0 auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.donut-dashanimate {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--primary) 0% 35%,
+    #1cc88a 35% 55%,
+    #e74a3b 55% 75%,
+    #f6c23e 75% 90%,
+    #858796 90% 100%
+  );
+  position: relative;
+  animation: pulseDashanimate 4s infinite ease-in-out;
+}
+
+.donut-hole-dashanimate {
+  position: absolute;
+  width: 60%;
+  height: 60%;
+  background-color: white;
+  border-radius: 50%;
+  top: 20%;
+  left: 20%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5a5c69;
+}
+
+.legend-dashanimate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  justify-content: center;
+}
+
+.legend-item-dashanimate {
+  display: flex;
+  align-items: center;
+  font-size: 8px;
+  color: #858796;
+}
+
+.legend-color-dashanimate {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 3px;
+}
+
+.bottom-row-dashanimate {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.progress-container-dashanimate {
+  margin-bottom: 10px;
+}
+
+.progress-header-dashanimate {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.progress-title-dashanimate {
+  font-size: 10px;
+  color: #5a5c69;
+  font-weight: 600;
+}
+
+.progress-value-dashanimate {
+  font-size: 10px;
+  color: #858796;
+}
+
+.progress-bar-bg-dashanimate {
+  height: 6px;
+  background-color: #eaecf4;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-bar-fill-dashanimate {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.progress-bar-fill-dashanimate.animate-item-dashanimate {
+  animation: growBarDashanimate 1.5s ease-out forwards;
+}
+
+.progress-bar-housing-dashanimate { background-color: var(--primary); }
+.progress-bar-food-dashanimate { background-color: #1cc88a; }
+.progress-bar-transport-dashanimate { background-color: #f6c23e; }
+.progress-bar-entertainment-dashanimate { background-color: #e74a3b; } 

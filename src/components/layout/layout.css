@@ -1,0 +1,40 @@
+/* Layout specific styles */
+
+/* Notification dot styling */
+.notification-dot {
+  position: absolute;
+  top: 25px;
+  right: -1px;
+  width: 8px;
+  height: 8px;
+  background-color: #e74a3b; /* danger color */
+  border-radius: 50%;
+  border: 1px solid #fff; /* add white border for better visibility */
+  transform: none;
+  animation: notification-pulse 2s infinite ease-in-out;
+}
+
+/* Icon styling for proper positioning */
+.nav-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0.75rem 1rem;
+}
+
+/* Subtle pulse animation for notification dot */
+@keyframes notification-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(231, 74, 59, 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(231, 74, 59, 0);
+    transform: scale(1.1);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 74, 59, 0);
+    transform: scale(1);
+  }
+} 
