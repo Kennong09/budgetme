@@ -6,14 +6,10 @@ import {
   formatPercentage,
   getRemainingDays,
 } from "../../utils/helpers";
-import {
-  goals as mockGoals,
-  transactions as mockTransactions,
-  accounts as mockAccounts,
-  getAccountById,
-  contributeToGoal,
-} from "../../data/mockData";
 import { Goal as GoalType, Transaction, Account, GoalContributionResult } from "../../types";
+import { supabase } from "../../utils/supabaseClient";
+import { useAuth } from "../../utils/AuthContext";
+import { useToast } from "../../utils/ToastContext";
 
 // Import SB Admin CSS (already imported at the app level)
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -26,6 +22,8 @@ interface RouteParams {
 const GoalContribution: FC = () => {
   const { id } = useParams<keyof RouteParams>() as RouteParams;
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showSuccessToast, showErrorToast } = useToast();
   const [goal, setGoal] = useState<GoalType | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -39,27 +37,85 @@ const GoalContribution: FC = () => {
   const [viewMode, setViewMode] = useState<"form" | "review">("form");
   
   useEffect(() => {
-    // Simulate API call to get goal details
-    const timer = setTimeout(() => {
-      const foundGoal = mockGoals.find((g) => g.id.toString() === id);
-      if (foundGoal) {
-        setGoal({ ...foundGoal, category: "General" } as unknown as GoalType);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        
+        if (!user) {
+          showErrorToast("Please sign in to make contributions");
+          navigate("/login");
+          return;
+        }
+        
+        // Fetch goal details from Supabase
+        let goalData: any = null;
+        let goalError: any = null;
+        
+        try {
+          // First try from goal_details view
+          const result = await supabase
+            .from('goal_details')
+            .select('*')
+            .eq('id', id)
+            .single();
+            
+          goalData = result.data;
+          goalError = result.error;
+        } catch (err) {
+          // Fall back to direct goals table
+          console.log("Error with goal_details view, falling back to goals table");
+          const result = await supabase
+            .from('goals')
+            .select('*')
+            .eq('id', id)
+            .single();
+            
+          goalData = result.data;
+          goalError = result.error;
+        }
+        
+        // If we have an error and no data, handle accordingly
+        if (goalError && !goalData) {
+          throw new Error(`Error fetching goal: ${goalError.message}`);
+        }
+        
+        if (!goalData) {
+          // Goal not found
+          setLoading(false);
+          return;
+        }
+        
+        setGoal(goalData as unknown as GoalType);
         
         // Update notes with goal name
         setContribution(prev => ({
           ...prev,
-          notes: `Contribution to ${foundGoal.goal_name}`,
+          notes: goalData && goalData.goal_name ? `Contribution to ${goalData.goal_name}` : `Contribution to goal`,
         }));
+        
+        // Fetch user accounts from Supabase
+        const { data: accountsData, error: accountsError } = await supabase
+          .from('accounts')
+          .select('*')
+          .eq('user_id', user.id);
+          
+        if (accountsError) {
+          throw new Error(`Error fetching accounts: ${accountsError.message}`);
+        }
+        
+        setAccounts(accountsData || []);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error loading data:", err);
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        showErrorToast(`Failed to load data: ${errorMessage}`);
+        setError(errorMessage);
+        setLoading(false);
       }
-      
-      // Get user accounts
-      setAccounts(mockAccounts.filter(acc => acc.user_id === 1) as Account[]);
-      
-      setLoading(false);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [id]);
+    };
+    
+    fetchData();
+  }, [id, user, navigate, showErrorToast]);
   
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -73,6 +129,7 @@ const GoalContribution: FC = () => {
   
   const handleReview = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
+    setError(null);
     
     // Form validation
     if (!contribution.amount || parseFloat(contribution.amount) <= 0) {
@@ -85,50 +142,151 @@ const GoalContribution: FC = () => {
       return;
     }
     
-    setError(null);
+    // Check account balance
+    const contributionAmount = parseFloat(contribution.amount);
+    const selectedAccount = accounts.find(acc => acc.id.toString() === contribution.account_id);
+    
+    if (!selectedAccount) {
+      setError("Selected account not found");
+      return;
+    }
+    
+    if (selectedAccount.balance < contributionAmount) {
+      setError(`Insufficient funds in ${selectedAccount.account_name}. Available balance: ${formatCurrency(selectedAccount.balance)}`);
+      return;
+    }
+    
     setViewMode("review");
     window.scrollTo(0, 0);
   };
   
-  const handleSubmit = (): void => {
-    setIsSubmitting(true);
-    
-    // Use the helper function to contribute to the goal
-    const contributionAmount = parseFloat(contribution.amount);
-    const accountId = parseInt(contribution.account_id);
-    
-    // Call the contributeToGoal helper function
-    const result = contributeToGoal(
-      id,
-      contributionAmount,
-      accountId,
-      contribution.notes
-    ) as GoalContributionResult;
-    
-    // Check if contribution was successful
-    if (!result.success) {
-      setError(result.error || "Failed to make contribution. Please try again.");
+  const handleSubmit = async (): Promise<void> => {
+    try {
+      setIsSubmitting(true);
+      
+      if (!user) {
+        showErrorToast("You must be signed in to make contributions");
+        setIsSubmitting(false);
+        setViewMode("form");
+        return;
+      }
+      
+      if (!goal) {
+        showErrorToast("Goal information is missing");
+        setIsSubmitting(false);
+        setViewMode("form");
+        return;
+      }
+      
+      const contributionAmount = parseFloat(contribution.amount);
+      const selectedAccount = accounts.find(acc => acc.id.toString() === contribution.account_id);
+      
+      if (!selectedAccount) {
+        showErrorToast("Selected account not found");
+        setIsSubmitting(false);
+        setViewMode("form");
+        return;
+      }
+      
+      // Check if account has sufficient funds
+      if (selectedAccount.balance < contributionAmount) {
+        showErrorToast("Insufficient funds in the selected account");
+        setIsSubmitting(false);
+        setViewMode("form");
+        return;
+      }
+      
+      // Start a Supabase transaction using RPC
+      const { data: result, error: rpcError } = await supabase.rpc('contribute_to_goal', {
+        p_goal_id: id,
+        p_amount: contributionAmount,
+        p_account_id: contribution.account_id,
+        p_notes: contribution.notes,
+        p_user_id: user.id
+      });
+      
+      // If RPC fails or is not available, perform the operations manually
+      if (rpcError) {
+        console.warn("RPC failed, falling back to manual transaction:", rpcError.message);
+        
+        // Begin manual transaction process
+        
+        // 1. Create a new transaction record
+        const { data: transactionData, error: transactionError } = await supabase
+          .from('transactions')
+          .insert([{
+            date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
+            amount: contributionAmount,
+            notes: contribution.notes,
+            type: 'expense', // Expense from account perspective
+            account_id: contribution.account_id,
+            goal_id: id,
+            user_id: user.id
+          }])
+          .select()
+          .single();
+          
+        if (transactionError) {
+          throw new Error(`Error creating transaction: ${transactionError.message}`);
+        }
+        
+        // 2. Update account balance
+        const newBalance = selectedAccount.balance - contributionAmount;
+        const { error: accountError } = await supabase
+          .from('accounts')
+          .update({ balance: newBalance })
+          .eq('id', contribution.account_id);
+          
+        if (accountError) {
+          throw new Error(`Error updating account balance: ${accountError.message}`);
+        }
+        
+        // 3. Update goal progress
+        const newAmount = goal.current_amount + contributionAmount;
+        const goalStatus = newAmount >= goal.target_amount ? 'completed' : 'in_progress';
+        
+        const { error: goalError } = await supabase
+          .from('goals')
+          .update({ 
+            current_amount: newAmount,
+            status: goalStatus
+          })
+          .eq('id', id);
+          
+        if (goalError) {
+          throw new Error(`Error updating goal progress: ${goalError.message}`);
+        }
+      }
+      
+      // Show success message
+      showSuccessToast("Contribution made successfully!");
+      
+      // Redirect to goal details page after a short delay
+      setTimeout(() => {
+        navigate(`/goals/${id}`);
+      }, 1000);
+    } catch (err) {
+      console.error("Error making contribution:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+      showErrorToast(`Failed to make contribution: ${errorMessage}`);
+      setError(errorMessage);
       setIsSubmitting(false);
       setViewMode("form");
-      return;
     }
-    
-    console.log("Contribution successful:", result);
-    
-    // Show success and redirect after a short delay
-    setTimeout(() => {
-      navigate(`/goals/${id}`);
-    }, 1000);
   };
   
   if (loading) {
     return (
       <div className="container-fluid">
         <div className="text-center my-5">
-          <div className="spinner-border text-primary" role="status">
+          <div className="spinner-border text-primary mb-3" role="status">
             <span className="sr-only">Loading...</span>
           </div>
-          <p className="mt-3 text-gray-700">Loading goal details...</p>
+          <h4 className="text-gray-800 mt-3 mb-2">Loading goal details...</h4>
+          <p className="text-gray-600">Please wait while we retrieve your goal information</p>
+          <div className="progress mt-4" style={{ height: "10px", maxWidth: "300px", margin: "0 auto" }}>
+            <div className="progress-bar progress-bar-striped progress-bar-animated" style={{ width: "100%" }}></div>
+          </div>
         </div>
       </div>
     );
@@ -142,10 +300,18 @@ const GoalContribution: FC = () => {
             <i className="fas fa-exclamation-triangle fa-4x text-warning"></i>
           </div>
           <h1 className="h3 mb-3 font-weight-bold text-gray-800">Goal not found</h1>
-          <p className="mb-4">The goal you're looking for does not exist or has been deleted.</p>
-          <Link to="/goals" className="btn btn-primary">
-            <i className="fas fa-arrow-left mr-2"></i> Back to Goals
-          </Link>
+          <p className="mb-4 text-gray-600">The goal you're looking for does not exist or has been deleted.</p>
+          <div className="mb-4">
+            <p className="text-gray-600">You can try one of the following:</p>
+            <div className="d-flex flex-column flex-md-row justify-content-center mt-3">
+              <Link to="/goals" className="btn btn-primary mb-2 mb-md-0 mr-md-3">
+                <i className="fas fa-arrow-left mr-2"></i> View All Goals
+              </Link>
+              <Link to="/goals/create" className="btn btn-success">
+                <i className="fas fa-plus-circle mr-2"></i> Create New Goal
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -165,9 +331,14 @@ const GoalContribution: FC = () => {
         {/* Page Heading */}
         <div className="d-sm-flex align-items-center justify-content-between mb-4">
           <h1 className="h3 mb-0 text-gray-800">Review Contribution</h1>
-          <Link to="/goals" className="btn btn-sm btn-secondary shadow-sm">
-            <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
-          </Link>
+          <div className="d-flex align-items-center">
+            <span className="text-xs text-success mr-3">
+              <i className="fas fa-sync text-xs mr-1"></i> Real-time updates enabled
+            </span>
+            <Link to="/goals" className="btn btn-sm btn-secondary shadow-sm">
+              <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
+            </Link>
+          </div>
         </div>
 
         <div className="row">
@@ -297,9 +468,14 @@ const GoalContribution: FC = () => {
       {/* Page Heading */}
       <div className="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 className="h3 mb-0 text-gray-800">Make a Contribution</h1>
-        <Link to={`/goals/${id}`} className="btn btn-sm btn-secondary shadow-sm">
-          <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Goal Details
-        </Link>
+        <div className="d-flex align-items-center">
+          <span className="text-xs text-success mr-3">
+            <i className="fas fa-sync text-xs mr-1"></i> Real-time updates enabled
+          </span>
+          <Link to={`/goals/${id}`} className="btn btn-sm btn-secondary shadow-sm">
+            <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Goal Details
+          </Link>
+        </div>
       </div>
 
       <div className="row">

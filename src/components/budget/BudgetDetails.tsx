@@ -1,49 +1,39 @@
 import React, { useState, useEffect, FC, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { formatCurrency, formatDate, formatPercentage } from "../../utils/helpers";
-import { getBudgetProgressData, getCurrentUserData, getTransactionsByCategory, getTransactionsByDate, getCategoryById } from "../../data/mockData";
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
 import "animate.css";
 import { Budget } from "../../types";
+import { supabase } from "../../utils/supabaseClient";
+import { useAuth } from "../../utils/AuthContext";
+import { useToast } from "../../utils/ToastContext";
 
-// Interface for the data returned by getBudgetProgressData
-interface RawBudgetData {
-  id: number;
-  category: string;
-  budget: number;
-  spent: number;
-  remaining: number;
-  percentage: number;
-  status: "success" | "warning" | "danger";
-  month: string;
-  year: number;
-  period_start: string;
-  period_end: string;
-  category_id: number;
-}
-
-// Interface for the properly typed budget item
+// Interface for budget details from Supabase view
 interface BudgetItem {
   id: string;
-  category: string;
-  budget: number;
+  user_id: string;
+  category_id: string;
+  category_name: string;
+  amount: number;
   spent: number;
   remaining: number;
   percentage: number;
   status: "success" | "warning" | "danger";
   month: string;
   year: number;
-  period_start: string;
-  period_end: string;
+  period: string;
+  start_date: string;
+  end_date: string;
+  created_at: string;
 }
 
 // Interface for transaction data
 interface Transaction {
-  id: number;
-  user_id: number;
-  account_id: number;
-  category_id: number;
+  id: string;
+  user_id: string;
+  account_id: string;
+  category_id: string;
   type: "income" | "expense";
   amount: number;
   date: string;
@@ -51,24 +41,19 @@ interface Transaction {
   created_at: string;
 }
 
-// Convert raw budget data to properly typed BudgetItem
-const convertToTypedBudget = (budget: RawBudgetData): BudgetItem => ({
-  ...budget,
-  id: budget.id.toString()
-});
-
-interface RouteParams {
-  id: string;
-}
-
 const BudgetDetails: FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showSuccessToast, showErrorToast } = useToast();
   const [budget, setBudget] = useState<BudgetItem | null>(null);
   const [relatedBudgets, setRelatedBudgets] = useState<BudgetItem[]>([]);
   const [relatedTransactions, setRelatedTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [highchartsLoaded, setHighchartsLoaded] = useState<boolean>(false);
+  const [budgetSubscription, setBudgetSubscription] = useState<any>(null);
+  const [transactionSubscription, setTransactionSubscription] = useState<any>(null);
   
   // Tooltip state
   const [activeTip, setActiveTip] = useState<string | null>(null);
@@ -82,95 +67,220 @@ const BudgetDetails: FC = () => {
   const [allocationChartOptions, setAllocationChartOptions] = useState<any>(null);
   const [categoryDistributionOptions, setCategoryDistributionOptions] = useState<any>(null);
 
+  const [budgetChannelName] = useState<string>(`budget_detail_updates_${id}`);
+  const [transactionChannelName] = useState<string>(`budget_transactions_updates_${id}`);
+
+  // Delete modal states
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Fetch budget details from Supabase
   useEffect(() => {
-    // Simulate API call to get budget details
-    const timer = setTimeout(() => {
+    const fetchBudgetDetails = async () => {
+      try {
       if (!id) {
         setLoading(false);
+          setError("No budget ID provided");
         return;
       }
 
+        if (!user) {
+          console.log("No user found, redirecting to login");
+          navigate("/login");
+          return;
+        }
+
+        setLoading(true);
       console.log(`Loading budget details for ID: ${id}`);
 
-      // Get user data and budget info
-      const userData = getCurrentUserData();
-      if (!userData || !userData.user) {
-        console.error("No user data found");
+        // Fetch the specific budget from budget_details view
+        const { data: budgetData, error: budgetError } = await supabase
+          .from('budget_details')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .single();
+
+        if (budgetError) {
+          throw new Error(`Error fetching budget: ${budgetError.message}`);
+        }
+
+        if (!budgetData) {
+          setError("Budget not found");
         setLoading(false);
         return;
       }
 
-      const userId = userData.user.id;
-      console.log(`User ID: ${userId}`);
-
-      // Get all budget data
-      const budgetProgressData = getBudgetProgressData(userId) as RawBudgetData[];
-      console.log(`Retrieved ${budgetProgressData.length} budgets`);
-      
-      // Find the specific budget
-      const foundBudget = budgetProgressData.find(
-        (budget) => budget.id.toString() === id
-      );
-
-      if (foundBudget) {
-        console.log("Found budget:", foundBudget);
-        const typedBudget = convertToTypedBudget(foundBudget);
-        setBudget(typedBudget);
+        console.log("Found budget:", budgetData);
+        setBudget(budgetData);
         
-        // Find related budgets (same category)
-        const relatedBudgetsData = budgetProgressData
-          .filter((b) => b.category === foundBudget.category && b.id.toString() !== id)
-          .slice(0, 5)
-          .map(convertToTypedBudget);
+        // Fetch related budgets (same category)
+        const { data: relatedBudgetsData, error: relatedBudgetsError } = await supabase
+          .from('budget_details')
+          .select('*')
+          .eq('category_id', budgetData.category_id)
+          .eq('user_id', user.id)
+          .neq('id', id)
+          .order('created_at', { ascending: false })
+          .limit(5);
         
-        setRelatedBudgets(relatedBudgetsData);
-        console.log(`Found ${relatedBudgetsData.length} related budgets`);
+        if (relatedBudgetsError) {
+          console.error("Error fetching related budgets:", relatedBudgetsError);
+        } else {
+          console.log(`Found ${relatedBudgetsData?.length || 0} related budgets`);
+          setRelatedBudgets(relatedBudgetsData || []);
+        }
         
-        // Get related transactions for this budget period and category
-        const categoryId = foundBudget.category_id;
-        const categoryDetails = getCategoryById(categoryId, "expense");
-        console.log(`Category: ${categoryDetails?.category_name} (ID: ${categoryId})`);
+        // Fetch related transactions for this budget period and category
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('category_id', budgetData.category_id)
+          .eq('user_id', user.id)
+          .eq('type', 'expense')
+          .gte('date', budgetData.start_date)
+          .lte('date', budgetData.end_date)
+          .order('date', { ascending: false });
         
-        // Get all transactions for this category within the budget period
-        // Make sure we're working with date strings in the correct format
-        const startDate = foundBudget.period_start;
-        const endDate = foundBudget.period_end;
+        if (transactionsError) {
+          console.error("Error fetching transactions:", transactionsError);
+        } else {
+          console.log(`Found ${transactionsData?.length || 0} related transactions`);
+          setRelatedTransactions(transactionsData || []);
+        }
         
-        console.log(`Fetching transactions from ${startDate} to ${endDate} for category ${categoryId}`);
+        // Fetch all budgets for chart visualizations
+        const { data: allBudgetsData, error: allBudgetsError } = await supabase
+          .from('budget_details')
+          .select('*')
+          .eq('user_id', user.id);
         
-        // Get all transactions within this period
-        const periodTransactions = getTransactionsByDate(userId, startDate, endDate);
-        console.log(`Found ${periodTransactions.length} transactions in this period`);
+        if (!allBudgetsError && allBudgetsData) {
+          // Generate chart configurations
+          createChartConfigs(budgetData, allBudgetsData);
+        } else {
+          console.error("Error fetching all budgets for charts:", allBudgetsError);
+        }
         
-        // Filter by category and ensure they're expenses
-        const categoryTransactions = periodTransactions.filter(t => 
-          t.category_id === categoryId && 
-          t.type === "expense"
-        );
-        
-        console.log(`Found ${categoryTransactions.length} transactions for this category in this period`);
-        categoryTransactions.forEach((tx, index) => {
-          console.log(`Transaction ${index + 1}: ${formatDate(tx.date)} - ${formatCurrency(tx.amount)} - ${tx.notes}`);
-        });
-        
-        // Check if the spent amount matches what we calculated
-        const calculatedSpent = categoryTransactions.reduce((total, tx) => total + tx.amount, 0);
-        console.log(`Calculated spent: ${calculatedSpent}, Budget spent property: ${foundBudget.spent}`);
-        
-        setRelatedTransactions(categoryTransactions as Transaction[]);
-        
-        // Generate chart configurations
-        createChartConfigs(typedBudget, budgetProgressData);
-      } else {
-        console.error(`Budget with ID ${id} not found`);
+        setHighchartsLoaded(true);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error loading budget details:", err);
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        setError(errorMessage);
+        showErrorToast(`Failed to load budget details: ${errorMessage}`);
+        setLoading(false);
       }
+    };
 
-      setLoading(false);
-      setHighchartsLoaded(true);
-    }, 500);
+    // Initial data fetch
+    fetchBudgetDetails();
+  }, [id, user, navigate, showErrorToast]);
 
-    return () => clearTimeout(timer);
-  }, [id]);
+  // Set up real-time subscriptions in a separate useEffect
+  useEffect(() => {
+    if (!user || !id) return;
+
+    // Clean up any existing subscriptions first
+    if (budgetSubscription) {
+      console.log("Removing existing budget subscription");
+      supabase.removeChannel(budgetSubscription);
+    }
+    if (transactionSubscription) {
+      console.log("Removing existing transaction subscription");
+      supabase.removeChannel(transactionSubscription);
+    }
+
+    console.log(`Setting up new subscriptions for budget ${id}`);
+    
+    // Create new budget subscription with unique channel name
+    const newBudgetSubscription = supabase
+      .channel(budgetChannelName)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'budgets',
+        filter: `id=eq.${id}`
+      }, (payload) => {
+        console.log("Budget update received:", payload);
+        // Refresh data when changes occur
+        const fetchUpdatedBudget = async () => {
+          try {
+            const { data, error } = await supabase
+              .from('budget_details')
+              .select('*')
+              .eq('id', id)
+              .eq('user_id', user.id)
+              .single();
+              
+            if (!error && data) {
+              setBudget(data);
+            }
+          } catch (err) {
+            console.error("Error refreshing budget data:", err);
+          }
+        };
+        
+        fetchUpdatedBudget();
+      })
+      .subscribe((status) => {
+        console.log(`Budget subscription status: ${status}`);
+      });
+      
+    // Create new transaction subscription for this budget's category and period
+    const newTransactionSubscription = supabase
+      .channel(transactionChannelName)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'transactions',
+        filter: `user_id=eq.${user.id}`
+      }, (payload) => {
+        console.log("Transaction update received:", payload);
+        // Refresh transactions data when changes occur
+        const fetchUpdatedTransactions = async () => {
+          if (!budget) return;
+          
+          try {
+            const { data, error } = await supabase
+              .from('transactions')
+              .select('*')
+              .eq('category_id', budget.category_id)
+              .eq('user_id', user.id)
+              .eq('type', 'expense')
+              .gte('date', budget.start_date)
+              .lte('date', budget.end_date)
+              .order('date', { ascending: false });
+              
+            if (!error && data) {
+              setRelatedTransactions(data);
+            }
+          } catch (err) {
+            console.error("Error refreshing transaction data:", err);
+          }
+        };
+        
+        fetchUpdatedTransactions();
+      })
+      .subscribe((status) => {
+        console.log(`Transaction subscription status: ${status}`);
+      });
+
+    // Save subscription references
+    setBudgetSubscription(newBudgetSubscription);
+    setTransactionSubscription(newTransactionSubscription);
+
+    // Clean up subscriptions on unmount or when dependencies change
+    return () => {
+      console.log("Cleaning up subscriptions");
+      if (newBudgetSubscription) {
+        supabase.removeChannel(newBudgetSubscription);
+      }
+      if (newTransactionSubscription) {
+        supabase.removeChannel(newTransactionSubscription);
+      }
+    };
+  }, [id, user, budgetChannelName, transactionChannelName]);
   
   // Tooltip toggle function
   const toggleTip = (tipId: string, event?: React.MouseEvent): void => {
@@ -192,24 +302,24 @@ const BudgetDetails: FC = () => {
     }
   };
 
-  const createChartConfigs = (budget: BudgetItem, allBudgets: RawBudgetData[]) => {
+  const createChartConfigs = (budget: BudgetItem, allBudgets: BudgetItem[]) => {
     // Budget allocation chart (how this budget compares to other categories)
     const topCategories = allBudgets
-      .filter(b => b.id.toString() !== budget.id)
-      .sort((a, b) => b.budget - a.budget)
+      .filter(b => b.id !== budget.id)
+      .sort((a, b) => b.amount - a.amount)
       .slice(0, 4);
     
     const allocationData = [
       {
-        name: budget.category,
-        y: budget.budget,
+        name: budget.category_name,
+        y: budget.amount,
         selected: true,
         sliced: true,
         color: '#4e73df'
       },
       ...topCategories.map(b => ({
-        name: b.category,
-        y: b.budget
+        name: b.category_name,
+        y: b.amount
       }))
     ];
     
@@ -267,10 +377,10 @@ const BudgetDetails: FC = () => {
     // Budget Category Distribution bar chart
     // Group budgets by category and sum them
     const categoryBudgets = allBudgets.reduce<Record<string, number>>((acc, b) => {
-      if (!acc[b.category]) {
-        acc[b.category] = 0;
+      if (!acc[b.category_name]) {
+        acc[b.category_name] = 0;
       }
-      acc[b.category] += b.budget;
+      acc[b.category_name] += b.amount;
       return acc;
     }, {});
     
@@ -350,18 +460,49 @@ const BudgetDetails: FC = () => {
         data: sortedCategories.map(([cat, amount]) => ({
           name: cat,
           y: amount,
-          color: cat === budget.category ? '#4e73df' : '#858796', // Highlight current category
+          color: cat === budget.category_name ? '#4e73df' : '#858796', // Highlight current category
         }))
       }]
     });
   };
 
-  const handleDelete = (): void => {
-    if (window.confirm("Are you sure you want to delete this budget?")) {
-      // In a real app, would call API to delete budget
-      console.log("Deleting budget:", budget);
-      alert("Budget deleted successfully!");
+  // Function to open delete confirmation modal
+  const openDeleteModal = () => {
+    setShowDeleteModal(true);
+  };
+
+  // Function to close delete confirmation modal
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setIsDeleting(false);
+  };
+
+  const handleDelete = async (): Promise<void> => {
+    try {
+      setIsDeleting(true);
+      
+      const { error } = await supabase
+        .from('budgets')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        throw new Error(`Error deleting budget: ${error.message}`);
+      }
+      
+      showSuccessToast("Budget deleted successfully!");
+      
+      // Add a short timeout to ensure Supabase events have time to propagate
+      // before redirecting the user
+      setTimeout(() => {
       navigate("/budgets");
+      }, 300);
+      
+    } catch (err) {
+      console.error("Error deleting budget:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+      showErrorToast(`Failed to delete budget: ${errorMessage}`);
+      setIsDeleting(false);
     }
   };
 
@@ -378,7 +519,7 @@ const BudgetDetails: FC = () => {
     );
   }
 
-  if (!budget) {
+  if (error || !budget) {
     return (
       <div className="container-fluid">
         <div className="text-center my-5 animate__animated animate__fadeIn">
@@ -386,7 +527,9 @@ const BudgetDetails: FC = () => {
             <i className="fas fa-exclamation-triangle fa-4x text-warning"></i>
           </div>
           <h1 className="h3 mb-3 font-weight-bold text-gray-800">Budget not found</h1>
-          <p className="mb-4">The budget you're looking for does not exist or has been deleted.</p>
+          <p className="mb-4">
+            {error || "The budget you're looking for does not exist or has been deleted."}
+          </p>
           <Link to="/budgets" className="btn btn-primary">
             <i className="fas fa-arrow-left mr-2"></i> Back to Budgets
           </Link>
@@ -411,7 +554,7 @@ const BudgetDetails: FC = () => {
       <div className="d-sm-flex align-items-center justify-content-between mb-4 animate__animated animate__fadeInDown">
         <h1 className="h3 mb-0 text-gray-800">Budget Details</h1>
         <div className="d-flex">
-          <button onClick={handleDelete} className="btn btn-primary btn-sm shadow-sm mr-2" style={{ backgroundColor: "#e74a3b", borderColor: "#e74a3b" }}>
+          <button onClick={openDeleteModal} className="btn btn-primary btn-sm shadow-sm mr-2" style={{ backgroundColor: "#e74a3b", borderColor: "#e74a3b" }}>
             <i className="fas fa-trash fa-sm mr-2"></i> Delete Budget
           </button>
           <Link to={`/budgets/${id}/edit`} className="btn btn-primary btn-sm mr-2 shadow-sm">
@@ -442,7 +585,7 @@ const BudgetDetails: FC = () => {
                     </div>
                   </div>
                   <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {formatCurrency(budget.budget)}
+                    {formatCurrency(budget.amount)}
                   </div>
                 </div>
                 <div className="col-auto">
@@ -498,7 +641,7 @@ const BudgetDetails: FC = () => {
                     </div>
                   </div>
                   <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {budget.category}
+                    {budget.category_name}
                   </div>
                 </div>
                 <div className="col-auto">
@@ -560,7 +703,7 @@ const BudgetDetails: FC = () => {
                           Budget Amount
                         </div>
                         <div className="h5 mb-0 font-weight-bold text-gray-800">
-                          {formatCurrency(budget.budget)}
+                          {formatCurrency(budget.amount)}
                         </div>
                       </div>
                     </div>
@@ -607,7 +750,7 @@ const BudgetDetails: FC = () => {
                   </div>
                 </h6>
                 <p className="small text-gray-600 mb-3">
-                  How {budget.category} budget amount compares to other budget categories
+                  How {budget.category_name} budget amount compares to other budget categories
                 </p>
                 {highchartsLoaded && categoryDistributionOptions && (
                   <div className="chart-area">
@@ -649,7 +792,7 @@ const BudgetDetails: FC = () => {
                       <tbody>
                         {relatedTransactions.map((tx) => {
                           // Calculate what percentage of the budget this transaction represents
-                          const percentOfBudget = (tx.amount / budget.budget) * 100;
+                          const percentOfBudget = (tx.amount / budget.amount) * 100;
                           
                           return (
                             <tr key={tx.id}>
@@ -688,7 +831,7 @@ const BudgetDetails: FC = () => {
                           <td className="text-danger">
                             {formatCurrency(relatedTransactions.reduce((sum, tx) => sum + tx.amount, 0))}
                           </td>
-                          <td colSpan={2}>{formatPercentage(relatedTransactions.reduce((sum, tx) => sum + tx.amount, 0) / budget.budget * 100)} of budget</td>
+                          <td colSpan={2}>{formatPercentage(relatedTransactions.reduce((sum, tx) => sum + tx.amount, 0) / budget.amount * 100)} of budget</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -708,8 +851,8 @@ const BudgetDetails: FC = () => {
                       </button>
                     </div>
                     <div className="mt-2 small text-muted">
-                      Budget period: {formatDate(budget.period_start)} - {formatDate(budget.period_end)}<br/>
-                      Category: {budget.category} (ID: {budget.id})
+                      Budget period: {formatDate(budget.start_date)} - {formatDate(budget.end_date)}<br/>
+                      Category: {budget.category_name} (ID: {budget.id})
                     </div>
                   </div>
                 )}
@@ -728,7 +871,7 @@ const BudgetDetails: FC = () => {
                   </div>
                 </h6>
                 <p className="small text-gray-600 mb-3">
-                  Other budgets for the {budget.category} category
+                  Other budgets for the {budget.category_name} category
                 </p>
                 {relatedBudgets.length > 0 ? (
                   <div className="table-responsive">
@@ -746,7 +889,7 @@ const BudgetDetails: FC = () => {
                         {relatedBudgets.map((b) => (
                           <tr key={b.id}>
                             <td>{b.month} {b.year}</td>
-                            <td>{formatCurrency(b.budget)}</td>
+                            <td>{formatCurrency(b.amount)}</td>
                             <td className={b.status === 'danger' ? 'text-danger' : b.status === 'warning' ? 'text-warning' : 'text-success'}>
                               {formatCurrency(b.spent)}
                             </td>
@@ -768,7 +911,7 @@ const BudgetDetails: FC = () => {
                 ) : (
                   <div className="alert alert-info text-center">
                     <i className="fas fa-info-circle mr-2"></i>
-                    No related budgets found for the {budget.category} category.
+                    No related budgets found for the {budget.category_name} category.
                   </div>
                 )}
               </div>
@@ -811,7 +954,7 @@ const BudgetDetails: FC = () => {
               )}
               <div className="mt-3">
                 <p className="small text-gray-500 text-center mb-0">
-                  This chart shows how your {budget.category} budget compares to other categories
+                  This chart shows how your {budget.category_name} budget compares to other categories
                 </p>
               </div>
             </div>
@@ -856,7 +999,7 @@ const BudgetDetails: FC = () => {
                 <div>
                   <div className="small text-gray-500">Budget Period</div>
                   <div className="font-weight-bold">
-                    {formatDate(budget.period_start)} - {formatDate(budget.period_end)}
+                    {formatDate(budget.start_date)} - {formatDate(budget.end_date)}
                   </div>
                 </div>
               </div>
@@ -960,17 +1103,56 @@ const BudgetDetails: FC = () => {
           )}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="modal" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Confirm Deletion</h5>
+                <button type="button" className="close" onClick={closeDeleteModal} disabled={isDeleting}>
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div className="modal-body text-center">
+                <div className="mb-4">
+                  <div className="rounded-circle mx-auto d-flex align-items-center justify-content-center" 
+                    style={{ width: "80px", height: "80px", backgroundColor: "rgba(246, 194, 62, 0.2)" }}>
+                    <i className="fas fa-exclamation-triangle fa-3x text-warning"></i>
+                  </div>
+                </div>
+                <p>Are you sure you want to delete this budget? This action cannot be undone.</p>
+              </div>
+              <div className="modal-footer d-flex justify-content-center">
+                <button 
+                  type="button" 
+                  className="btn btn-outline-secondary" 
+                  onClick={closeDeleteModal}
+                  disabled={isDeleting}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-danger" 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                      Delete
+                    </>
+                  ) : "Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
-
-// Helper function to get month index from month name
-const getMonthIndex = (month: string): number => {
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June', 
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  return months.indexOf(month);
 };
 
 export default BudgetDetails; 

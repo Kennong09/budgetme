@@ -106,8 +106,8 @@ const AdminLogin: React.FC = () => {
           <div className="spinner-border text-danger mb-4" role="status">
             <span className="sr-only">Loading...</span>
           </div>
-          <h1 className="h3 text-gray-800 mb-2">BudgetMe Admin</h1>
-          <p className="text-gray-600">Loading...</p>
+          <h1 className="h3 text-danger mb-2">BudgetMe Admin</h1>
+          <p className="text-danger">Loading your admin dashboard...</p>
         </div>
       </div>
     );
@@ -150,7 +150,7 @@ const AdminLogin: React.FC = () => {
                 >
                   Try Another Account
                 </button>
-                <a href="/" className="btn btn-primary">
+                <a href="/" className="btn btn-danger">
                   Return to Main Site
                 </a>
               </div>

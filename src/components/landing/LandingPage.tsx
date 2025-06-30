@@ -22,9 +22,11 @@ import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
 import EmailVerificationModal from "../auth/EmailVerificationModal";
 
-interface LandingPageProps {}
+interface LandingPageProps {
+  activeTab?: string;
+}
 
-const LandingPage: FC<LandingPageProps> = () => {
+const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
   const { 
     signIn, 
     signUp, 
@@ -79,6 +81,17 @@ const LandingPage: FC<LandingPageProps> = () => {
   });
   
   const navigate = useNavigate();
+
+  // Use activeTab to show the appropriate modal on initial render
+  useEffect(() => {
+    if (activeTab === 'login') {
+      setShowLoginModal(true);
+    } else if (activeTab === 'signup') {
+      setShowRegisterModal(true);
+    } else if (activeTab === 'reset') {
+      setShowForgotPasswordModal(true);
+    }
+  }, [activeTab]);
 
   // Handle scroll-triggered animations
   useEffect(() => {

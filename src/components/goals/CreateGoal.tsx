@@ -1,4 +1,4 @@
-import React, { useState, FC, ChangeEvent, FormEvent } from "react";
+import React, { useState, FC, ChangeEvent, FormEvent, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   formatCurrency,
@@ -6,6 +6,9 @@ import {
   calculateMonthlySavingsForGoal,
 } from "../../utils/helpers";
 import { useCurrency } from "../../utils/CurrencyContext";
+import { supabase } from "../../utils/supabaseClient";
+import { useAuth } from "../../utils/AuthContext";
+import { useToast } from "../../utils/ToastContext";
 
 // Import SB Admin CSS (already imported at the app level)
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -18,13 +21,23 @@ interface GoalFormData {
   current_amount: string;
   priority: "low" | "medium" | "high";
   notes: string;
+  share_with_family: boolean; // Whether to share the goal with family
 }
 
 const CreateGoal: FC = () => {
   const navigate = useNavigate();
   const { currencySymbol } = useCurrency();
+  const { user } = useAuth();
+  const { showSuccessToast, showErrorToast } = useToast();
   const [viewMode, setViewMode] = useState<"form" | "review">("form");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  
+  // Family status states
+  const [isFamilyMember, setIsFamilyMember] = useState<boolean>(false);
+  const [userFamilyId, setUserFamilyId] = useState<string | null>(null);
+  const [familyRole, setFamilyRole] = useState<"admin" | "viewer" | null>(null);
 
   const initialFormState: GoalFormData = {
     goal_name: "",
@@ -33,9 +46,135 @@ const CreateGoal: FC = () => {
     current_amount: "0",
     priority: "medium",
     notes: "",
+    share_with_family: false,
   };
 
   const [goal, setGoal] = useState<GoalFormData>(initialFormState);
+  
+  // Get URL parameters
+  const queryParams = new URLSearchParams(window.location.search);
+  const shareParam = queryParams.get('share');
+
+  // Check if user is authenticated
+  useEffect(() => {
+    if (!user) {
+      showErrorToast("Please sign in to create a goal");
+      navigate("/login");
+    }
+    
+    // Check if share=family parameter is present and set share_with_family to true
+    if (shareParam === 'family') {
+      setGoal(prev => ({
+        ...prev,
+        share_with_family: true
+      }));
+    }
+  }, [user, navigate, showErrorToast, shareParam]);
+  
+  // Check if user is part of a family
+  useEffect(() => {
+    const checkFamilyStatus = async () => {
+      if (!user) return;
+      
+      try {
+        setLoading(true);
+        console.log("Checking family status for user:", user.id);
+        
+        // First try to query the family_members directly
+        const { data: memberData, error: memberError } = await supabase
+          .from('family_members')
+          .select(`
+            id,
+            family_id,
+            role,
+            status,
+            families:family_id (
+              id,
+              family_name
+            )
+          `)
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .limit(1);
+          
+        console.log("Family member query result:", { memberData, memberError });
+          
+        if (!memberError && memberData && memberData.length > 0) {
+          console.log("User is a family member:", memberData[0]);
+          setIsFamilyMember(true);
+          setUserFamilyId(memberData[0].family_id);
+          setFamilyRole(memberData[0].role as "admin" | "viewer");
+        } else {
+          // Fallback to the function
+          console.log("No direct family_members record found, using check_user_family RPC");
+          
+          // Explicit cast for proper TypeScript typing
+          const { data: familyStatus, error: statusError } = await supabase.rpc(
+            'check_user_family',
+            { p_user_id: user.id }
+          );
+          
+          console.log("Family status check result:", { familyStatus, statusError });
+          
+          if (!statusError && familyStatus) {
+            // Handle both array and object responses
+            const isMember = Array.isArray(familyStatus) 
+              ? familyStatus.length > 0 && familyStatus[0].is_member
+              : familyStatus.is_member;
+              
+            console.log("Membership check:", { isMember });
+            
+            if (isMember) {
+              // Extract the family ID from the response based on format
+              const familyId = Array.isArray(familyStatus) 
+                ? familyStatus[0].family_id 
+                : familyStatus.family_id;
+              
+              console.log("Setting user family ID:", familyId);
+              setIsFamilyMember(true);
+              setUserFamilyId(familyId);
+              
+              // Fetch role
+              const { data: roleData, error: roleError } = await supabase
+                .from('family_members')
+                .select('role')
+                .eq('user_id', user.id)
+                .eq('family_id', familyId)
+                .single();
+                
+              console.log("Role lookup result:", { roleData, roleError });
+                
+              if (!roleError && roleData) {
+                setFamilyRole(roleData.role as "admin" | "viewer");
+              } else {
+                console.log("Setting default role as viewer");
+                setFamilyRole("viewer"); // Default role if not found
+              }
+            } else {
+              console.log("User is not a family member");
+              setIsFamilyMember(false);
+              setUserFamilyId(null);
+              setFamilyRole(null);
+            }
+          } else {
+            console.log("Failed to check family status, assuming not a family member");
+            setIsFamilyMember(false);
+            setUserFamilyId(null);
+            setFamilyRole(null);
+          }
+        }
+      } catch (err) {
+        console.error("Error checking family status:", err);
+        setIsFamilyMember(false);
+        setUserFamilyId(null);
+        setFamilyRole(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkFamilyStatus();
+  }, [user]);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -49,20 +188,21 @@ const CreateGoal: FC = () => {
 
   const handleReview = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
+    setError(null);
 
     // Validation
     if (!goal.goal_name) {
-      alert("Please enter a goal name");
+      showErrorToast("Please enter a goal name");
       return;
     }
 
     if (!goal.target_amount || parseFloat(goal.target_amount) <= 0) {
-      alert("Please enter a valid target amount");
+      showErrorToast("Please enter a valid target amount");
       return;
     }
 
     if (!goal.target_date) {
-      alert("Please select a target date");
+      showErrorToast("Please select a target date");
       return;
     }
 
@@ -70,7 +210,7 @@ const CreateGoal: FC = () => {
     const today = new Date();
 
     if (targetDate <= today) {
-      alert("Target date must be in the future");
+      showErrorToast("Target date must be in the future");
       return;
     }
 
@@ -78,15 +218,75 @@ const CreateGoal: FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleSubmit = (): void => {
-    setIsSubmitting(true);
-    
-    // In a real app, would call API to save goal
-    setTimeout(() => {
-      console.log("Submitting goal:", goal);
-      alert("Goal created successfully!");
+  const handleSubmit = async (): Promise<void> => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+
+      if (!user || !user.id) {
+        throw new Error("User not authenticated");
+      }
+      
+      // Debug logs to check family sharing status
+      console.log("Goal submission data:", {
+        share_with_family: goal.share_with_family,
+        isFamilyMember: isFamilyMember,
+        userFamilyId: userFamilyId
+      });
+
+      // Prepare goal data for insertion
+      const goalData: any = {
+        goal_name: goal.goal_name,
+        target_amount: parseFloat(goal.target_amount),
+        current_amount: parseFloat(goal.current_amount) || 0,
+        target_date: goal.target_date,
+        priority: goal.priority,
+        notes: goal.notes,
+        user_id: user.id,
+        status: "in_progress", // Default status for new goals
+      };
+      
+      // Add family ID if the goal is shared with family
+      if (goal.share_with_family) {
+        if (isFamilyMember && userFamilyId) {
+          console.log("Adding family sharing data", { family_id: userFamilyId });
+          goalData.family_id = userFamilyId;
+          goalData.is_shared = true;
+        } else {
+          console.log("Failed to add family sharing - missing conditions:", { 
+            isFamilyMember, 
+            userFamilyId 
+          });
+          
+          // If user is not in family or no family ID, we need to notify them
+          throw new Error("Could not create family goal: You must be part of a family first.");
+        }
+      }
+
+      console.log("Final goal data:", goalData);
+
+      // Insert goal into Supabase
+      const { data, error } = await supabase
+        .from('goals')
+        .insert(goalData)
+        .select()
+        .single();
+        
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      // Success! Show toast and redirect
+      showSuccessToast(`Goal "${goal.goal_name}" ${goal.share_with_family ? 'shared with family' : 'created'} successfully!`);
       navigate("/goals");
-    }, 1000);
+      
+    } catch (err) {
+      console.error("Error creating goal:", err);
+      const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+      showErrorToast(`Failed to create goal: ${errorMessage}`);
+      setError(errorMessage);
+      setIsSubmitting(false);
+    }
   };
 
   const calculateRecommendation = (): number | null => {
@@ -109,6 +309,19 @@ const CreateGoal: FC = () => {
     return remaining / monthsDiff;
   };
 
+  if (loading) {
+    return (
+      <div className="container-fluid">
+        <div className="text-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="sr-only">Loading...</span>
+          </div>
+          <p className="mt-3 text-gray-700">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (viewMode === "review") {
     const monthlySavings = calculateRecommendation();
 
@@ -121,6 +334,14 @@ const CreateGoal: FC = () => {
             <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
           </Link>
         </div>
+
+        {/* Display error if any */}
+        {error && (
+          <div className="alert alert-danger mb-4">
+            <i className="fas fa-exclamation-triangle mr-2"></i>
+            {error}
+          </div>
+        )}
 
         <div className="row">
           <div className="col-lg-8 mx-auto">
@@ -135,6 +356,42 @@ const CreateGoal: FC = () => {
                       Goal Name
                     </div>
                     <h4 className="h4 mb-0 font-weight-bold text-gray-800">{goal.goal_name}</h4>
+                  </div>
+                </div>
+
+                {/* Goal Type Indicator */}
+                <div className="row mb-4">
+                  <div className="col-12">
+                    <div className="card border-left-info shadow h-100 py-2">
+                      <div className="card-body">
+                        <div className="row no-gutters align-items-center">
+                          <div className="col mr-2">
+                            <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
+                              Goal Type
+                            </div>
+                            <div className="h5 mb-0 font-weight-bold text-gray-800 d-flex align-items-center">
+                              {goal.share_with_family ? (
+                                <>
+                                  <div className="mr-2">
+                                    <i className="fas fa-users text-info"></i>
+                                  </div>
+                                  Family Shared Goal
+                                  <span className="badge badge-info ml-2">Visible to family members</span>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="mr-2">
+                                    <i className="fas fa-user text-primary"></i>
+                                  </div>
+                                  Personal Goal
+                                  <span className="badge badge-primary ml-2">Only visible to you</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -290,6 +547,21 @@ const CreateGoal: FC = () => {
         </Link>
       </div>
 
+      {/* Display error if any */}
+      {error && (
+        <div className="alert alert-danger mb-4">
+          <i className="fas fa-exclamation-triangle mr-2"></i>
+          {error}
+          <button 
+            onClick={() => setError(null)} 
+            className="close" 
+            aria-label="Close"
+          >
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+      )}
+
       <div className="row">
         <div className="col-lg-8 mx-auto">
           <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
@@ -417,19 +689,99 @@ const CreateGoal: FC = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="notes" className="font-weight-bold text-gray-800">
-                    Notes (Optional)
-                  </label>
+                  <label htmlFor="notes">Additional Notes (Optional)</label>
                   <textarea
+                    className="form-control"
                     id="notes"
                     name="notes"
+                    rows={3}
                     value={goal.notes}
                     onChange={handleChange}
-                    className="form-control"
-                    rows={4}
-                    placeholder="Add any additional details or motivation for your goal"
                   ></textarea>
+                  <small className="text-muted">
+                    Add any details or reminders about your goal
+                  </small>
                 </div>
+
+                {/* Share with family option - only show if user is part of a family */}
+                {loading ? (
+                  <div className="form-group">
+                    <div className="card border-left-info shadow p-3 mb-3">
+                      <h5 className="font-weight-bold text-info mb-3">
+                        <i className="fas fa-users mr-2"></i>
+                        Family Goal Sharing
+                      </h5>
+                      <div className="d-flex align-items-center">
+                        <div className="spinner-border spinner-border-sm text-info mr-2" role="status">
+                          <span className="sr-only">Loading...</span>
+                        </div>
+                        <span>Checking your family status...</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : isFamilyMember ? (
+                  <div className="form-group">
+                    <div className="card border-left-info shadow p-3 mb-3">
+                      <h5 className="font-weight-bold text-info mb-3">
+                        <i className="fas fa-users mr-2"></i>
+                        Family Goal Sharing
+                      </h5>
+                      
+                      <div className="custom-control custom-checkbox">
+                        <input
+                          type="checkbox"
+                          className="custom-control-input"
+                          id="shareWithFamily"
+                          name="share_with_family"
+                          checked={goal.share_with_family}
+                          onChange={(e) => 
+                            setGoal({...goal, share_with_family: e.target.checked})
+                          }
+                        />
+                        <label className="custom-control-label font-weight-bold" htmlFor="shareWithFamily">
+                          Share this goal with my family
+                        </label>
+                        <div className="mt-2">
+                          <small className="form-text text-muted d-block">
+                            <i className="fas fa-info-circle mr-1"></i>
+                            When shared, this goal will appear in your family dashboard and family members can view and contribute to it.
+                          </small>
+                          <small className="form-text text-muted d-block mt-1">
+                            <i className="fas fa-lock mr-1"></i>
+                            If not shared, this will be a personal goal only visible to you.
+                          </small>
+                          {goal.share_with_family && (
+                            <div className="alert alert-info mt-2 py-2 mb-0">
+                              <i className="fas fa-users mr-1"></i>
+                              This goal will be visible to all family members.
+                              <div className="small mt-1">
+                                <strong>Family ID:</strong> {userFamilyId ?? "Unknown"}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <div className="card border-left-secondary shadow p-3 mb-3">
+                      <h5 className="font-weight-bold text-secondary mb-3">
+                        <i className="fas fa-users mr-2"></i>
+                        Family Goal Sharing
+                      </h5>
+                      <div className="alert alert-light mb-0">
+                        <i className="fas fa-info-circle mr-2"></i>
+                        You need to be part of a family to share goals. 
+                        <div className="mt-2">
+                          <Link to="/family/create" className="btn btn-sm btn-info">
+                            <i className="fas fa-plus mr-1"></i> Create a Family
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <hr className="my-4" />
 

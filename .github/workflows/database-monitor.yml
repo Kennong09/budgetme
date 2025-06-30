@@ -1,0 +1,64 @@
+name: Database Monitor
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode'
+        required: true
+        default: 'monitor'
+        type: choice
+        options:
+          - monitor
+          - setup
+          - both
+  schedule:
+    # Run every hour to ensure monitoring is active
+    - cron: '0 * * * *'
+
+jobs:
+  monitor:
+    name: Database Monitor
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run database setup and monitor
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [[ "${{ github.event.inputs.mode }}" == "setup" ]]; then
+            echo "Running setup only mode"
+            node setupDatabase.js --setup-only
+          elif [[ "${{ github.event.inputs.mode }}" == "monitor" ]] || [[ "${{ github.event.inputs.mode }}" == "" ]]; then
+            echo "Running monitor only mode"
+            # For GitHub Actions, we use a shorter monitoring period to stay within job limits
+            # This will run for 50 minutes (just under the 1 hour GitHub Actions timeout)
+            node setupDatabase.js --monitor-only --debug --debug-timeout 3000000
+          else
+            echo "Running full setup and monitoring"
+            # Run setup and monitor for 50 minutes
+            node setupDatabase.js --monitor --debug --debug-timeout 3000000
+          fi
+      
+      - name: Upload logs
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: monitoring-logs
+          path: |
+            debug_output.log
+            monitor.log
+          retention-days: 7 

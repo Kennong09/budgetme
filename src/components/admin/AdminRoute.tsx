@@ -15,8 +15,12 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ element, title }) => {
   if (loading) {
     return (
       <div className="d-flex align-items-center justify-content-center" style={{ height: "100vh" }}>
-        <div className="spinner-border text-danger" role="status">
-          <span className="sr-only">Loading...</span>
+        <div className="text-center">
+          <div className="spinner-border text-danger mb-4" role="status">
+            <span className="sr-only">Loading...</span>
+          </div>
+          <h1 className="h3 text-danger mb-2">BudgetMe Admin</h1>
+          <p className="text-danger">Loading your admin dashboard...</p>
         </div>
       </div>
     );
@@ -50,8 +54,12 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ element, title }) => {
   if (isAdmin === null) {
     return (
       <div className="d-flex align-items-center justify-content-center" style={{ height: "100vh" }}>
-        <div className="spinner-border text-danger" role="status">
-          <span className="sr-only">Checking admin privileges...</span>
+        <div className="text-center">
+          <div className="spinner-border text-danger mb-4" role="status">
+            <span className="sr-only">Checking admin privileges...</span>
+          </div>
+          <h1 className="h3 text-danger mb-2">BudgetMe Admin</h1>
+          <p className="text-danger">Loading your admin dashboard...</p>
         </div>
       </div>
     );

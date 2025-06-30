@@ -4,6 +4,7 @@ import { useAuth } from "../../utils/AuthContext";
 import "animate.css";
 import { SidebarProps } from "../../types";
 import { getCurrentUserData } from "../../data/mockData";
+import { HelpButton } from "../../components/onboarding";
 
 interface NavItem {
   id: number;
@@ -298,6 +299,15 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
 
         {/* Divider */}
         <hr className="sidebar-divider" />
+        
+        {/* Help Button */}
+        <li 
+          className="nav-item"
+          onMouseEnter={(e) => handleMouseEnter(101, "Help & Tour", e)}
+          onMouseLeave={handleMouseLeave}
+        >
+          <HelpButton compactMode={compactMode} />
+        </li>
         
         {/* Logout */}
         <li 

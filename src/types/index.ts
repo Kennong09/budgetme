@@ -62,6 +62,13 @@ export interface Goal {
   status?: string;
   created_at?: string;
   user_id?: string | number;
+  family_id?: string | number;
+  percentage?: number;
+  remaining?: number;
+  is_shared?: boolean;
+  shared_by?: string | number;
+  shared_by_name?: string;
+  is_overdue?: boolean;
 }
 
 // Account related types
@@ -222,4 +229,53 @@ export interface BudgetGoalRelationship {
   totalSpentOnGoals: number;
   percentageBudgetToGoals: number;
   goalTransactionsCount: number;
+}
+
+// Onboarding and tutorial types
+export interface UserOnboarding {
+  id: string;
+  user_id: string;
+  tutorial_completed: boolean;
+  current_step: number;
+  dashboard_seen: boolean;
+  budget_seen: boolean;
+  goals_seen: boolean;
+  transactions_seen: boolean;
+  reports_seen: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TutorialStep {
+  target: string;
+  content: React.ReactNode;
+  title: string;
+  disableBeacon?: boolean;
+  placement?: 'top' | 'top-start' | 'top-end' | 'bottom' | 'bottom-start' | 'bottom-end' | 'left' | 'right';
+  spotlightPadding?: number;
+  disableOverlay?: boolean;
+  hideFooter?: boolean;
+  hideCloseButton?: boolean;
+  styles?: {
+    options?: Record<string, any>;
+    spotlight?: Record<string, any>;
+    tooltip?: Record<string, any>;
+    tooltipContainer?: Record<string, any>;
+    tooltipTitle?: Record<string, any>;
+    tooltipContent?: Record<string, any>;
+    buttonNext?: Record<string, any>;
+    buttonBack?: Record<string, any>;
+    buttonSkip?: Record<string, any>;
+  };
+}
+
+export interface OnboardingContextType {
+  showTutorial: boolean;
+  setShowTutorial: React.Dispatch<React.SetStateAction<boolean>>;
+  tutorialStep: number;
+  setTutorialStep: React.Dispatch<React.SetStateAction<number>>;
+  onboardingStatus: UserOnboarding | null;
+  fetchOnboardingStatus: () => Promise<void>;
+  updateOnboardingStatus: (data: Partial<UserOnboarding>) => Promise<void>;
+  completeTutorial: () => Promise<void>;
 }

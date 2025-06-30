@@ -1,22 +1,25 @@
 import React, { useState, useEffect, FC, ChangeEvent, FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { getCurrentUserData } from "../../data/mockData";
 import { formatCurrency, formatDate } from "../../utils/helpers";
+import { supabase } from "../../utils/supabaseClient";
+import { useAuth } from "../../utils/AuthContext";
+import { useToast } from "../../utils/ToastContext";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
 import "animate.css";
 
 interface Account {
-  id: number;
+  id: string;
   account_name: string;
   account_type: string;
   balance: number;
 }
 
 interface Category {
-  id: number;
+  id: string;
   category_name: string;
+  icon?: string;
 }
 
 interface Goal {
@@ -25,10 +28,6 @@ interface Goal {
 }
 
 interface UserData {
-  user: {
-    id: string;
-    name: string;
-  };
   accounts: Account[];
   incomeCategories: Category[];
   expenseCategories: Category[];
@@ -47,7 +46,14 @@ interface TransactionFormData {
 
 const AddTransaction: FC = () => {
   const navigate = useNavigate();
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const { user } = useAuth();
+  const { showSuccessToast, showErrorToast } = useToast();
+  const [userData, setUserData] = useState<UserData>({
+    accounts: [],
+    incomeCategories: [],
+    expenseCategories: [],
+    goals: []
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<"form" | "review">("form");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -65,29 +71,97 @@ const AddTransaction: FC = () => {
   });
 
   useEffect(() => {
-    // Load user data
-    const user = getCurrentUserData();
-    setUserData(user as unknown as UserData);
+    const fetchUserData = async () => {
+      try {
+        if (!user) {
+          showErrorToast("You must be logged in to add transactions");
+          navigate("/auth/login");
+          return;
+        }
 
-    // Set default account if available
-    if (user.accounts && user.accounts.length > 0) {
-      setTransaction((prev) => ({
-        ...prev,
-        account_id: user.accounts[0].id.toString(),
-      }));
-    }
+        setLoading(true);
+        
+        // Fetch user's accounts
+        const { data: accountsData, error: accountsError } = await supabase
+          .from('accounts')
+          .select('id, account_name, account_type, balance')
+          .eq('user_id', user.id);
+          
+        if (accountsError) throw accountsError;
+        
+        // Fetch income categories
+        const { data: incomeData, error: incomeError } = await supabase
+          .from('income_categories')
+          .select('id, category_name, icon')
+          .eq('user_id', user.id)
+          .order('category_name');
+          
+        if (incomeError) throw incomeError;
+        
+        // Fetch expense categories
+        const { data: expenseData, error: expenseError } = await supabase
+          .from('expense_categories')
+          .select('id, category_name, icon')
+          .eq('user_id', user.id)
+          .order('category_name');
+          
+        if (expenseError) throw expenseError;
+        
+        // Fetch goals
+        const { data: goalsData, error: goalsError } = await supabase
+          .from('goals')
+          .select('id, goal_name')
+          .eq('user_id', user.id)
+          .eq('status', 'in_progress')
+          .order('goal_name');
+          
+        if (goalsError) throw goalsError;
+        
+        // Update state with fetched data
+        setUserData({
+          accounts: accountsData || [],
+          incomeCategories: incomeData || [],
+          expenseCategories: expenseData || [],
+          goals: goalsData || []
+        });
+        
+        // Set default account if available
+        if (accountsData && accountsData.length > 0) {
+          setTransaction(prev => ({ 
+            ...prev, 
+            account_id: accountsData[0].id 
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        showErrorToast("Failed to load user data");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    setLoading(false);
-  }, []);
+    fetchUserData();
+  }, [user, navigate, showErrorToast]);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ): void => {
     const { name, value } = e.target;
-    setTransaction((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    // Special handling for transaction type changes
+    if (name === 'type') {
+      // When changing transaction type, reset the category selection
+      setTransaction((prev) => ({
+        ...prev,
+        [name]: value as "income" | "expense",
+        category_id: '', // Clear category selection when changing transaction type
+      }));
+    } else {
+      setTransaction((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
   };
 
   const handleReview = (e: FormEvent<HTMLFormElement>): void => {
@@ -95,22 +169,33 @@ const AddTransaction: FC = () => {
 
     // Validation
     if (!transaction.amount || parseFloat(transaction.amount) <= 0) {
-      alert("Please enter a valid amount");
+      showErrorToast("Please enter a valid amount");
       return;
     }
 
     if (!transaction.date) {
-      alert("Please select a date");
+      showErrorToast("Please select a date");
       return;
     }
 
     if (!transaction.account_id) {
-      alert("Please select an account");
+      showErrorToast("Please select an account");
       return;
     }
 
     if (!transaction.category_id) {
-      alert("Please select a category");
+      showErrorToast("Please select a category");
+      return;
+    }
+    
+    // Additional validation to ensure the category matches the transaction type
+    const isIncome = transaction.type === 'income';
+    const categoryExists = isIncome 
+      ? userData.incomeCategories.some(cat => cat.id === transaction.category_id)
+      : userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+    
+    if (!categoryExists) {
+      showErrorToast(`Selected category does not match transaction type. Please select a ${isIncome ? 'income' : 'expense'} category.`);
       return;
     }
 
@@ -118,15 +203,122 @@ const AddTransaction: FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleSubmit = (): void => {
+  const handleSubmit = async (): Promise<void> => {
+    if (!user) {
+      showErrorToast("You must be logged in to add transactions");
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // For demo, just log and redirect
-    setTimeout(() => {
-      console.log("Submitting transaction:", transaction);
-      alert("Transaction added successfully!");
-      navigate("/transactions");
-    }, 1000);
+    try {
+      // Determine if we need to update account balance
+      const amount = parseFloat(transaction.amount);
+      const accountId = transaction.account_id;
+      
+      // Validate that the category matches the transaction type
+      if (transaction.category_id && transaction.type) {
+        const isIncome = transaction.type === 'income';
+        const categoryExists = isIncome 
+          ? userData.incomeCategories.some(cat => cat.id === transaction.category_id)
+          : userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+        
+        if (!categoryExists) {
+          throw new Error(`Selected category does not match transaction type. Please select a ${isIncome ? 'income' : 'expense'} category.`);
+        }
+      }
+      
+      // Start a transaction in Supabase using RPC (if available) or multiple queries
+      
+      // 1. Insert the transaction
+      const { data: transactionData, error: transactionError } = await supabase
+        .from('transactions')
+        .insert([
+          {
+            user_id: user.id,
+            account_id: accountId,
+            category_id: transaction.category_id || null,
+            goal_id: transaction.goal_id || null,
+            type: transaction.type,
+            amount: amount,
+            date: transaction.date,
+            notes: transaction.notes,
+            created_at: new Date().toISOString()
+          }
+        ])
+        .select();
+
+      if (transactionError) throw transactionError;
+      
+      // 2. Update the account balance
+      // For income, add to balance; for expenses, subtract from balance
+      const balanceChange = transaction.type === 'income' ? amount : -amount;
+      
+      const { error: accountError } = await supabase.rpc('update_account_balance', { 
+        p_account_id: accountId,
+        p_amount_change: balanceChange
+      });
+      
+      if (accountError) {
+        // If RPC fails, fall back to direct update
+        const { data: accountData, error: fetchError } = await supabase
+          .from('accounts')
+          .select('balance')
+          .eq('id', accountId)
+          .single();
+          
+        if (fetchError) throw fetchError;
+        
+        const newBalance = accountData.balance + balanceChange;
+        
+        const { error: updateError } = await supabase
+          .from('accounts')
+          .update({ balance: newBalance })
+          .eq('id', accountId);
+          
+        if (updateError) throw updateError;
+      }
+      
+      // 3. Update goal progress if applicable
+      if (transaction.goal_id) {
+        const { error: goalError } = await supabase.rpc('update_goal_progress', {
+          p_goal_id: transaction.goal_id,
+          p_amount: amount
+        });
+        
+        if (goalError) {
+          // If RPC fails, fall back to direct update
+          const { data: goalData, error: fetchGoalError } = await supabase
+            .from('goals')
+            .select('current_amount, target_amount')
+            .eq('id', transaction.goal_id)
+            .single();
+            
+          if (fetchGoalError) throw fetchGoalError;
+          
+          const newAmount = goalData.current_amount + amount;
+          const status = newAmount >= goalData.target_amount ? 'completed' : 'in_progress';
+          
+          const { error: updateGoalError } = await supabase
+            .from('goals')
+            .update({ 
+              current_amount: newAmount,
+              status: status
+            })
+            .eq('id', transaction.goal_id);
+            
+          if (updateGoalError) throw updateGoalError;
+        }
+      }
+
+      showSuccessToast("Transaction added successfully!");
+      navigate('/transactions');
+    } catch (error: any) {
+      console.error('Error adding transaction:', error);
+      showErrorToast(error.message || "Failed to add transaction");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   const toggleTip = (tipId: string, event?: React.MouseEvent) => {
@@ -154,7 +346,7 @@ const AddTransaction: FC = () => {
     }
   };
 
-  if (loading || !userData) {
+  if (loading) {
     return (
       <div className="container-fluid">
         <div className="text-center my-5">
@@ -169,15 +361,15 @@ const AddTransaction: FC = () => {
 
   if (viewMode === "review") {
     const selectedAccount = userData.accounts.find(
-      account => account.id.toString() === transaction.account_id
+      account => account.id === transaction.account_id
     );
     
     const selectedCategory = transaction.type === "income" 
-      ? userData.incomeCategories.find(category => category.id.toString() === transaction.category_id)
-      : userData.expenseCategories.find(category => category.id.toString() === transaction.category_id);
+      ? userData.incomeCategories.find(category => category.id === transaction.category_id)
+      : userData.expenseCategories.find(category => category.id === transaction.category_id);
       
     const selectedGoal = transaction.goal_id 
-      ? userData.goals.find(goal => goal.id.toString() === transaction.goal_id)
+      ? userData.goals.find(goal => goal.id === transaction.goal_id)
       : null;
     
     return (
@@ -488,7 +680,7 @@ const AddTransaction: FC = () => {
                       >
                         <option value="">Select Account</option>
                         {userData.accounts.map((account) => (
-                          <option key={account.id} value={account.id.toString()}>
+                          <option key={account.id} value={account.id}>
                             {account.account_name} ({account.account_type})
                           </option>
                         ))}
@@ -512,12 +704,12 @@ const AddTransaction: FC = () => {
                         <option value="">Select Category</option>
                         {transaction.type === "income"
                           ? userData.incomeCategories.map((category) => (
-                              <option key={category.id} value={category.id.toString()}>
+                              <option key={category.id} value={category.id}>
                                 {category.category_name}
                               </option>
                             ))
                           : userData.expenseCategories.map((category) => (
-                              <option key={category.id} value={category.id.toString()}>
+                              <option key={category.id} value={category.id}>
                                 {category.category_name}
                               </option>
                             ))}
@@ -539,7 +731,7 @@ const AddTransaction: FC = () => {
                   >
                     <option value="">No Goal</option>
                     {userData.goals.map((goal) => (
-                      <option key={goal.id} value={goal.id.toString()}>
+                      <option key={goal.id} value={goal.id}>
                         {goal.goal_name}
                       </option>
                     ))}

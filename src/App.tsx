@@ -23,6 +23,7 @@ import "./assets/css/responsive.css";
 import { AuthProvider, useAuth } from "./utils/AuthContext";
 import { ToastProvider } from "./utils/ToastContext";
 import { CurrencyProvider } from "./utils/CurrencyContext";
+import { OnboardingProvider } from "./utils/OnboardingContext";
 import AuthCallback from "./components/auth/AuthCallback";
 import EmailVerificationModal from "./components/auth/EmailVerificationModal";
 
@@ -31,19 +32,27 @@ import Layout from "./components/layout/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Meta from "./components/layout/Meta";
 
+// Onboarding components
+import { OnboardingController } from "./components/onboarding";
+
 // Page components
 import Dashboard from "./components/dashboard/Dashboard";
 import Transactions from "./components/transactions/Transactions";
 import AddTransaction from "./components/transactions/AddTransaction";
+import EditTransaction from "./components/transactions/EditTransaction";
 import TransactionDetails from "./components/transactions/TransactionDetails";
 import Budgets from "./components/budget/Budgets";
 import CreateBudget from "./components/budget/CreateBudget";
+import EditBudget from "./components/budget/EditBudget";
 import BudgetDetails from "./components/budget/BudgetDetails";
 import Goals from "./components/goals/Goals";
 import GoalDetails from "./components/goals/GoalDetails";
 import CreateGoal from "./components/goals/CreateGoal";
+import EditGoal from "./components/goals/EditGoal";
 import GoalContribution from "./components/goals/GoalContribution";
 import FamilyDashboard from "./components/family/FamilyDashboard";
+import CreateFamily from "./components/family/CreateFamily";
+import EditFamily from "./components/family/EditFamily";
 import InviteFamilyMember from "./components/family/InviteFamilyMember";
 import LandingPage from "./components/landing/LandingPage";
 import AIPrediction from "./components/predictions/AIPrediction";
@@ -62,195 +71,390 @@ const AdminPredictions = lazy(() => import("./components/admin/predictions/Admin
 const AdminReports = lazy(() => import("./components/admin/reports/AdminReports"));
 const AdminSettings = lazy(() => import("./components/admin/settings/AdminSettings"));
 
-interface AppProps {}
+// Add activeTab to LandingPageProps
+interface LandingPageProps {
+  activeTab?: string;
+}
 
-// Route guard component with enhanced session handling
-const ProtectedRoute: FC<{ element: React.ReactElement, title?: string, adminOnly?: boolean }> = ({ element, title, adminOnly }) => {
+interface PrivateRouteProps {
+  children: React.ReactNode;
+}
+
+// Check if the user is authenticated before rendering route content
+const PrivateRoute: FC<PrivateRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
-  
-  // Redirect to landing page without auto-showing login modal
-  useEffect(() => {
-    if (!loading && !user) {
-      // Redirect to home without setting showLogin in state
-      navigate('/');
-    }
-  }, [user, loading, navigate]);
 
-  if (loading) return (
-    <div
-      className="d-flex align-items-center justify-content-center"
-      style={{ height: "100vh", backgroundColor: "#f8f9fc" }}
-    >
-      <div className="text-center">
-        <div className="spinner-border text-primary mb-4" role="status">
-          <span className="sr-only">Loading...</span>
-        </div>
-        <h1 className="h3 text-gray-800 mb-2">BudgetMe</h1>
-        <p className="text-gray-600">Loading your financial dashboard...</p>
-      </div>
-    </div>
-  );
-
-  if (adminOnly && user) {
-    // Check if user has admin role (this would use Supabase in production)
-    const isAdmin = user.user_metadata?.role === 'admin'; // This is simplified
-    
-    if (!isAdmin) {
-      navigate('/dashboard');
-    }
+  // If authentication is still loading, show nothing or a loading indicator
+  if (loading) {
+    return <div>Loading...</div>;
   }
 
-  // Wrap the element in the Layout component if user is authenticated
-  return user ? (
-    <Layout title={title}>
-      {element}
-    </Layout>
-  ) : null; // Return null to prevent flash before redirect
-};
-
-// Landing page wrapper that handles automatic login detection
-const LandingPageWrapper: FC = () => {
-  const { user, loading } = useAuth();
-  const navigate = useNavigate();
-  
-  useEffect(() => {
-    // Redirect to dashboard if already logged in
-    if (!loading && user) {
-      navigate('/dashboard');
-    }
-  }, [user, loading, navigate]);
-
-  // Show landing page only if not authenticated
-  return loading ? (
-    <div
-      className="d-flex align-items-center justify-content-center"
-      style={{ height: "100vh", backgroundColor: "#f8f9fc" }}
-    >
-      <div className="text-center">
-        <div className="spinner-border text-primary mb-4" role="status">
-          <span className="sr-only">Loading...</span>
-        </div>
-        <h1 className="h3 text-gray-800 mb-2">BudgetMe</h1>
-        <p className="text-gray-600">Loading...</p>
-      </div>
-    </div>
-  ) : !user ? (
-    <>
-      <Meta title="BudgetMe - Personal Finance Tracker" />
-      <LandingPage />
-    </>
-  ) : null; // Return null to prevent flash before redirect
-};
-
-const AppContent: FC = () => {
-  const { loading } = useAuth();
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    // Simulate loading state
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Loading screen
-  if (isLoading || loading) {
-    return (
-      <div
-        className="d-flex align-items-center justify-content-center"
-        style={{ height: "100vh", backgroundColor: "#f8f9fc" }}
-      >
-        <div className="text-center">
-          <div className="spinner-border text-primary mb-4" role="status">
-            <span className="sr-only">Loading...</span>
-          </div>
-          <h1 className="h3 text-gray-800 mb-2">BudgetMe</h1>
-          <p className="text-gray-600">Loading your financial dashboard...</p>
-        </div>
-      </div>
-    );
+  // If not authenticated, redirect to login page
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  return (
-    <ErrorBoundary>
-      <EmailVerificationModal 
-        isOpen={false}
-        onClose={() => {}}
-        email=""
-      />
-      <Routes>
-        {/* Landing page route */}
-        <Route path="/" element={<LandingPageWrapper />} />
-        
-        {/* Admin login route */}
-        <Route path="/admin" element={<AdminLogin />} />
-
-        {/* Auth callback route */}
-        <Route path="/auth/callback" element={<AuthCallback />} />
-
-        {/* Protected routes */}
-        <Route path="/dashboard" element={<ProtectedRoute element={<Dashboard />} title="Dashboard | BudgetMe" />} />
-        <Route path="/transactions" element={<ProtectedRoute element={<Transactions />} title="Transactions | BudgetMe" />} />
-        <Route path="/transactions/add" element={<ProtectedRoute element={<AddTransaction />} title="Add Transaction | BudgetMe" />} />
-        <Route path="/transactions/:id" element={<ProtectedRoute element={<TransactionDetails />} title="Transaction Details | BudgetMe" />} />
-        <Route path="/budgets" element={<ProtectedRoute element={<Budgets />} title="Budgets | BudgetMe" />} />
-        <Route path="/budgets/create" element={<ProtectedRoute element={<CreateBudget />} title="Create Budget | BudgetMe" />} />
-        <Route path="/budgets/:id" element={<ProtectedRoute element={<BudgetDetails />} title="Budget Details | BudgetMe" />} />
-        <Route path="/goals" element={<ProtectedRoute element={<Goals />} title="Goals | BudgetMe" />} />
-        <Route path="/goals/create" element={<ProtectedRoute element={<CreateGoal />} title="Create Goal | BudgetMe" />} />
-        <Route path="/goals/:id" element={<ProtectedRoute element={<GoalDetails />} title="Goal Details | BudgetMe" />} />
-        <Route path="/goals/:id/contribute" element={<ProtectedRoute element={<GoalContribution />} title="Make Contribution | BudgetMe" />} />
-        <Route path="/family" element={<ProtectedRoute element={<FamilyDashboard />} title="Family Dashboard | BudgetMe" />} />
-        <Route path="/family/invite" element={<ProtectedRoute element={<InviteFamilyMember />} title="Invite Member | BudgetMe" />} />
-        <Route path="/predictions" element={<ProtectedRoute element={<AIPrediction />} title="AI Predictions | BudgetMe" />} />
-        <Route path="/reports" element={<ProtectedRoute element={<FinancialReports />} title="Financial Reports | BudgetMe" />} />
-        <Route path="/settings" element={<ProtectedRoute element={<Settings />} title="Settings | BudgetMe" />} />
-
-        {/* Admin routes */}
-        <Route path="/admin/dashboard" element={<AdminRoute element={<AdminDashboard />} title="Admin Dashboard | BudgetMe" />} />
-        <Route path="/admin/users" element={<AdminRoute element={<UserManagement />} title="User Management | BudgetMe" />} />
-        <Route path="/admin/budgets" element={<AdminRoute element={<AdminBudgets />} title="Admin Budgets | BudgetMe" />} />
-        <Route path="/admin/goals" element={<AdminRoute element={<Suspense fallback={<div>Loading...</div>}>
-          <AdminGoals />
-        </Suspense>} title="Admin Goals | BudgetMe" />} />
-        <Route path="/admin/transactions" element={<AdminRoute element={<Suspense fallback={<div>Loading...</div>}>
-          <AdminTransactions />
-        </Suspense>} title="Admin Transactions | BudgetMe" />} />
-        <Route path="/admin/family" element={<AdminRoute element={<Suspense fallback={<div>Loading...</div>}>
-          <AdminFamily />
-        </Suspense>} title="Admin Family | BudgetMe" />} />
-        <Route path="/admin/predictions" element={<AdminRoute element={<Suspense fallback={<div>Loading...</div>}>
-          <AdminPredictions />
-        </Suspense>} title="Admin Predictions | BudgetMe" />} />
-        <Route path="/admin/reports" element={<AdminRoute element={<Suspense fallback={<div>Loading...</div>}>
-          <AdminReports />
-        </Suspense>} title="Admin Reports | BudgetMe" />} />
-        <Route path="/admin/settings" element={<AdminRoute element={<Suspense fallback={<div>Loading...</div>}>
-          <AdminSettings />
-        </Suspense>} title="Admin Settings | BudgetMe" />} />
-
-        {/* Catch-all route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </ErrorBoundary>
-  );
+  // If authenticated, render the children components
+  return <>{children}</>;
 };
 
-const App: FC<AppProps> = () => {
+const App: FC = () => {
   return (
     <Router>
       <ToastProvider>
         <AuthProvider>
           <CurrencyProvider>
-            <AppContent />
+            <OnboardingProvider>
+              <ErrorBoundary>
+                <AppRoutes />
+              </ErrorBoundary>
+            </OnboardingProvider>
           </CurrencyProvider>
         </AuthProvider>
       </ToastProvider>
     </Router>
+  );
+};
+
+const AppRoutes: FC = () => {
+  const { user, loading, verificationEmail, showEmailVerificationModal, setShowEmailVerificationModal } = useAuth();
+  const location = useLocation();
+
+  // Landing page paths
+  const landingPaths = ["/", "/login", "/signup", "/password-reset"];
+  const isLandingPage = landingPaths.includes(location.pathname);
+  const isAdminPage = location.pathname.startsWith("/admin");
+
+  return (
+    <>
+      <Meta title="BudgetMe - Personal Finance Manager" />
+      <EmailVerificationModal 
+        isOpen={showEmailVerificationModal} 
+        onClose={() => setShowEmailVerificationModal(false)}
+        email={verificationEmail || ''}
+      />
+
+      {/* Only show OnboardingController if user is authenticated and not on landing/admin pages */}
+      {user && !loading && !isLandingPage && !isAdminPage && (
+        <OnboardingController />
+      )}
+
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LandingPage activeTab="login" />} />
+        <Route path="/signup" element={<LandingPage activeTab="signup" />} />
+        <Route path="/password-reset" element={<LandingPage activeTab="reset" />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+
+        {/* Admin routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <AdminDashboard />
+              </AdminLayout>
+            }/>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <UserManagement />
+              </AdminLayout>
+            }/>
+          }
+        />
+        <Route
+          path="/admin/families"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <AdminFamily />
+              </AdminLayout>
+            }/>
+          }
+        />
+        <Route
+          path="/admin/budgets"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <AdminBudgets />
+              </AdminLayout>
+            }/>
+          }
+        />
+        <Route
+          path="/admin/goals"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <AdminGoals />
+              </AdminLayout>
+            }/>
+          }
+        />
+        <Route
+          path="/admin/transactions"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <AdminTransactions />
+              </AdminLayout>
+            }/>
+          }
+        />
+        <Route
+          path="/admin/reports"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <AdminReports />
+              </AdminLayout>
+            }/>
+          }
+        />
+        <Route
+          path="/admin/predictions"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <AdminPredictions />
+              </AdminLayout>
+            }/>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <AdminRoute element={
+              <AdminLayout>
+                <AdminSettings />
+              </AdminLayout>
+            }/>
+          }
+        />
+
+        {/* Protected routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute>
+              <Layout title="Dashboard">
+                <Dashboard />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/transactions"
+          element={
+            <PrivateRoute>
+              <Layout title="Transactions">
+                <Transactions />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/transactions/add"
+          element={
+            <PrivateRoute>
+              <Layout title="Add Transaction">
+                <AddTransaction />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/transactions/:id/edit"
+          element={
+            <PrivateRoute>
+              <Layout title="Edit Transaction">
+                <EditTransaction />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/transactions/:id"
+          element={
+            <PrivateRoute>
+              <Layout title="Transaction Details">
+                <TransactionDetails />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/budgets"
+          element={
+            <PrivateRoute>
+              <Layout title="Budgets">
+                <Budgets />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/budgets/create"
+          element={
+            <PrivateRoute>
+              <Layout title="Create Budget">
+                <CreateBudget />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/budgets/:id/edit"
+          element={
+            <PrivateRoute>
+              <Layout title="Edit Budget">
+                <EditBudget />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/budgets/:id"
+          element={
+            <PrivateRoute>
+              <Layout title="Budget Details">
+                <BudgetDetails />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/goals"
+          element={
+            <PrivateRoute>
+              <Layout title="Financial Goals">
+                <Goals />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/goals/create"
+          element={
+            <PrivateRoute>
+              <Layout title="Create Goal">
+                <CreateGoal />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/goals/:id/edit"
+          element={
+            <PrivateRoute>
+              <Layout title="Edit Goal">
+                <EditGoal />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/goals/:id"
+          element={
+            <PrivateRoute>
+              <Layout title="Goal Details">
+                <GoalDetails />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/goals/:id/contribute"
+          element={
+            <PrivateRoute>
+              <Layout title="Contribute to Goal">
+                <GoalContribution />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/family"
+          element={
+            <PrivateRoute>
+              <Layout title="Family Dashboard">
+                <FamilyDashboard />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/family/create"
+          element={
+            <PrivateRoute>
+              <Layout title="Create Family">
+                <CreateFamily />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/family/edit/:id"
+          element={
+            <PrivateRoute>
+              <Layout title="Edit Family">
+                <EditFamily />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/family/invite"
+          element={
+            <PrivateRoute>
+              <Layout title="Invite Family Member">
+                <InviteFamilyMember />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/predictions"
+          element={
+            <PrivateRoute>
+              <Layout title="AI Predictions">
+                <AIPrediction />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <PrivateRoute>
+              <Layout title="Financial Reports">
+                <FinancialReports />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <PrivateRoute>
+              <Layout title="Settings">
+                <Settings />
+              </Layout>
+            </PrivateRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 };
 

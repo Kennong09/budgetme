@@ -2,6 +2,7 @@
 
 import { Transaction, Goal } from "../types";
 import { currencySymbols } from "./CurrencyContext";
+import { supabase } from "./supabaseClient";
 
 // Format currency based on user preference
 export const formatCurrency = (amount: number, currency = 'PHP'): string => {
@@ -172,4 +173,31 @@ export const calculateMonthlySavingsForGoal = (goal: {
   if (monthsDiff <= 0) return remainingAmount;
 
   return remainingAmount / monthsDiff;
+};
+
+/**
+ * Safely refresh the user_family_memberships materialized view
+ * Uses the new safe_refresh_family_memberships function that handles errors
+ */
+export const refreshFamilyMembershipsView = async (): Promise<boolean> => {
+  try {
+    // Add a small delay before refreshing to avoid conflicts with active queries
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // Use our safe refresh function that handles errors internally
+    const { error } = await supabase.rpc('safe_refresh_family_memberships');
+    
+    if (error) {
+      console.warn("Error in safe refresh function:", error);
+      // Return true anyway since the operation should continue
+      return true;
+    }
+    
+    console.log("Successfully called materialized view refresh function");
+    return true;
+  } catch (refreshError) {
+    console.warn("Failed to refresh materialized view (non-critical):", refreshError);
+    // This is a non-critical operation, so return true to let the main flow continue
+    return true;
+  }
 };

@@ -140,7 +140,7 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
                   <h6 className="dropdown-header">Alerts Center</h6>
                   <a className="dropdown-item d-flex align-items-center" href="#">
                     <div className="mr-3">
-                      <div className="icon-circle bg-primary">
+                      <div className="icon-circle bg-danger">
                         <i className="fas fa-file-alt text-white"></i>
                       </div>
                     </div>
@@ -262,7 +262,7 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
               >
                 Cancel
               </button>
-              <a className="btn btn-primary" href="/login">
+              <a className="btn btn-danger" href="/login">
                 Logout
               </a>
             </div>

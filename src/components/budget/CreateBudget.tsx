@@ -1,7 +1,10 @@
 import React, { useState, useEffect, FC, ChangeEvent, FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { formatCurrency, getMonthDates } from "../../utils/helpers";
-import { getCurrentUserData } from "../../data/mockData";
+import { supabase } from "../../utils/supabaseClient";
+import { useAuth } from "../../utils/AuthContext";
+import { useToast } from "../../utils/ToastContext";
+import { Budget } from "../../types";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -31,9 +34,12 @@ interface UserData {
 
 const CreateBudget: FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showSuccessToast, showErrorToast } = useToast();
   const [loading, setLoading] = useState<boolean>(true);
-  const [userData, setUserData] = useState<UserData | null>(null);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [budget, setBudget] = useState<BudgetFormData>({
     category_id: "",
@@ -45,15 +51,40 @@ const CreateBudget: FC = () => {
   const [viewMode, setViewMode] = useState<"form" | "review">("form");
 
   useEffect(() => {
-    // Simulate API call
-    const timer = setTimeout(() => {
-      const user = getCurrentUserData() as unknown as UserData;
-      setUserData(user);
+    // Fetch expense categories from Supabase
+    const fetchCategories = async () => {
+      try {
+        setLoading(true);
+        
+        if (!user) {
+          showErrorToast("Please sign in to create a budget");
+          navigate("/login");
+          return;
+        }
+        
+        // Fetch expense categories from the database
+        const { data, error } = await supabase
+          .from('expense_categories')
+          .select('id, category_name')
+          .eq('user_id', user.id)
+          .order('category_name', { ascending: true });
+          
+        if (error) {
+          throw new Error(error.message);
+        }
+        
+        setExpenseCategories(data || []);
+      } catch (err) {
+        console.error("Error fetching categories:", err);
+        showErrorToast(`Failed to load categories: ${(err as Error).message}`);
+        setError((err as Error).message);
+      } finally {
       setLoading(false);
-    }, 300);
+      }
+    };
 
-    return () => clearTimeout(timer);
-  }, []);
+    fetchCategories();
+  }, [user, navigate, showErrorToast]);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -82,12 +113,12 @@ const CreateBudget: FC = () => {
 
     // Validate
     if (!budget.category_id) {
-      alert("Please select a category");
+      showErrorToast("Please select a category");
       return;
     }
 
     if (!budget.amount || parseFloat(budget.amount) <= 0) {
-      alert("Please enter a valid amount");
+      showErrorToast("Please enter a valid amount");
       return;
     }
 
@@ -95,7 +126,8 @@ const CreateBudget: FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleSubmit = (): void => {
+  const handleSubmit = async (): Promise<void> => {
+    try {
     // Get start and end dates based on period
     const startDate = new Date(budget.startDate + "-01")
       .toISOString()
@@ -104,25 +136,45 @@ const CreateBudget: FC = () => {
     
     setIsSubmitting(true);
 
-    const finalBudget = {
-      ...budget,
-      period_start: startDate,
-      period_end: endDate,
+      if (!user || !user.id) {
+        throw new Error("User not authenticated");
+      }
+      
+      // Prepare budget data for insertion
+      const budgetData = {
+        category_id: budget.category_id,
+        amount: parseFloat(budget.amount),
+        period: budget.period,
+        start_date: startDate,
+        end_date: endDate,
+        user_id: user.id,
+        spent: 0, // Initial spent is zero
     };
 
-    // In a real app, would call API to save budget
-    setTimeout(() => {
-      console.log("Submitting budget:", finalBudget);
-      alert("Budget created successfully!");
+      // Insert budget into Supabase
+      const { data, error } = await supabase
+        .from('budgets')
+        .insert(budgetData)
+        .select()
+        .single();
+        
+      if (error) {
+        throw new Error(error.message);
+      }
+      
+      // Success! Show toast and redirect
+      showSuccessToast("Budget created successfully!");
       navigate("/budgets");
-    }, 1000);
+    } catch (err) {
+      console.error("Error creating budget:", err);
+      showErrorToast(`Failed to create budget: ${(err as Error).message}`);
+      setError((err as Error).message);
+      setIsSubmitting(false);
+    }
   };
 
   const findCategory = (categoryId: string): ExpenseCategory | undefined => {
-    if (!userData) return undefined;
-    return userData.expenseCategories.find(
-      (c) => c.id.toString() === categoryId
-    );
+    return expenseCategories.find((c) => c.id.toString() === categoryId);
   };
 
   if (loading) {
@@ -296,6 +348,21 @@ const CreateBudget: FC = () => {
         </Link>
       </div>
       
+      {/* Error message if applicable */}
+      {error && (
+        <div className="alert alert-danger mb-4">
+          <i className="fas fa-exclamation-triangle mr-2"></i>
+          {error}
+          <button 
+            onClick={() => setError(null)} 
+            className="close" 
+            aria-label="Close"
+          >
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+      )}
+      
       <div className="row">
         <div className="col-lg-8 mx-auto">
           <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
@@ -317,7 +384,7 @@ const CreateBudget: FC = () => {
                     required
                   >
                     <option value="">Select Category</option>
-                    {userData?.expenseCategories.map((category) => (
+                    {expenseCategories.map((category) => (
                       <option key={category.id} value={category.id.toString()}>
                         {category.category_name}
                       </option>

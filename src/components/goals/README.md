@@ -24,6 +24,7 @@ src/components/goals/
 ├── Goals.tsx             # Main goal list and overview component
 ├── GoalDetails.tsx       # Detailed view for a single goal
 ├── CreateGoal.tsx        # Form for creating new goals
+├── EditGoal.tsx          # Form for editing existing goals
 └── GoalContribution.tsx  # Form for contributing to existing goals
 ```
 
@@ -112,6 +113,36 @@ The component manages several state variables:
 - Form data (name, amount, date, etc.)
 - View mode (form or review)
 - Submission states
+
+## EditGoal Component
+
+**File**: `EditGoal.tsx`
+
+This component provides a form interface for editing existing financial goals with a review process before submission.
+
+### Key Features
+
+- **Pre-populated Form**: Loads existing goal data for editing
+- **Goal Status Management**: Allows changing goal status
+- **Savings Recommendation Updates**: Recalculates recommendations based on edits
+- **Review Step**: Preview of the goal changes before final submission
+- **Form Validation**: Validates required fields, amounts, and dates
+
+### Key Functions
+
+- `fetchGoal()`: Retrieves the existing goal data from the database
+- `handleChange()`: Manages form input changes
+- `handleReview()`: Validates form and switches to review mode
+- `handleSubmit()`: Submits the updated goal data
+- `calculateRecommendation()`: Calculates monthly savings needed to reach the goal
+
+### State Management
+
+The component manages several state variables:
+- Original goal data
+- Form data for editing (name, amount, date, etc.)
+- View mode (form or review)
+- Submission and loading states
 
 ## GoalContribution Component
 
@@ -223,6 +254,7 @@ The system provides notifications for goal milestones, upcoming deadlines, and c
    - Make a contribution (navigates to GoalContribution)
    - Edit or delete the goal
 5. **CreateGoal.tsx** handles the goal creation flow with form and review steps
-6. **GoalContribution.tsx** handles the process of contributing funds to a goal
+6. **EditGoal.tsx** handles the goal editing flow with form and review steps
+7. **GoalContribution.tsx** handles the process of contributing funds to a goal
 
 The components are designed with a clear separation of concerns, with each handling a specific part of the goal management functionality while maintaining consistent styling and user experience throughout the application. 

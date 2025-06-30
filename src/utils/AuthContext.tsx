@@ -90,6 +90,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Session exists, user is authenticated
           if (currentUser) {
             setSignInSuccess(true);
+            
+            // If user is on login or signup page, redirect to dashboard
+            const currentPath = window.location.pathname;
+            if (currentPath === '/login' || currentPath === '/signup' || currentPath === '/') {
+              window.location.href = '/dashboard';
+            }
           }
         }
         
@@ -143,6 +149,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             if (showEmailVerificationModal) {
               setShowEmailVerificationModal(false);
             }
+            
+            // Redirect to dashboard after OAuth sign-in
+            window.location.href = '/dashboard';
           } else {
             // Regular email sign-in
             if (!toastsShown.current.signIn) {
@@ -150,6 +159,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               toastsShown.current.signIn = true;
             }
             setSignInSuccess(true);
+            
+            // Redirect to dashboard after email sign-in
+            window.location.href = '/dashboard';
           }
         } else if (event === 'SIGNED_OUT') {
           showSuccessToast('Successfully Signed Out');
@@ -251,6 +263,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setSession(response.session);
         setSignInSuccess(true);
         toastsShown.current.signIn = false; // Allow sign-in toast to show
+        
+        // Redirect to dashboard after successful login
+        window.location.href = '/dashboard';
       }
     } catch (err) {
       const errorMessage = 'An unexpected error occurred during sign in';

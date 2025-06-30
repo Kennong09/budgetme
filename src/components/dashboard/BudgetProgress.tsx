@@ -28,9 +28,17 @@ interface BudgetProgressProps {
 const BudgetProgress: FC<BudgetProgressProps> = ({ budgets, onBudgetItemClick }) => {
   if (!budgets || budgets.length === 0) {
     return (
-      <div className="text-center p-6 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-        <i className="fas fa-chart-pie text-gray-400 text-4xl mb-3"></i>
-        <p className="text-gray-500">No budget data available.</p>
+      <div className="text-center py-5">
+        <div className="mb-3">
+          <i className="fas fa-chart-pie fa-3x text-gray-300"></i>
+        </div>
+        <h5 className="text-gray-700 mb-2">No Budgets Available</h5>
+        <p className="text-gray-500 mb-4">
+          Create budgets to track your spending by category and stay on top of your financial goals.
+        </p>
+        <Link to="/budgets/create" className="btn btn-primary btn-sm shadow-sm">
+          <i className="fas fa-plus fa-sm mr-2"></i>Create Your First Budget
+        </Link>
       </div>
     );
   }

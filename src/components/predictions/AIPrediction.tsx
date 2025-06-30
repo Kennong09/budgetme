@@ -399,11 +399,14 @@ const AIPrediction: FC = () => {
   if (loading) {
     return (
       <div className="container-fluid">
-        <div className="text-center mt-5">
-            <div className="spinner-border text-primary" role="status">
-              <span className="sr-only">Loading...</span>
+        <div className="text-center my-5 py-5 animate__animated animate__fadeIn">
+          <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
+            <span className="sr-only">Loading...</span>
           </div>
-          <p className="mt-3 text-gray-600">Loading your predictions...</p>
+          <h5 className="mt-4 text-gray-600 font-weight-light">
+            Loading AI Predictions
+          </h5>
+          <p className="text-gray-500">Please wait while we analyze your financial data...</p>
         </div>
       </div>
     );

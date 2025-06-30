@@ -237,7 +237,7 @@ const AdminSidebar: FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, isMobile
   return (
     <>
       <ul
-        className={`navbar-nav bg-gradient-primary sidebar sidebar-dark accordion 
+        className={`navbar-nav bg-gradient-danger sidebar sidebar-dark accordion 
           ${!isOpen && window.innerWidth >= 768 ? "toggled" : ""} 
           ${isMobile ? "mobile-sidebar" : ""}
           ${compactMode ? "sidebar-compact" : ""}`}
@@ -355,7 +355,7 @@ const AdminSidebar: FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, isMobile
             className="rounded-circle border-0 sidebar-toggle-btn" 
             id="sidebarToggle"
             onClick={handleToggleSidebar}
-            style={{ color: 'var(--light)', background: 'var(--primary)' }}
+            style={{ color: 'var(--primary)', background: '#ffffff' }}
           >
             <i className={`fas ${isOpen ? "fa-angle-left" : "fa-angle-right"}`}></i>
           </button>

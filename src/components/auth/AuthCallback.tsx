@@ -48,7 +48,10 @@ const AuthCallback: FC = () => {
           }
           
           // Redirect to dashboard on successful authentication
-          navigate('/dashboard');
+          console.log('Authentication successful, redirecting to dashboard');
+          
+          // Use window.location.href for a full page reload to ensure the auth context is updated
+          window.location.href = '/dashboard';
         } else {
           // If no session, redirect to home
           console.log('No session found, redirecting to home');

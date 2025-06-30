@@ -1,11 +1,9 @@
 import React, { useState, useEffect, FC, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { formatCurrency, formatDate } from "../../utils/helpers";
-import {
-  transactions,
-  getCategoryById,
-  getAccountById,
-} from "../../data/mockData";
+import { supabase } from "../../utils/supabaseClient";
+import { useAuth } from "../../utils/AuthContext";
+import { useToast } from "../../utils/ToastContext";
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
 import "animate.css";
@@ -16,20 +14,31 @@ interface Transaction {
   amount: number;
   notes: string;
   type: "income" | "expense";
-  category_id?: number;
-  account_id: number;
+  category_id?: string;
+  account_id: string;
   goal_id?: string;
   created_at: string;
+  user_id: string;
 }
 
 interface Category {
-  id: number;
+  id: string;
   category_name: string;
+  icon?: string;
 }
 
 interface Account {
-  id: number;
+  id: string;
   account_name: string;
+  account_type: string;
+  balance: number;
+}
+
+interface Goal {
+  id: string;
+  goal_name: string;
+  current_amount: number;
+  target_amount: number;
 }
 
 interface RouteParams {
@@ -39,10 +48,24 @@ interface RouteParams {
 const TransactionDetails: FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showSuccessToast, showErrorToast } = useToast();
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [relatedTransactions, setRelatedTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [highchartsLoaded, setHighchartsLoaded] = useState<boolean>(false);
+  const [subscriptionEstablished, setSubscriptionEstablished] = useState<boolean>(false);
+  
+  // Data for categories and accounts
+  const [categories, setCategories] = useState<{
+    income: Category[],
+    expense: Category[]
+  }>({
+    income: [],
+    expense: []
+  });
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   
   // Tooltip state
   const [activeTip, setActiveTip] = useState<string | null>(null);
@@ -56,59 +79,186 @@ const TransactionDetails: FC = () => {
   const [categoryChartOptions, setCategoryChartOptions] = useState<any>(null);
   const [impactChartOptions, setImpactChartOptions] = useState<any>(null);
 
-  useEffect(() => {
-    // Simulate API call to get transaction details
-    const timer = setTimeout(() => {
-      if (!id) {
+  // State for delete confirmation modal
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Function to fetch transaction details
+  const fetchTransactionData = async () => {
+    if (!id || !user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Fetch transaction details
+      const { data: transactionData, error: transactionError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (transactionError) throw transactionError;
+      
+      if (!transactionData) {
         setLoading(false);
         return;
       }
-
-      const foundTransaction = transactions.find(
-        (tx) => tx.id.toString() === id
-      );
-
-      if (foundTransaction) {
-        // Cast as Transaction type
-        const typedTransaction = foundTransaction as unknown as Transaction;
-        setTransaction(typedTransaction);
-        
-        // Find related transactions (same category or account)
-        if (typedTransaction.category_id) {
-          const related = transactions
-            .filter(tx => 
-              tx.id.toString() !== id && 
-              tx.category_id === typedTransaction.category_id &&
-              tx.type === typedTransaction.type
-            )
-            .slice(0, 5) as unknown as Transaction[]; // Get up to 5 related transactions
-          setRelatedTransactions(related);
-        }
-        
-        // Create chart configurations
-        createChartConfigs(typedTransaction);
+      
+      // Verify the user has permission to view this transaction
+      if (transactionData.user_id !== user.id) {
+        showErrorToast("You don't have permission to view this transaction");
+        navigate('/transactions');
+        return;
       }
 
-      setLoading(false);
-      setHighchartsLoaded(true);
-    }, 500);
+      setTransaction(transactionData);
+      
+      // Fetch account information
+      const { data: accountData, error: accountError } = await supabase
+        .from('accounts')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (accountError) throw accountError;
+      setAccounts(accountData || []);
 
-    return () => clearTimeout(timer);
-  }, [id]);
-  
-  const createChartConfigs = (transaction: Transaction) => {
+      // Fetch income categories
+      const { data: incomeData, error: incomeError } = await supabase
+        .from('income_categories')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (incomeError) throw incomeError;
+
+      // Fetch expense categories
+      const { data: expenseData, error: expenseError } = await supabase
+        .from('expense_categories')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (expenseError) throw expenseError;
+
+      // Set categories
+      setCategories({
+        income: incomeData || [],
+        expense: expenseData || []
+      });
+
+      // Fetch goals
+      const { data: goalsData, error: goalsError } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (goalsError) throw goalsError;
+      setGoals(goalsData || []);
+      
+      // Find related transactions (same category or account)
+      if (transactionData.category_id) {
+        const { data: relatedData, error: relatedError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('category_id', transactionData.category_id)
+          .eq('type', transactionData.type)
+          .neq('id', id)
+          .order('date', { ascending: false })
+          .limit(5);
+        
+        if (relatedError) throw relatedError;
+        setRelatedTransactions(relatedData || []);
+      }
+      
+      // Create chart configurations with the fetched data
+      createChartConfigs(
+        transactionData, 
+        { 
+          accounts: accountData || [],
+          incomeCategories: incomeData || [],
+          expenseCategories: expenseData || []
+        }
+      );
+
+      setHighchartsLoaded(true);
+    } catch (error: any) {
+      console.error('Error fetching transaction data:', error);
+      showErrorToast(error.message || "Failed to load transaction data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Set up real-time subscription
+  const setupRealtimeSubscription = () => {
+    if (!user || !id || subscriptionEstablished) return;
+
+    // Subscribe to this specific transaction
+    const subscription = supabase
+      .channel(`transaction-${id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'transactions',
+        filter: `id=eq.${id}`
+      }, (payload) => {
+        console.log('Transaction change received:', payload);
+        
+        // If transaction was deleted, navigate back to transactions list
+        if (payload.eventType === 'DELETE') {
+          showSuccessToast('This transaction has been deleted');
+          navigate('/transactions');
+          return;
+        }
+        
+        // Otherwise refresh data
+        fetchTransactionData();
+      })
+      .subscribe();
+
+    setSubscriptionEstablished(true);
+
+    // Cleanup function
+    return () => {
+      subscription.unsubscribe();
+    };
+  };
+
+  // Fetch data on component mount
+  useEffect(() => {
+    if (user) {
+      fetchTransactionData();
+    } else {
+      navigate('/auth/login');
+    }
+  }, [id, user]);
+
+  // Set up real-time subscriptions after fetching initial data
+  useEffect(() => {
+    if (user && !loading && !subscriptionEstablished) {
+      const cleanup = setupRealtimeSubscription();
+      return cleanup;
+    }
+  }, [user, loading, subscriptionEstablished]);
+
+  const createChartConfigs = (transaction: Transaction, data: {
+    accounts: Account[],
+    incomeCategories: Category[],
+    expenseCategories: Category[]
+  }) => {
     // Get category information
     const category = transaction.category_id
-      ? getCategoryById(transaction.category_id, transaction.type)
+      ? data.incomeCategories.find((c: Category) => c.id === transaction.category_id) || 
+        data.expenseCategories.find((c: Category) => c.id === transaction.category_id)
       : null;
     
     // Create category spending chart (pie chart)
     const categoryName = category ? category.category_name : 'Uncategorized';
     
-    // Find other transactions in the same category
-    const categoryTransactions = transactions.filter(
-      tx => tx.category_id === transaction.category_id && tx.type === transaction.type
-    ) as unknown as Transaction[];
+    // For now, we'll use related transactions for category transactions
+    const categoryTransactions = relatedTransactions.concat(transaction);
     
     // Calculate total spent in category
     const totalInCategory = categoryTransactions.reduce(
@@ -181,9 +331,7 @@ const TransactionDetails: FC = () => {
     });
     
     // Impact visualization - compare this transaction to average transaction in same category
-    const sameCategoryTransactions = transactions.filter(
-      tx => tx.category_id === transaction.category_id && tx.id.toString() !== id
-    ) as unknown as Transaction[];
+    const sameCategoryTransactions = relatedTransactions;
     
     // Calculate average transaction amount in this category
     const avgAmount = sameCategoryTransactions.length > 0
@@ -267,12 +415,135 @@ const TransactionDetails: FC = () => {
     });
   };
 
-  const handleDelete = (): void => {
-    if (window.confirm("Are you sure you want to delete this transaction?")) {
-      // In a real app, would call API to delete transaction
-      console.log("Deleting transaction:", transaction);
-      alert("Transaction deleted successfully!");
-      navigate("/transactions");
+  // Open delete modal
+  const openDeleteModal = () => {
+    setShowDeleteModal(true);
+  };
+  
+  // Close delete modal
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+  };
+
+  const handleDelete = async (): Promise<void> => {
+    if (!transaction || !user) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      // When deleting a transaction, we need to:
+      // 1. Get transaction details (account, type, amount, goal)
+      // 2. Delete the transaction
+      // 3. Update account balance
+      // 4. Update goal progress if applicable
+      
+      // Calculate balance adjustment
+      // If it was income, subtract from balance; if expense, add to balance
+      const balanceChange = transaction.type === 'income' ? -transaction.amount : transaction.amount;
+      
+      // Delete transaction
+      const { error: deleteError } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', transaction.id);
+        
+      if (deleteError) throw deleteError;
+      
+      // Show success message and navigate immediately
+      showSuccessToast("Transaction deleted successfully!");
+      closeDeleteModal();
+      navigate('/transactions');
+      
+      // Continue with account and goal updates asynchronously
+      // These updates are important but don't need to block navigation
+      updateRelatedData(
+        transaction.account_id, 
+        balanceChange, 
+        transaction.amount,
+        transaction.goal_id
+      );
+        
+    } catch (error: any) {
+      console.error('Error deleting transaction:', error);
+      showErrorToast(error.message || "Failed to delete transaction");
+      setIsDeleting(false);
+      closeDeleteModal();
+    }
+  };
+  
+  // Helper function to update account balance and goal progress after deletion
+  const updateRelatedData = async (
+    accountId: string, 
+    balanceChange: number,
+    transactionAmount: number,
+    goalId?: string
+  ): Promise<void> => {
+    try {
+      // Update account balance
+      const { error: accountError } = await supabase.rpc('update_account_balance', {
+        p_account_id: accountId,
+        p_amount_change: balanceChange
+      });
+      
+      if (accountError) {
+        // If RPC fails, fall back to direct update
+        const { data: accountData, error: fetchError } = await supabase
+          .from('accounts')
+          .select('balance')
+          .eq('id', accountId)
+          .single();
+          
+        if (fetchError) throw fetchError;
+        
+        const newBalance = accountData.balance + balanceChange;
+        
+        const { error: updateError } = await supabase
+          .from('accounts')
+          .update({ balance: newBalance })
+          .eq('id', accountId);
+          
+        if (updateError) throw updateError;
+      }
+      
+      // If transaction was associated with a goal, update goal progress
+      if (goalId) {
+        // For goals, reverse the effect of the transaction (subtract if it was a contribution)
+        const goalAdjustment = -transactionAmount;
+        
+        const { error: goalError } = await supabase.rpc('update_goal_progress', {
+          p_goal_id: goalId,
+          p_amount: goalAdjustment
+        });
+        
+        if (goalError) {
+          // If RPC fails, fall back to direct update
+          const { data: goalData, error: fetchGoalError } = await supabase
+            .from('goals')
+            .select('current_amount, target_amount')
+            .eq('id', goalId)
+            .single();
+              
+          if (fetchGoalError) throw fetchGoalError;
+            
+          const newAmount = Math.max(0, goalData.current_amount + goalAdjustment);
+          const status = newAmount >= goalData.target_amount ? 'completed' : 'in_progress';
+            
+          const { error: updateGoalError } = await supabase
+            .from('goals')
+            .update({ 
+              current_amount: newAmount,
+              status: status
+            })
+            .eq('id', goalId);
+              
+          if (updateGoalError) throw updateGoalError;
+        }
+      }
+    } catch (error) {
+      console.error('Error updating related data after transaction deletion:', error);
+      // We don't show this error to the user since they've already navigated away
+    } finally {
+      setIsDeleting(false);
     }
   };
   
@@ -326,10 +597,16 @@ const TransactionDetails: FC = () => {
     );
   }
 
+  // Get category and account information from state
   const category = transaction.category_id
-    ? getCategoryById(transaction.category_id, transaction.type)
+    ? categories[transaction.type === 'income' ? 'income' : 'expense'].find(c => c.id === transaction.category_id)
     : null;
-  const account = getAccountById(transaction.account_id);
+  const account = accounts.find(a => a.id === transaction.account_id);
+
+  // Get goal information if applicable
+  const goal = transaction.goal_id 
+    ? goals.find(g => g.id === transaction.goal_id)
+    : null;
 
   // Determine color scheme based on transaction type
   const colorClass = transaction.type === "income" ? "success" : "danger";
@@ -345,7 +622,7 @@ const TransactionDetails: FC = () => {
       <div className="d-sm-flex align-items-center justify-content-between mb-4 animate__animated animate__fadeInDown">
         <h1 className="h3 mb-0 text-gray-800">Transaction Details</h1>
         <div className="d-flex">
-          <button onClick={handleDelete} className="btn btn-primary btn-sm shadow-sm mr-2" style={{ backgroundColor: "#e74a3b", borderColor: "#e74a3b" }}>
+          <button onClick={openDeleteModal} className="btn btn-primary btn-sm shadow-sm mr-2" style={{ backgroundColor: "#e74a3b", borderColor: "#e74a3b" }}>
             <i className="fas fa-trash fa-sm mr-2"></i> Delete Transaction
           </button>
           <Link to={`/transactions/${id}/edit`} className="btn btn-primary btn-sm mr-2 shadow-sm">
@@ -433,6 +710,15 @@ const TransactionDetails: FC = () => {
                   </div>
                   <div className="h5 mb-0 font-weight-bold text-gray-800">
                     {account ? account.account_name : "Unknown Account"}
+                    {account && (
+                      <Link 
+                        to={`/accounts/${account.id}`} 
+                        className="btn btn-sm btn-outline-primary ml-2" 
+                        style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}
+                      >
+                        <i className="fas fa-external-link-alt"></i>
+                      </Link>
+                    )}
                   </div>
                 </div>
                 <div className="col-auto">
@@ -494,22 +780,31 @@ const TransactionDetails: FC = () => {
                 )}
               </div>
 
-              {transaction.goal_id && (
+              {/* Transaction Goal Section */}
+              {goal && (
                 <div className="mb-4">
                   <h4 className="small font-weight-bold">Related Goal</h4>
                   <div className="d-flex align-items-center">
                     <div className="p-2 rounded mr-2" style={{ backgroundColor: "rgba(28, 200, 138, 0.15)" }}>
                       <i className="fas fa-bullseye text-success"></i>
                     </div>
-                    <span className="text-gray-800">
-                      This transaction contributes to a goal.{" "}
-                      <Link
-                        to={`/goals/${transaction.goal_id}`}
-                        className="text-primary"
-                      >
-                        View Goal Details
-                      </Link>
-                    </span>
+                    <div>
+                      <span className="text-gray-800">
+                        This transaction contributes to <strong>{goal.goal_name}</strong>
+                      </span>
+                      <div className="small text-gray-600 mt-1">
+                        Progress: {formatCurrency(goal.current_amount)} of {formatCurrency(goal.target_amount)} 
+                        ({((goal.current_amount / goal.target_amount) * 100).toFixed(1)}%)
+                      </div>
+                      <div className="mt-2">
+                        <Link
+                          to={`/goals/${transaction.goal_id}`}
+                          className="btn btn-sm btn-outline-primary"
+                        >
+                          <i className="fas fa-eye mr-1"></i> View Goal Details
+                        </Link>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -746,6 +1041,134 @@ const TransactionDetails: FC = () => {
               </p>
             </>
           )}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 1050,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div className="modal-dialog modal-dialog-centered" style={{
+            maxWidth: '450px',
+            margin: '1.75rem',
+            position: 'relative',
+            width: 'auto',
+            pointerEvents: 'none',
+            zIndex: 1060
+          }}>
+            <div className="modal-content" style={{
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              backgroundColor: '#fff',
+              borderRadius: '0.5rem',
+              pointerEvents: 'auto',
+              boxShadow: '0 0.5rem 1rem rgba(0, 0, 0, 0.15)'
+            }}>
+              <div className="modal-header border-0 pt-4 px-4 pb-0">
+                <h3 className="modal-title w-100 text-center" style={{ color: '#4e73df', fontWeight: 600 }}>Confirm Deletion</h3>
+                <button 
+                  type="button" 
+                  className="close" 
+                  onClick={closeDeleteModal} 
+                  style={{ 
+                    position: 'absolute',
+                    top: '1rem',
+                    right: '1rem',
+                    fontSize: '1.5rem',
+                    fontWeight: 700,
+                    color: '#999',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer' 
+                  }}
+                  aria-label="Close"
+                >
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div className="modal-body text-center p-4">
+                <div className="mb-4">
+                  <div className="warning-icon" style={{
+                    backgroundColor: '#FFEFD5',
+                    width: '80px',
+                    height: '80px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto'
+                  }}>
+                    <i className="fas fa-exclamation-triangle fa-3x" style={{ color: '#FFA500' }}></i>
+                  </div>
+                </div>
+                <p style={{ fontSize: '1rem', color: '#555' }}>
+                  Are you sure you want to delete this transaction? This action cannot be undone.
+                </p>
+              </div>
+              <div className="modal-footer border-0 pb-4 pt-0 justify-content-center">
+                <button 
+                  type="button" 
+                  className="btn" 
+                  onClick={closeDeleteModal}
+                  disabled={isDeleting}
+                  style={{
+                    padding: '0.5rem 1.5rem',
+                    backgroundColor: 'transparent',
+                    color: '#4e73df',
+                    border: '1px solid #4e73df',
+                    borderRadius: '30px',
+                    fontWeight: 500,
+                    transition: 'all 0.2s ease',
+                    marginRight: '1rem'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(78, 115, 223, 0.1)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-danger" 
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  style={{
+                    padding: '0.5rem 1.5rem',
+                    backgroundColor: '#e74a3b',
+                    borderColor: '#e74a3b',
+                    borderRadius: '30px',
+                    fontWeight: 500,
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = '#d52a1a';
+                    e.currentTarget.style.borderColor = '#d52a1a';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = '#e74a3b';
+                    e.currentTarget.style.borderColor = '#e74a3b';
+                  }}
+                >
+                  {isDeleting ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                      Deleting...
+                    </>
+                  ) : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

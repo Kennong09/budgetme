@@ -35,15 +35,6 @@ interface EmailSettings {
   useSmtp: boolean;
 }
 
-interface IntegrationSettings {
-  googleAnalyticsId: string;
-  stripePublishableKey: string;
-  stripeSecretKey: string;
-  enableFinancialAI: boolean;
-  enableSocialLogin: boolean;
-  enableExporting: boolean;
-}
-
 interface BackupSettings {
   autoBackupEnabled: boolean;
   backupFrequency: string;
@@ -51,7 +42,7 @@ interface BackupSettings {
   lastBackupDate: string; 
 }
 
-type SettingsSectionType = 'system' | 'security' | 'email' | 'integrations' | 'backup';
+type SettingsSectionType = 'system' | 'security' | 'email' | 'backup';
 
 const AdminSettings: FC = () => {
   const [activeSection, setActiveSection] = useState<SettingsSectionType>('system');
@@ -90,15 +81,6 @@ const AdminSettings: FC = () => {
     emailFromName: "BudgetMe",
     emailSignature: "The BudgetMe Team",
     useSmtp: true,
-  });
-
-  const [integrationSettings, setIntegrationSettings] = useState<IntegrationSettings>({
-    googleAnalyticsId: "UA-XXXXXXXXX-X",
-    stripePublishableKey: "pk_test_XXXXXXXXXXXXX",
-    stripeSecretKey: "••••••••••••••••••••••",
-    enableFinancialAI: true,
-    enableSocialLogin: true,
-    enableExporting: true,
   });
 
   const [backupSettings, setBackupSettings] = useState<BackupSettings>({
@@ -170,16 +152,6 @@ const AdminSettings: FC = () => {
     setEmailSettings(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : numValue
-    }));
-  };
-
-  const handleIntegrationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type } = e.target;
-    const checked = e.target.checked;
-    
-    setIntegrationSettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -309,12 +281,6 @@ const AdminSettings: FC = () => {
                   <i className="fas fa-envelope mr-2"></i> Email Configuration
                 </button>
                 <button
-                  className={`list-group-item list-group-item-action ${activeSection === 'integrations' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('integrations')}
-                >
-                  <i className="fas fa-plug mr-2"></i> Integrations
-                </button>
-                <button
                   className={`list-group-item list-group-item-action ${activeSection === 'backup' ? 'active' : ''}`}
                   onClick={() => setActiveSection('backup')}
                 >
@@ -333,7 +299,6 @@ const AdminSettings: FC = () => {
                 {activeSection === 'system' && 'System Settings'}
                 {activeSection === 'security' && 'Security Settings'}
                 {activeSection === 'email' && 'Email Configuration'}
-                {activeSection === 'integrations' && 'Integration Settings'}
                 {activeSection === 'backup' && 'Backup & Maintenance'}
               </h6>
             </div>
@@ -738,112 +703,6 @@ const AdminSettings: FC = () => {
                           <i className="fas fa-paper-plane mr-1"></i>
                           Send Test Email
                         </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Integration Settings */}
-                {activeSection === 'integrations' && (
-                  <div className="settings-section">
-                    <div className="form-group row">
-                      <label className="col-sm-3 col-form-label">Google Analytics ID</label>
-                      <div className="col-sm-9">
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="googleAnalyticsId"
-                          value={integrationSettings.googleAnalyticsId}
-                          onChange={handleIntegrationChange}
-                          placeholder="UA-XXXXXXXXX-X"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group row">
-                      <label className="col-sm-3 col-form-label">Stripe Publishable Key</label>
-                      <div className="col-sm-9">
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="stripePublishableKey"
-                          value={integrationSettings.stripePublishableKey}
-                          onChange={handleIntegrationChange}
-                          placeholder="pk_test_XXXXXXXXXXXXX"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group row">
-                      <label className="col-sm-3 col-form-label">Stripe Secret Key</label>
-                      <div className="col-sm-9">
-                        <input
-                          type="password"
-                          className="form-control"
-                          name="stripeSecretKey"
-                          value={integrationSettings.stripeSecretKey}
-                          onChange={handleIntegrationChange}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-group row">
-                      <div className="col-sm-9 offset-sm-3">
-                        <div className="custom-control custom-switch">
-                          <input
-                            type="checkbox"
-                            className="custom-control-input"
-                            id="enableFinancialAI"
-                            name="enableFinancialAI"
-                            checked={integrationSettings.enableFinancialAI}
-                            onChange={handleIntegrationChange}
-                          />
-                          <label className="custom-control-label" htmlFor="enableFinancialAI">
-                            Enable Financial AI Features
-                          </label>
-                        </div>
-                        <small className="form-text text-muted">
-                          Predictive analytics and spending recommendations
-                        </small>
-                      </div>
-                    </div>
-
-                    <div className="form-group row">
-                      <div className="col-sm-9 offset-sm-3">
-                        <div className="custom-control custom-switch">
-                          <input
-                            type="checkbox"
-                            className="custom-control-input"
-                            id="enableSocialLogin"
-                            name="enableSocialLogin"
-                            checked={integrationSettings.enableSocialLogin}
-                            onChange={handleIntegrationChange}
-                          />
-                          <label className="custom-control-label" htmlFor="enableSocialLogin">
-                            Enable Social Login
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="form-group row">
-                      <div className="col-sm-9 offset-sm-3">
-                        <div className="custom-control custom-switch">
-                          <input
-                            type="checkbox"
-                            className="custom-control-input"
-                            id="enableExporting"
-                            name="enableExporting"
-                            checked={integrationSettings.enableExporting}
-                            onChange={handleIntegrationChange}
-                          />
-                          <label className="custom-control-label" htmlFor="enableExporting">
-                            Enable Data Exporting
-                          </label>
-                        </div>
-                        <small className="form-text text-muted">
-                          Allow users to export their financial data
-                        </small>
                       </div>
                     </div>
                   </div>

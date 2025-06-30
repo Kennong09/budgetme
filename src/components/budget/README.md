@@ -11,12 +11,13 @@ This documentation provides details about the components in the `src/components/
 5. [CreateBudget Component](#createbudget-component)
 6. [Data Types and Interfaces](#data-types-and-interfaces)
 7. [Integration and Data Flow](#integration-and-data-flow)
+8. [Supabase Integration](#supabase-integration)
 
 ## Overview
 
 The budget components provide a comprehensive budgeting system for managing personal finances. Users can create budgets for different expense categories, track their spending against these budgets, and visualize their budget allocation and performance. The system supports different budget periods (monthly, quarterly, yearly) and offers detailed analytics and insights.
 
-## Component Structure
+## Component Saucture
 
 ```
 src/components/budget/
@@ -182,6 +183,7 @@ The budget components integrate with other parts of the application through:
 3. **Shared Utilities**: Formatting helpers like `formatCurrency()`, `formatDate()`, etc.
 4. **Context Providers**: Currency context for consistent currency formatting
 5. **Chart Libraries**: Highcharts integration for data visualization
+6. **Supabase Database**: Direct integration with Supabase for data persistence
 
 ### Data Flow
 
@@ -194,3 +196,114 @@ The budget components integrate with other parts of the application through:
 4. **CreateBudget.tsx** handles the creation flow with form and review steps
 
 The components are designed with a clear separation of concerns, with each handling a specific part of the budgeting functionality while maintaining consistent styling and user experience throughout the application. 
+
+## Supabase Integration
+
+The budget components integrate with Supabase, a PostgreSQL-based backend-as-a-service platform, for data persistence and real-time capabilities.
+
+### Database Schema
+
+The budget functionality relies on these key tables in Supabase:
+
+#### Budgets Table
+```sql
+create table budgets (
+  id uuid default uuid_generate_v4() primary key,
+  category_id int references categories(id) not null,
+  amount numeric not null,
+  spent numeric default 0 not null,
+  period text not null check (period in ('month', 'quarter', 'year')),
+  start_date date not null,
+  end_date date not null,
+  user_id uuid references auth.users(id) not null,
+  created_at timestamp with time zone default now() not null
+);
+```
+
+#### Categories Table
+```sql
+create table categories (
+  id serial primary key,
+  category_name text not null,
+  type text not null check (type in ('income', 'expense')),
+  icon text,
+  created_at timestamp with time zone default now() not null
+);
+```
+
+### Authentication Integration
+
+Budget components use the `useAuth` hook to access the currently authenticated user:
+
+```typescript
+const { user } = useAuth();
+```
+
+This ensures that:
+1. Only authenticated users can create and manage budgets
+2. Users can only see and manipulate their own budget data
+3. The user's ID is automatically associated with created budgets
+
+### Supabase Data Operations
+
+The components use the following Supabase operations:
+
+#### Fetching Data
+
+```typescript
+// Fetch expense categories
+const { data, error } = await supabase
+  .from('categories')
+  .select('id, category_name')
+  .eq('type', 'expense')
+  .order('category_name', { ascending: true });
+```
+
+#### Creating Records
+
+```typescript
+// Insert budget into Supabase
+const { data, error } = await supabase
+  .from('budgets')
+  .insert({
+    category_id: parseInt(budget.category_id),
+    amount: parseFloat(budget.amount),
+    period: budget.period,
+    start_date: startDate,
+    end_date: endDate,
+    user_id: user.id,
+    spent: 0 // Initial spent is zero
+  })
+  .select()
+  .single();
+```
+
+#### Updating Records
+
+```typescript
+// Update budget amount
+const { data, error } = await supabase
+  .from('budgets')
+  .update({ amount: newAmount })
+  .eq('id', budgetId)
+  .eq('user_id', user.id) // Security: ensure user owns the budget
+  .select()
+  .single();
+```
+
+### Error Handling
+
+The Supabase integration includes comprehensive error handling:
+
+1. Authentication errors (redirect to login)
+2. Database query errors (displayed with toast notifications)
+3. Network and connectivity issues
+4. Data validation errors
+
+### Benefits of Supabase Integration
+
+1. **Real-time data**: Changes to budgets can be synchronized across devices
+2. **Scalable backend**: Handles growing user data efficiently
+3. **Security**: Row-level security policies ensure data isolation
+4. **Reduced development time**: No need for custom API endpoints
+5. **Future extensibility**: Easy integration with other Supabase features like Functions and Edge Functions 

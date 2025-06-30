@@ -6,11 +6,72 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name TEXT,
   avatar_url TEXT,
-  email TEXT, 
+  email TEXT,
   role TEXT DEFAULT 'user',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW())
 );
+
+-- Create trigger function to automatically create a profile for new users
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  account_id UUID;
+BEGIN
+  -- Create user profile
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (
+    NEW.id, 
+    NEW.raw_user_meta_data->>'full_name',
+    NEW.email
+  );
+  
+  -- Create default accounts
+  INSERT INTO public.accounts (id, user_id, account_name, account_type, balance, status, created_at)
+  VALUES
+    (uuid_generate_v4(), NEW.id, 'Primary Checking', 'checking', 5234.65, 'active', NOW()),
+    (uuid_generate_v4(), NEW.id, 'Savings Account', 'savings', 12750.42, 'active', NOW()),
+    (uuid_generate_v4(), NEW.id, 'Credit Card', 'credit', -1250.3, 'active', NOW());
+    
+  -- Create default income categories
+  INSERT INTO public.income_categories (id, user_id, category_name, icon, is_default, created_at)
+  VALUES
+    (uuid_generate_v4(), NEW.id, 'Salary', 'cash', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Freelance', 'briefcase', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Investments', 'trending-up', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Gifts', 'gift', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Other Income', 'plus-circle', TRUE, NOW());
+    
+  -- Create default expense categories
+  INSERT INTO public.expense_categories (id, user_id, category_name, icon, is_default, created_at)
+  VALUES
+    (uuid_generate_v4(), NEW.id, 'Housing', 'home', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Utilities', 'zap', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Groceries', 'shopping-cart', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Transportation', 'truck', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Dining Out', 'coffee', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Entertainment', 'film', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Healthcare', 'activity', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Education', 'book', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Shopping', 'shopping-bag', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Personal Care', 'user', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Travel', 'map', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Subscriptions', 'repeat', TRUE, NOW()),
+    (uuid_generate_v4(), NEW.id, 'Other Expenses', 'more-horizontal', TRUE, NOW());
+  
+  RETURN NEW;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG 'Error in handle_new_user trigger: %', SQLERRM;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create the trigger on auth.users
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Set up RLS for profiles table
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -352,3 +413,88 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 10. Set up your first admin user (replace YOUR_USER_ID with the actual user ID)
 -- Uncomment and run this line to make yourself an admin:
 -- UPDATE public.profiles SET role = 'admin' WHERE id = 'YOUR_USER_ID';
+
+-- Master script to fix contribution tracking and verify database setup
+-- Run this script to ensure all database components are properly configured
+
+-- 1. First, ensure the transactions table is properly set up
+\echo 'Setting up transactions table...'
+\i create-transactions-table.sql
+
+-- 2. Fix any existing issues with contribution tracking
+\echo 'Fixing contribution tracking issues...'
+\i fix-contribution-tracking.sql
+
+-- 3. Add test data if needed
+\echo 'Adding test contribution data...'
+\i populate-transaction-data.sql
+
+-- 4. Verify the setup
+\echo 'Verifying database setup...'
+
+-- Check if the transactions table exists and has the right structure
+SELECT EXISTS (
+   SELECT FROM information_schema.tables 
+   WHERE table_schema = 'public' 
+   AND table_name = 'transactions'
+) AS transactions_table_exists;
+
+-- Check if the views exist
+SELECT EXISTS (
+   SELECT FROM information_schema.views 
+   WHERE table_schema = 'public' 
+   AND table_name = 'transaction_details'
+) AS transaction_details_view_exists;
+
+SELECT EXISTS (
+   SELECT FROM information_schema.views 
+   WHERE table_schema = 'public' 
+   AND table_name = 'goal_contributions'
+) AS goal_contributions_view_exists;
+
+-- Check if the contribute_to_goal function exists
+SELECT EXISTS (
+   SELECT FROM pg_proc 
+   WHERE proname = 'contribute_to_goal'
+) AS contribute_to_goal_function_exists;
+
+-- Display a summary of goals and their contributions
+\echo 'Summary of goals and contributions:'
+SELECT 
+    g.id AS goal_id,
+    g.goal_name,
+    g.current_amount,
+    g.target_amount,
+    g.status,
+    COUNT(t.id) AS contribution_count,
+    COALESCE(SUM(t.amount), 0) AS contribution_total
+FROM 
+    goals g
+LEFT JOIN 
+    transactions t ON g.id = t.goal_id
+GROUP BY 
+    g.id, g.goal_name, g.current_amount, g.target_amount, g.status
+ORDER BY 
+    g.goal_name;
+
+-- Show recent contributions
+\echo 'Recent contributions:'
+SELECT 
+    t.date,
+    t.amount,
+    t.notes,
+    g.goal_name,
+    a.account_name
+FROM 
+    transactions t
+JOIN 
+    goals g ON t.goal_id = g.id
+LEFT JOIN 
+    accounts a ON t.account_id = a.id
+WHERE 
+    t.goal_id IS NOT NULL
+ORDER BY 
+    t.date DESC
+LIMIT 10;
+
+\echo 'Database setup complete!'
