@@ -33,7 +33,6 @@ const OnboardingController: FC = () => {
       
       // No automatic navigation to dashboard
       // We will respect the current path and show the appropriate tutorial
-      console.log(`Starting tutorial on current path: ${location.pathname}`);
       
       // Mark current section as seen
       const currentPath = location.pathname;
@@ -53,13 +52,7 @@ const OnboardingController: FC = () => {
   
   // Log tutorial state changes for debugging
   useEffect(() => {
-    console.log('Tutorial state updated:', { 
-      showTutorial, 
-      joyrideStarted, 
-      tutorialStep, 
-      currentPath: location.pathname,
-      tutorialCompleted: onboardingStatus?.tutorial_completed 
-    });
+    // Tutorial state tracking
   }, [showTutorial, joyrideStarted, tutorialStep, location.pathname, onboardingStatus]);
   
   // Start tutorial handler
@@ -76,15 +69,12 @@ const OnboardingController: FC = () => {
       tutorial_completed: false,
       current_step: 0
     });
-    
-    console.log('Tutorial started manually');
   };
   
   // Skip tutorial handler
   const handleSkipTutorial = () => {
     completeTutorial();
     setShowInitialModal(false);
-    console.log('Tutorial skipped manually');
   };
   
   if (!onboardingStatus) return null;

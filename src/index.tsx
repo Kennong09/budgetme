@@ -3,6 +3,8 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 // Import Bootstrap CSS
 import "bootstrap/dist/css/bootstrap.min.css";
+// Import custom CSS overrides
+import "./assets/css/custom.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { Analytics } from '@vercel/analytics/react';
@@ -26,5 +28,4 @@ root.render(
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals(metric => {
   // You can send the metrics to Vercel Analytics or any other endpoint
-  console.log(metric);
 });

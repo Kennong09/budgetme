@@ -1,7 +1,51 @@
-import React from 'react';
+import React, { useState, useEffect, useTransition, Component, ErrorInfo, ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
-import AdminLayout from './layout/AdminLayout';
+import { isUserAdmin } from '../../utils/adminHelpers';
+
+// Add an ErrorBoundary component
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Error caught by AdminRoute error boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="alert alert-danger m-3">
+          <h4>Something went wrong</h4>
+          <p>There was an error loading the admin panel. Please try refreshing the page.</p>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => this.setState({ hasError: false })}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 interface AdminRouteProps {
   element: React.ReactElement;
@@ -9,69 +53,91 @@ interface AdminRouteProps {
 }
 
 const AdminRoute: React.FC<AdminRouteProps> = ({ element, title }) => {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  // Move useState hook to the top level before any conditional returns
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isPending, startTransition] = useTransition();
   
-  // Show loading state when checking authentication
-  if (loading) {
+  // Use a single loading state for better UX
+  const isLoading = authLoading || loading || isPending;
+  
+  useEffect(() => {
+    // Don't do anything if we're still loading auth state
+    if (authLoading) return;
+    
+    let isMounted = true;
+    
+    const checkAdminStatus = async () => {
+      if (!user) {
+        if (isMounted) {
+          setIsAdmin(false);
+          setLoading(false);
+        }
+        return;
+      }
+      
+      try {
+        // Perform the admin check outside of the transition
+        const adminStatus = await isUserAdmin();
+        
+        // Use startTransition for state updates to avoid suspension during render
+        if (isMounted) {
+          startTransition(() => {
+            setIsAdmin(adminStatus);
+            setLoading(false);
+          });
+        }
+      } catch (err) {
+        console.error("Error checking admin status:", err);
+        
+        if (isMounted) {
+          startTransition(() => {
+            setIsAdmin(false);
+            setLoading(false);
+          });
+        }
+      }
+    };
+    
+    checkAdminStatus();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
+  }, [user, startTransition, authLoading]);
+  
+  // Show loading state when checking authentication or when transition is pending
+  if (isLoading) {
     return (
-      <div className="d-flex align-items-center justify-content-center" style={{ height: "100vh" }}>
-        <div className="text-center">
-          <div className="spinner-border text-danger mb-4" role="status">
-            <span className="sr-only">Loading...</span>
-          </div>
-          <h1 className="h3 text-danger mb-2">BudgetMe Admin</h1>
-          <p className="text-danger">Loading your admin dashboard...</p>
-        </div>
-      </div>
+      <div className="admin-loading-indicator"></div>
     );
   }
   
   // If not authenticated, redirect to admin login page
   if (!user) {
-    return <Navigate to="/admin" replace />;
+    return <Navigate to="/admin/login" replace />;
   }
   
-  // Check if user has admin role using adminHelpers function
-  const [isAdmin, setIsAdmin] = React.useState<boolean | null>(null);
-  
-  React.useEffect(() => {
-    const checkAdminStatus = async () => {
-      try {
-        // Import the function dynamically to avoid circular dependency issues
-        const { isUserAdmin } = await import('../../utils/adminHelpers');
-        const adminStatus = await isUserAdmin();
-        setIsAdmin(adminStatus);
-      } catch (err) {
-        console.error("Error checking admin status:", err);
-        setIsAdmin(false);
-      }
-    };
-    
-    checkAdminStatus();
-  }, []);
-
-  // Show loading while checking admin status
+  // If admin status is still unknown, show loading - spinner only
   if (isAdmin === null) {
     return (
-      <div className="d-flex align-items-center justify-content-center" style={{ height: "100vh" }}>
-        <div className="text-center">
-          <div className="spinner-border text-danger mb-4" role="status">
-            <span className="sr-only">Checking admin privileges...</span>
-          </div>
-          <h1 className="h3 text-danger mb-2">BudgetMe Admin</h1>
-          <p className="text-danger">Loading your admin dashboard...</p>
-        </div>
-      </div>
+      <div className="admin-loading-indicator"></div>
     );
   }
   
   // If not admin, redirect to admin login with access denied parameter
   if (!isAdmin) {
-    return <Navigate to="/admin?access_denied=true" replace />;
+    return <Navigate to="/admin/login?access_denied=true" replace />;
   }
   
-  // If admin, render the admin layout with the provided element
-  return <AdminLayout title={title}>{element}</AdminLayout>;
+  // If admin, render the provided element wrapped in an error boundary
+  return (
+    <ErrorBoundary>
+      {element}
+    </ErrorBoundary>
+  );
 };
 
 export default AdminRoute; 

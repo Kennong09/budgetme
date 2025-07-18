@@ -3,20 +3,40 @@ import { User } from '@supabase/supabase-js';
 
 /**
  * Check if the current user has admin role
- * This leverages the Supabase is_admin_user() function we created
+ * This first tries to use the Supabase RPC function, and falls back to direct query if that fails
  * @returns {Promise<boolean>} True if the user is an admin
  */
 export const isUserAdmin = async (): Promise<boolean> => {
   try {
-    // Call the Supabase function we created to check if user is admin
-    const { data, error } = await supabase.rpc('is_admin_user');
+    // Try to call the Supabase function to check if user is admin
+    try {
+      const { data, error } = await supabase.rpc('is_admin_user');
+      
+      if (!error) {
+        return data === true;
+      }
+      // If there's an error (function doesn't exist), we'll fall through to the direct query
+    } catch (rpcErr) {
+      // RPC failed, continue to fallback
+      console.warn('RPC method failed, using fallback query:', rpcErr);
+    }
     
-    if (error) {
-      console.error('Error checking admin status:', error);
+    // Fallback: Query the profiles table directly
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) return false;
+    
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.user.id)
+      .single();
+    
+    if (profileError) {
+      console.error('Error checking admin role from profiles:', profileError);
       return false;
     }
     
-    return data === true;
+    return profile?.role === 'admin';
   } catch (err) {
     console.error('Error in isUserAdmin:', err);
     return false;
@@ -31,16 +51,32 @@ export const isUserAdmin = async (): Promise<boolean> => {
  */
 export const addAdminRole = async (userId: string): Promise<boolean> => {
   try {
-    const { data, error } = await supabase.rpc('add_admin_user', {
-      user_id: userId
-    });
+    // Try RPC method first
+    try {
+      const { data, error } = await supabase.rpc('add_admin_user', {
+        user_id: userId
+      });
+      
+      if (!error) {
+        return data === true;
+      }
+      // If RPC fails, continue to fallback
+    } catch (rpcErr) {
+      console.warn('RPC method failed, using fallback update:', rpcErr);
+    }
+    
+    // Fallback: Update profiles table directly
+    const { error } = await supabase
+      .from('profiles')
+      .update({ role: 'admin' })
+      .eq('id', userId);
     
     if (error) {
       console.error('Error adding admin role:', error);
       return false;
     }
     
-    return data === true;
+    return true;
   } catch (err) {
     console.error('Error in addAdminRole:', err);
     return false;
@@ -77,16 +113,19 @@ export const removeAdminRole = async (userId: string): Promise<boolean> => {
  */
 export const getAdminUsers = async (): Promise<string[]> => {
   try {
+    // Query the profiles table to get all admin users
     const { data, error } = await supabase
-      .from('admin_users')
-      .select('id');
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin');
     
     if (error) {
       console.error('Error fetching admin users:', error);
       return [];
     }
     
-    return data.map(user => user.id);
+    // Return an array of admin user IDs
+    return data?.map(user => user.id) || [];
   } catch (err) {
     console.error('Error in getAdminUsers:', err);
     return [];

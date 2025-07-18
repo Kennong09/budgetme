@@ -1,4 +1,4 @@
-import React, { FC, useState, useRef } from 'react';
+import React, { FC, useState, useRef, useEffect } from 'react';
 import { resendVerificationEmail } from '../../utils/authService';
 import { useToast } from '../../utils/ToastContext';
 
@@ -18,11 +18,24 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
   const { showSuccessToast, showErrorToast } = useToast();
   const [resendLoading, setResendLoading] = useState<boolean>(false);
   const [resendError, setResendError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number>(0);
   const toastShown = useRef<boolean>(false);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [countdown]);
 
   if (!isOpen) return null;
 
   const handleResendEmail = async () => {
+    if (countdown > 0) return;
+    
     setResendLoading(true);
     setResendError(null);
     toastShown.current = false;
@@ -32,19 +45,23 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
       if (error) {
         // Show error in the modal instead of toast
         setResendError(error.message);
+        showErrorToast(`Failed to resend: ${error.message}`);
       } else {
         // Success toast is still fine
         if (!toastShown.current) {
           showSuccessToast('Verification email resent successfully!');
           toastShown.current = true;
         }
+        setCountdown(60); // Set a 60-second cooldown
       }
     } catch (err) {
       // Show error in the modal instead of toast
       if (err instanceof Error) {
         setResendError(err.message);
+        showErrorToast(`Error: ${err.message}`);
       } else {
         setResendError('Failed to resend verification email. Please try again.');
+        showErrorToast('Failed to resend verification email');
       }
       console.error('Error resending verification email:', err);
     } finally {
@@ -115,7 +132,7 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
               type="button" 
               className="btn-secondary"
               onClick={handleResendEmail}
-              disabled={resendLoading}
+              disabled={resendLoading || countdown > 0}
               style={{ 
                 transition: "all 0.3s ease",
                 transform: resendLoading ? "scale(0.98)" : "scale(1)"
@@ -125,6 +142,8 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
                 <>
                   <i className="bx bx-loader-alt bx-spin"></i> Sending...
                 </>
+              ) : countdown > 0 ? (
+                `Resend in ${countdown}s`
               ) : 'Resend Email'}
             </button>
             

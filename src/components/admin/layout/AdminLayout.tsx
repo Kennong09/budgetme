@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FC, ReactNode } from "react";
+import React, { useState, useEffect, FC, ReactNode, useTransition } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../utils/AuthContext";
 import AdminHeader from "./AdminHeader";
@@ -10,51 +10,110 @@ import "../admin.css";
 interface AdminLayoutProps {
   children: ReactNode;
   title?: string;
+  hideNav?: boolean; // Add this prop to control visibility of navigation elements
 }
 
-const AdminLayout: FC<AdminLayoutProps> = ({ children, title }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
+const AdminLayout: FC<AdminLayoutProps> = ({ children, title, hideNav = false }) => {
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    // Get sidebar state from localStorage or default to true on desktop
+    try {
+      const savedState = localStorage.getItem('adminSidebarOpen');
+      // If we have a saved state, use it, otherwise default based on screen size
+      return savedState !== null ? savedState === 'true' : window.innerWidth >= 768;
+    } catch (e) {
+      console.error("Error accessing localStorage:", e);
+      return window.innerWidth >= 768; // Default to open on desktop
+    }
+  });
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [adminCheckComplete, setAdminCheckComplete] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { logout, user, loading: authLoading } = useAuth();
   
-  // Check if user is admin
+  // Use a single loading state for better UX
+  const isLoading = authLoading || loading || isPending;
+  
+  // Check if user is admin only when auth is ready and user is available
   useEffect(() => {
-    const checkAdmin = async () => {
-      if (user) {
-        setLoading(true);
-        const adminStatus = await isUserAdmin();
-        setIsAdmin(adminStatus);
-        
-        if (!adminStatus) {
-          // If not an admin, redirect to admin login with access denied parameter
-          navigate('/admin?access_denied=true');
-        }
+    // Skip if already completed or still loading auth
+    if (adminCheckComplete || authLoading) return;
+    
+    // Skip admin check if user is not authenticated
+    if (!user) {
+      startTransition(() => {
         setLoading(false);
-      } else {
-        // Not logged in, redirect to admin login
-        navigate('/admin');
+        setAdminCheckComplete(true);
+      });
+      navigate('/admin/login', { replace: true });
+      return;
+    }
+    
+    let isMounted = true;
+    
+    const checkAdmin = async () => {
+      try {
+        // Perform admin check outside of state update
+        const adminStatus = await isUserAdmin();
+        
+        // Guard against unmounted component
+        if (!isMounted) return;
+        
+        // Use startTransition for state updates
+        startTransition(() => {
+          setIsAdmin(adminStatus);
+          setLoading(false);
+          setAdminCheckComplete(true);
+        
+          if (!adminStatus) {
+            navigate('/admin/login?access_denied=true', { replace: true });
+          }
+        });
+      } catch (error) {
+        console.error("Error checking admin status:", error);
+        
+        // Guard against unmounted component
+        if (!isMounted) return;
+        
+        // Use startTransition for state updates
+        startTransition(() => {
+          setIsAdmin(false);
+          setLoading(false);
+          setAdminCheckComplete(true);
+          navigate('/admin/login?error=true', { replace: true });
+        });
       }
     };
     
+    // Call the async function
     checkAdmin();
-  }, [user, navigate]);
+    
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, [user, navigate, adminCheckComplete, authLoading]);
   
-  // Update sidebar state on resize
+  // Update sidebar state on resize and save to localStorage
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
       
       if (!mobile) {
-        // On desktop/tablet, sidebar visibility depends on previous state
-        setSidebarOpen(prevState => prevState);
+        // On desktop/tablet, don't auto-change sidebar state on resize
+        // This helps maintain state during navigation
       } else {
         // On mobile, always ensure sidebar is closed by default
         setSidebarOpen(false);
+        try {
+          localStorage.setItem('adminSidebarOpen', 'false');
+        } catch (e) {
+          console.error("Error writing to localStorage:", e);
+        }
       }
     };
 
@@ -67,39 +126,52 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children, title }) => {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate("/admin");
+      navigate("/admin/login", { replace: true });
     } catch (error) {
       console.error("Logout failed:", error);
     }
   };
 
-  // Toggle sidebar visibility
+  // Toggle sidebar visibility and save state to localStorage
   const toggleSidebar = () => {
-    setSidebarOpen(prevState => !prevState);
+    setSidebarOpen(prevState => {
+      const newState = !prevState;
+      try {
+        localStorage.setItem('adminSidebarOpen', newState.toString());
+      } catch (e) {
+        console.error("Error writing to localStorage:", e);
+      }
+      return newState;
+    });
   };
 
-  // Show loading state while checking admin status
-  if (loading) {
+  // Show loading state while checking admin status - spinner only without text
+  if (isLoading) {
     return (
-      <div className="d-flex align-items-center justify-content-center" style={{ height: "100vh" }}>
-        <div className="spinner-border text-danger" role="status">
-          <span className="sr-only">Loading...</span>
-        </div>
-      </div>
+      <div className="admin-loading-indicator"></div>
     );
   }
 
   // Prevent rendering content if not admin
-  if (!isAdmin) {
+  if (!isAdmin && adminCheckComplete) {
     return null;
+  }
+
+  // If hideNav is true, return only the children without the layout
+  if (hideNav) {
+    return (
+      <div className="admin-content-fullwidth">
+        {children}
+      </div>
+    );
   }
 
   return (
     <>
       <Meta title={title || "Admin | BudgetMe"} />
-      <div id="wrapper" className="d-flex">
+      <div id="wrapper" className="d-flex" style={{ transition: 'none' }}>
         {/* Admin Sidebar */}
-        <div className={`sidebar-container ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+        <div className={`sidebar-container ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`} style={{ transition: 'none' }}>
           <AdminSidebar 
             isOpen={sidebarOpen} 
             onToggleSidebar={toggleSidebar}
@@ -117,7 +189,7 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children, title }) => {
         )}
 
         {/* Content Wrapper */}
-        <div id="content-wrapper" className={`d-flex flex-column ${sidebarOpen && !isMobile ? "" : "content-full"} flex-fill`}>
+        <div id="content-wrapper" className={`d-flex flex-column ${sidebarOpen && !isMobile ? "" : "content-full"} flex-fill`} style={{ transition: 'none' }}>
           {/* Main Content */}
           <div id="content" className="flex-fill">
             {/* Topbar */}

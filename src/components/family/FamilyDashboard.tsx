@@ -13,7 +13,7 @@ import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
-import ErrorBoundary from "../ErrorBoundary";
+import JoinFamily from "./JoinFamily";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -265,7 +265,7 @@ const PendingJoinRequestsSection: React.FC<PendingJoinRequestsProps> = ({ family
           throw new Error(`Error updating request status: ${requestError.message}`);
         }
         
-        showSuccessToast("Join request approved successfully!");
+        showSuccessToast("Join request approved successfully! User added as a viewer.");
       } else {
         // Update request status to rejected
         const { error: requestError } = await supabase
@@ -393,13 +393,14 @@ const PendingJoinRequestsSection: React.FC<PendingJoinRequestsProps> = ({ family
                       className="btn btn-success btn-sm mr-2" 
                       onClick={() => handleRequestAction(request.id, 'approve')}
                       disabled={processingRequestId === request.id}
+                      title="Approve request and add user as a viewer"
                     >
                       {processingRequestId === request.id ? (
                         <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                       ) : (
                         <i className="fas fa-check mr-1"></i>
                       )}
-                      Approve
+                      Approve as Viewer
                     </button>
                     <button 
                       className="btn btn-danger btn-sm" 
@@ -643,7 +644,7 @@ const FamilyDashboard: React.FC = () => {
             throw new Error(`Error updating request status: ${requestError.message}`);
           }
           
-          showSuccessToast("Join request approved successfully!");
+          showSuccessToast("Join request approved successfully! User added as a viewer.");
         } else {
           // Update request status to rejected
           const { error: requestError } = await supabase
@@ -726,6 +727,9 @@ const FamilyDashboard: React.FC = () => {
         <div className="card-header py-3 d-flex justify-content-between align-items-center">
           <h6 className="m-0 font-weight-bold text-primary">
             Pending Join Requests <span className="badge badge-warning ml-2">{pendingRequests.length}</span>
+            <small className="ml-2 text-muted font-weight-normal">
+              (All approved users join as viewers)
+            </small>
           </h6>
           <button 
             className="btn btn-sm btn-outline-primary" 
@@ -772,13 +776,14 @@ const FamilyDashboard: React.FC = () => {
                         className="btn btn-success btn-sm mr-2" 
                         onClick={() => handleRequestAction(request.id, 'approve')}
                         disabled={processingRequestId === request.id}
+                        title="Approve request and add user as a viewer"
                       >
                         {processingRequestId === request.id ? (
                           <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                         ) : (
                           <i className="fas fa-check mr-1"></i>
                         )}
-                        Approve
+                        Approve as Viewer
                       </button>
                       <button 
                         className="btn btn-danger btn-sm" 
@@ -850,7 +855,6 @@ const FamilyDashboard: React.FC = () => {
     // Fetch family goals
   const fetchFamilyGoals = useCallback(async () => {
     if (!familyData?.id || !user) {
-      console.log("No family ID or user available for fetching family goals");
       return;
     }
 
@@ -858,8 +862,6 @@ const FamilyDashboard: React.FC = () => {
     setGoalError(null);
     
     try {
-      console.log(`Fetching family goals for family ID: ${familyData.id}`);
-      
       // Fetch all goals associated with this family ID
       const { data, error } = await supabase
         .from("goals")
@@ -875,7 +877,6 @@ const FamilyDashboard: React.FC = () => {
       }
       
       if (!data || data.length === 0) {
-        console.log("No family goals found");
         setFamilyGoals([]);
         return;
       }
@@ -910,8 +911,6 @@ const FamilyDashboard: React.FC = () => {
           profileMap.set(profile.id, profile);
         });
       }
-
-      console.log(`Found ${data.length} family goals`);
       
       // Process goals to calculate derived properties and add display names
       const processedGoals = data.map(goal => {
@@ -1140,11 +1139,8 @@ const FamilyDashboard: React.FC = () => {
     setIsLoadingFamilyData(true);
     
     try {
-      console.log("Fetching family data for user:", user.id, "- Attempt:", retryCount + 1);
-      
       // Enforce a maximum retry count to prevent infinite loops
       if (retryCount >= maxRetries) {
-        console.log(`Maximum retry attempts (${maxRetries}) reached. Stopping retries.`);
         showErrorToast("Could not load family data. Please refresh the page.");
         setIsLoadingFamilyData(false);
         return;
@@ -1168,8 +1164,6 @@ const FamilyDashboard: React.FC = () => {
       
       // If direct query succeeds and returns a family membership
       if (!directMemberError && directMemberQuery && directMemberQuery.length > 0) {
-        console.log("Found family membership via direct query:", directMemberQuery[0]);
-        
         // Fetch the family details using the family_id we got from members table
         const familyId = directMemberQuery[0].family_id;
         const { data: familyData, error: familyError } = await supabase
@@ -1182,7 +1176,6 @@ const FamilyDashboard: React.FC = () => {
           console.error("Error fetching family data from direct query:", familyError);
           // Continue to fallback methods
         } else if (familyData) {
-          console.log("Fetched family data via direct query:", familyData);
           setFamilyData(familyData);
           // Check if current user is the creator of the family
           setIsCreator(user.id === familyData.created_by);
@@ -1298,7 +1291,6 @@ const FamilyDashboard: React.FC = () => {
           // If we've already tried and we're still getting errors,
           // it might be that the materialized view hasn't refreshed yet after creating the family
           if (retryCount < maxRetries - 1) {
-            console.log("Retrying data fetch after a short delay...");
             setTimeout(() => {
               fetchFamilyData(retryCount + 1, maxRetries);
             }, 1500);
@@ -1312,8 +1304,6 @@ const FamilyDashboard: React.FC = () => {
         
         // Use the direct result if available
         if (directResult && directResult.is_member) {
-          console.log("User is part of a family (direct check):", directResult);
-          
           // Fetch family details directly since we have them already
           const familyFromDirect = {
             id: directResult.family_id,
@@ -1341,11 +1331,8 @@ const FamilyDashboard: React.FC = () => {
           
           // Fall through to the rest of the data loading code - no early return
         } else {
-          console.log("User is not part of any family (direct check)");
-          
           // If we've just created a family, try a few times before giving up
           if (retryCount < maxRetries - 1) {
-            console.log("Newly created family might not be reflected yet. Retrying...");
             setTimeout(() => {
               fetchFamilyData(retryCount + 1, maxRetries);
             }, 1500);
@@ -1358,7 +1345,6 @@ const FamilyDashboard: React.FC = () => {
         }
       } else if (checkResult) {
         // Now checkResult could be either a JSON object (old format) or a row from the table function (new format)
-        console.log("Got family check result:", checkResult);
         
         // Handle both the old JSON format and the new table format
         let isMember = false;
@@ -1377,7 +1363,6 @@ const FamilyDashboard: React.FC = () => {
         if (!isMember || !familyId) {
           // If we've just created a family, try a few times before giving up
           if (retryCount < maxRetries - 1) {
-            console.log("Family membership check returned false, but might be due to materialized view delay. Retrying...");
             setTimeout(() => {
               fetchFamilyData(retryCount + 1, maxRetries);
             }, 1500);
@@ -1402,7 +1387,6 @@ const FamilyDashboard: React.FC = () => {
           return;
         }
 
-        console.log("Fetched family data:", data);
         setFamilyData(data);
         
         // Check if current user is the creator of the family
@@ -1527,11 +1511,9 @@ const FamilyDashboard: React.FC = () => {
     // Use setTimeout to prevent immediate execution and allow component to fully mount
     const timer = setTimeout(() => {
       if (justCreated) {
-        console.log("Family was just created. Will retry fetching if needed.");
         // Start with higher retry attempts for newly created families
         fetchFamilyData(0, 5); // Allow more retries for newly created families
       } else if (familyIdFromUrl) {
-        console.log(`Directly accessing family with ID: ${familyIdFromUrl}`);
         // For direct access with family ID, attempt to fetch that specific family
         fetchFamilyData(0, 3, familyIdFromUrl);
       } else {
@@ -2486,7 +2468,15 @@ const FamilyDashboard: React.FC = () => {
     }
   };
 
-  const getMemberRoleBadge = (role: "admin" | "viewer") => {
+  const getMemberRoleBadge = (role: "admin" | "viewer", isOwner: boolean = false) => {
+    if (isOwner) {
+      return (
+        <>
+          <span className="badge badge-danger mr-1">Owner</span>
+          <span className="badge badge-primary">Admin</span>
+        </>
+      );
+    }
     return role === "admin"
       ? <span className="badge badge-primary">Admin</span>
       : <span className="badge badge-secondary">Viewer</span>;
@@ -2517,10 +2507,6 @@ const FamilyDashboard: React.FC = () => {
   // States for no family section
   const initialNoFamilyTab = searchParams.get('view') as "create" | "join" || "create";
   const [noFamilyActiveTab, setNoFamilyActiveTab] = useState<"create" | "join">(initialNoFamilyTab);
-  const [availableFamilies, setAvailableFamilies] = useState<any[]>([]);
-  const [loadingFamilies, setLoadingFamilies] = useState<boolean>(false);
-  const [joiningFamily, setJoiningFamily] = useState<boolean>(false);
-  const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null);
 
   // Handle no-family tab change with URL update
   const handleNoFamilyTabChange = (tab: "create" | "join") => {
@@ -2530,248 +2516,7 @@ const FamilyDashboard: React.FC = () => {
       return newParams;
     });
     setNoFamilyActiveTab(tab);
-    if (tab === "join") {
-      fetchAvailableFamilies();
-    }
   };
-
-  // Fetch available families that user can join
-  const fetchAvailableFamilies = useCallback(async () => {
-    if (!user) return;
-    
-    setLoadingFamilies(true);
-    try {
-      console.log("Fetching available families for user:", user.id);
-      
-      // Step 1: Check if any public families exist at all (for debugging)
-      const { count: publicCount, error: countError } = await supabase
-        .from('families')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_public', true);
-        
-      console.log(`Total public families in database: ${publicCount || 0}`);
-      
-      if (countError) {
-        console.error("Error checking public family count:", countError);
-      }
-      
-      // Step 2: Get all public families first without any filters
-      const { data: allPublicFamilies, error: publicFamiliesError } = await supabase
-        .from('families')
-        .select('id, family_name, description, currency_pref, created_at, created_by, is_public')
-        .eq('is_public', true);
-        
-      if (publicFamiliesError) {
-        console.error("Error fetching public families:", publicFamiliesError);
-        setAvailableFamilies([]);
-        setLoadingFamilies(false);
-        return;
-      }
-      
-      console.log("All public families found:", allPublicFamilies?.length || 0);
-      
-      if (!allPublicFamilies || allPublicFamilies.length === 0) {
-        console.log("No public families found in database");
-        setAvailableFamilies([]);
-        setLoadingFamilies(false);
-        return;
-      }
-
-      // Step 2: Get families user is already a member of to exclude them
-      const { data: userFamilies, error: userFamiliesError } = await supabase
-        .from('family_members')
-        .select('family_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-        
-      if (userFamiliesError) {
-        console.warn("Error checking user family memberships:", userFamiliesError);
-        // Continue with showing all public families
-      }
-      
-      // Create a set of family IDs user is already a member of
-      const userFamilyIds = new Set(userFamilies?.map(f => f.family_id) || []);
-      console.log("User is already a member of", userFamilyIds.size, "families");
-      
-      // Filter out families the user is already a member of
-      const availablePublicFamilies = allPublicFamilies.filter(family => !userFamilyIds.has(family.id));
-      console.log("Available public families after filtering:", availablePublicFamilies.length);
-      
-      if (availablePublicFamilies.length === 0) {
-        setAvailableFamilies([]);
-        setLoadingFamilies(false);
-        return;
-      }
-
-      // Step 3: Get family members count - one by one to avoid group issue
-      const familyIds = availablePublicFamilies.map(family => family.id);
-      
-      // Get count for each family separately
-      const memberCountMap = new Map();
-      
-      // For each family, count the members
-      for (const familyId of familyIds) {
-        try {
-          const { count, error } = await supabase
-            .from('family_members')
-            .select('*', { count: 'exact', head: true })
-            .eq('family_id', familyId)
-            .eq('status', 'active');
-            
-          if (error) {
-            console.warn(`Error getting member count for family ${familyId}:`, error);
-          } else {
-            memberCountMap.set(familyId, count || 0);
-          }
-        } catch (err) {
-          console.error(`Error counting members for family ${familyId}:`, err);
-        }
-      }
-      
-      // Step 3: Collect all creator IDs
-      const creatorIds = availablePublicFamilies.map(family => family.created_by).filter(Boolean);
-      
-      // Step 4: Fetch profile data for all creators in one query
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, email, user_metadata')
-        .in('id', creatorIds);
-        
-      if (profilesError) {
-        console.warn("Error fetching creator profiles:", profilesError);
-        // Continue without profile data
-      }
-      
-      // Create a map of profiles by ID for quick lookup
-      const profilesMap = new Map();
-      if (profilesData) {
-        profilesData.forEach(profile => {
-          profilesMap.set(profile.id, profile);
-        });
-      }
-      
-      // Step 5: Check pending join requests
-      const { data: pendingRequests, error: requestError } = await supabase
-        .from('family_join_requests')
-        .select('family_id, status')
-        .eq('user_id', user.id)
-        .in('status', ['pending', 'approved'])
-        .in('family_id', familyIds);
-        
-      if (requestError) {
-        console.error("Error checking pending requests:", requestError);
-      }
-      
-      // Step 6: Combine all the data
-      const enhancedData = availablePublicFamilies.map(family => {
-        const pending = pendingRequests?.find(req => req.family_id === family.id);
-        const creatorProfile = profilesMap.get(family.created_by);
-        
-        return {
-          ...family,
-          already_requested: !!pending,
-          request_status: pending?.status || null,
-          members_count: memberCountMap.get(family.id) || 0,
-          creator_email: creatorProfile?.email || "Unknown",
-          creator_name: creatorProfile?.user_metadata?.username || 
-                        creatorProfile?.user_metadata?.full_name || 
-                        "Unknown"
-        };
-      });
-      
-      console.log("Final list of available families:", enhancedData.length);
-      setAvailableFamilies(enhancedData);
-    } catch (err) {
-      console.error("Error in fetchAvailableFamilies:", err);
-      setAvailableFamilies([]);
-    } finally {
-      setLoadingFamilies(false);
-    }
-  }, [user]);
-
-  // Handle family join request
-  const handleJoinRequest = async (familyId: string) => {
-    if (!user) {
-      showErrorToast("You must be logged in to join a family");
-      return;
-    }
-    
-    setSelectedFamilyId(familyId);
-    setJoiningFamily(true);
-    
-    try {
-      // Check if a request already exists (double-check)
-      const { data: existingRequest, error: checkError } = await supabase
-        .from('family_join_requests')
-        .select('id, status')
-        .eq('family_id', familyId)
-        .eq('user_id', user.id)
-        .single();
-        
-      if (!checkError && existingRequest) {
-        // Request already exists
-        if (existingRequest.status === 'pending') {
-          showErrorToast("You already have a pending request to join this family");
-        } else if (existingRequest.status === 'approved') {
-          showErrorToast("You're already a member of this family");
-        } else {
-          showErrorToast("You've already requested to join this family");
-        }
-        return;
-      }
-
-      // Create new join request
-      const { data, error } = await supabase
-        .from('family_join_requests')
-        .insert({
-          family_id: familyId,
-          user_id: user.id,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        })
-        .select();
-        
-      if (error) {
-        console.error("Error sending join request:", error);
-        // Handle specific error cases
-        if (error.code === '23505') { // Unique constraint violation
-          throw new Error("You've already requested to join this family");
-        } else {
-          throw new Error(`Failed to send join request: ${error.message}`);
-        }
-      }
-      
-      // Update local state to reflect the join request
-      const updatedFamilies = availableFamilies.map(family => {
-        if (family.id === familyId) {
-          return {
-            ...family,
-            already_requested: true,
-            request_status: 'pending'
-          };
-        }
-        return family;
-      });
-      
-      setAvailableFamilies(updatedFamilies);
-      showSuccessToast("Join request sent successfully. Waiting for approval.");
-      
-    } catch (err) {
-      console.error("Error in handleJoinRequest:", err);
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      showErrorToast(errorMessage);
-    } finally {
-      setJoiningFamily(false);
-      setSelectedFamilyId(null);
-    }
-  };
-
-  // Load available families when tab changes to "join"
-  useEffect(() => {
-    if (noFamilyActiveTab === "join" && !familyData) {
-      fetchAvailableFamilies();
-    }
-  }, [noFamilyActiveTab, familyData, fetchAvailableFamilies]);
 
   // No family data - show create or join options
   if (!familyData) {
@@ -2861,101 +2606,7 @@ const FamilyDashboard: React.FC = () => {
             )}
 
             {noFamilyActiveTab === "join" && (
-              <div>
-                <div className="d-flex justify-content-between align-items-center mb-4">
-                  <h5 className="text-gray-700 font-weight-bold mb-0">Available Families</h5>
-                  <button 
-                    className="btn btn-sm btn-outline-primary" 
-                    onClick={fetchAvailableFamilies}
-                    disabled={loadingFamilies}
-                  >
-                    <i className={`fas ${loadingFamilies ? "fa-spinner fa-spin" : "fa-sync"} mr-1`}></i> 
-                    Refresh
-                  </button>
-                </div>
-
-                {loadingFamilies ? (
-                  <div className="text-center py-5">
-                    <div className="spinner-border text-primary" role="status">
-                      <span className="sr-only">Loading...</span>
-                    </div>
-                    <p className="mt-2 text-gray-600">Loading available families...</p>
-                  </div>
-                ) : availableFamilies.length > 0 ? (
-                  <div className="card shadow">
-                    <div className="card-body p-0">
-                      <div className="table-responsive">
-                        <table className="table mb-0">
-                          <thead className="bg-light">
-                            <tr>
-                              <th>Family Name</th>
-                              <th>Description</th>
-                              <th>Created By</th>
-                              <th>Members</th>
-                              <th>Created On</th>
-                              <th>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {availableFamilies.map(family => (
-                              <tr key={family.id}>
-                                <td className="font-weight-bold">{family.family_name}</td>
-                                <td>{family.description || "No description"}</td>
-                                <td>{family.creator_name || "Unknown"}</td>
-                                <td>
-                                  <span className="badge badge-info">
-                                    <i className="fas fa-users mr-1"></i> {family.members_count || 0} members
-                                  </span>
-                                </td>
-                                <td>{new Date(family.created_at).toLocaleDateString()}</td>
-                                <td>
-                                  {family.already_requested ? (
-                                    <button 
-                                      className="btn btn-sm btn-secondary" 
-                                      disabled
-                                    >
-                                      <i className="fas fa-clock mr-1"></i> Request Pending
-                                    </button>
-                                  ) : (
-                                    <button 
-                                      className="btn btn-sm btn-primary" 
-                                      onClick={() => handleJoinRequest(family.id)}
-                                      disabled={joiningFamily && selectedFamilyId === family.id}
-                                    >
-                                      {joiningFamily && selectedFamilyId === family.id ? (
-                                        <>
-                                          <span className="spinner-border spinner-border-sm mr-1" role="status" aria-hidden="true"></span>
-                                          Joining...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <i className="fas fa-sign-in-alt mr-1"></i> Request to Join
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div className="card-footer bg-light">
-                      <small className="text-muted">
-                        <i className="fas fa-info-circle mr-1"></i>
-                        Once you request to join, the family admin will need to approve your request.
-                      </small>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-5">
-                    <i className="fas fa-users fa-3x text-gray-300 mb-3"></i>
-                    <h5 className="text-gray-500 font-weight-light mb-2">No Families Available to Join</h5>
-                    <p className="text-gray-500 mb-4 small">There are no public families available for you to join at the moment.</p>
-                  </div>
-                )}
-              </div>
+              <JoinFamily onJoinSuccess={() => fetchFamilyData()} />
             )}
           </div>
         </div>
@@ -3677,9 +3328,7 @@ const FamilyDashboard: React.FC = () => {
                   </div>
                   <div className="card-body">
                     {sharedGoalPerformanceChartData && sharedGoalPerformanceChartData.series && sharedGoalPerformanceChartData.series[0].data && sharedGoalPerformanceChartData.series[0].data.length > 0 ? (
-                      <ErrorBoundary>
                         <HighchartsReact highcharts={Highcharts} options={sharedGoalPerformanceChartData} ref={sharedGoalPerformanceChartRef} />
-                      </ErrorBoundary>
                     ) : ( 
                       <div className="text-center p-4">
                         <div className="mb-3">
@@ -3715,9 +3364,7 @@ const FamilyDashboard: React.FC = () => {
                   </div>
                   <div className="card-body">
                     {sharedGoalBreakdownChartData && sharedGoalBreakdownChartData.series && sharedGoalBreakdownChartData.series[0].data && sharedGoalBreakdownChartData.series[0].data.length > 0 ? (
-                        <ErrorBoundary>
                         <HighchartsReact highcharts={Highcharts} options={sharedGoalBreakdownChartData} ref={sharedGoalBreakdownChartRef} />
-                      </ErrorBoundary>
                     ) : ( 
                       <div className="text-center p-4">
                         <div className="mb-3">
@@ -3914,13 +3561,11 @@ const FamilyDashboard: React.FC = () => {
                                 </div>
                                 <div className="card-body">
                                   {contributionChartData && (
-                                    <ErrorBoundary>
                                       <HighchartsReact 
                                         highcharts={Highcharts} 
                                         options={contributionChartData}
                                         ref={contributionBarChartRef} 
                                       />
-                                    </ErrorBoundary>
                                   )}
                                 </div>
                               </div>
@@ -3932,13 +3577,11 @@ const FamilyDashboard: React.FC = () => {
                                 </div>
                                 <div className="card-body">
                                   {contributionPieChartData && (
-                                    <ErrorBoundary>
                                       <HighchartsReact 
                                         highcharts={Highcharts} 
                                         options={contributionPieChartData}
                                         ref={contributionPieChartRef} 
                                       />
-                                    </ErrorBoundary>
                                   )}
                                 </div>
                               </div>
@@ -4028,7 +3671,7 @@ const FamilyDashboard: React.FC = () => {
                               </div>
                             </div>
                           </td>
-                          <td>{getMemberRoleBadge(member.role)}</td>
+                          <td>{getMemberRoleBadge(member.role, familyData && member.user_id === familyData.created_by)}</td>
                           <td>{formatDate(member.created_at)}</td>
                           <td>{member.user?.last_sign_in_at ? formatDate(member.user.last_sign_in_at) : "Never"}</td>
                           <td>

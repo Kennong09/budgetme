@@ -1,49 +1,75 @@
 import React, { useState, useEffect, ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import {
+  formatCurrency,
   formatDate,
   formatPercentage,
 } from "../../../utils/helpers";
+import { supabase, supabaseAdmin } from "../../../utils/supabaseClient";
+import { useToast } from "../../../utils/ToastContext";
+import { RealtimeChannel } from "@supabase/supabase-js";
 
 // Import any necessary CSS
 import "../admin.css";
 
-interface User {
+// Interface for Supabase user profile
+interface UserProfile {
   id: string;
-  name: string;
+  full_name: string;
   email: string;
-  profilePicture?: string;
+  avatar_url?: string;
 }
 
-interface FamilyGroup {
+// Interface for Supabase family group
+interface SupabaseFamily {
   id: string;
-  name: string;
-  owner_id: string;
+  family_name: string;
+  description?: string;
+  created_by: string;
   created_at: string;
-  members_count: number;
+  updated_at?: string;
+  currency_pref: string;
+  is_public: boolean;
   status: "active" | "inactive";
-  owner?: User;
+  members_count?: number;
+  owner?: UserProfile;
 }
 
+// Interface for family member
 interface FamilyMember {
   id: string;
   user_id: string;
   family_id: string;
   role: "admin" | "viewer";
-  join_date: string;
-  user?: User;
+  status: "active" | "pending" | "inactive";
+  created_at: string;
+  updated_at?: string;
+  user?: UserProfile;
 }
 
 const AdminFamily: React.FC = () => {
   // State for family groups data
-  const [familyGroups, setFamilyGroups] = useState<FamilyGroup[]>([]);
-  const [filteredGroups, setFilteredGroups] = useState<FamilyGroup[]>([]);
+  const [familyGroups, setFamilyGroups] = useState<SupabaseFamily[]>([]);
+  const [filteredGroups, setFilteredGroups] = useState<SupabaseFamily[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isFiltering, setIsFiltering] = useState<boolean>(false);
   const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null);
   const [selectedFamilyMembers, setSelectedFamilyMembers] = useState<FamilyMember[]>([]);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showMembersModal, setShowMembersModal] = useState<boolean>(false);
+  const { showSuccessToast, showErrorToast } = useToast();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(5);
+  const [totalItems, setTotalItems] = useState<number>(0);
+  
+  // Real-time subscription state
+  const [subscription, setSubscription] = useState<any>(null);
+  
+  // User profiles map for quick lookup
+  const [userProfiles, setUserProfiles] = useState<{[key: string]: UserProfile}>({});
 
   // State for summary data
   const [summary, setSummary] = useState({
@@ -59,102 +85,270 @@ const AdminFamily: React.FC = () => {
     status: "all",
     minMembers: "",
     maxMembers: "",
-    sortBy: "created_at"
+    sortBy: "created_at",
+    sortOrder: "desc" as "asc" | "desc"
   });
 
+  // Fetch families on component mount and when filters change
   useEffect(() => {
-    // Simulate API call to fetch all family groups
-    const timer = setTimeout(() => {
-      // This would normally be an API call to get all family groups
-      const mockFamilyGroups = [
-        {
-          id: "1",
-          name: "Johnson Family",
-          owner_id: "1",
-          created_at: "2023-01-15T10:30:00Z",
-          members_count: 4,
-          status: "active",
-          owner: {
-            id: "1",
-            name: "John Johnson",
-            email: "john@example.com",
-            profilePicture: "/images/placeholder.png"
-          }
-        },
-        {
-          id: "2",
-          name: "Smith Household",
-          owner_id: "2",
-          created_at: "2023-02-20T15:45:00Z",
-          members_count: 3,
-          status: "active",
-          owner: {
-            id: "2",
-            name: "Jane Smith",
-            email: "jane@example.com",
-            profilePicture: "/images/placeholder.png"
-          }
-        },
-        {
-          id: "3",
-          name: "Williams Family",
-          owner_id: "3",
-          created_at: "2023-03-10T09:15:00Z",
-          members_count: 5,
-          status: "active",
-          owner: {
-            id: "3",
-            name: "Robert Williams",
-            email: "robert@example.com",
-            profilePicture: "/images/placeholder.png"
-          }
-        },
-        {
-          id: "4",
-          name: "Brown Household",
-          owner_id: "4",
-          created_at: "2023-04-05T14:20:00Z",
-          members_count: 2,
-          status: "inactive",
-          owner: {
-            id: "4",
-            name: "Sarah Brown",
-            email: "sarah@example.com",
-            profilePicture: "/images/placeholder.png"
-          }
-        },
-        {
-          id: "5",
-          name: "Davis Family",
-          owner_id: "5",
-          created_at: "2023-05-12T11:10:00Z",
-          members_count: 6,
-          status: "active",
-          owner: {
-            id: "5",
-            name: "Michael Davis",
-            email: "michael@example.com",
-            profilePicture: "/images/placeholder.png"
-          }
-        }
-      ] as FamilyGroup[];
+    fetchFamilies();
+    fetchUserProfiles();
+  }, [currentPage, filter.name, filter.status, filter.minMembers, filter.maxMembers, filter.sortBy, filter.sortOrder, pageSize]);
 
-      setFamilyGroups(mockFamilyGroups);
-      setFilteredGroups(mockFamilyGroups);
+  // Set up real-time subscription
+  useEffect(() => {
+    // Create channel reference outside to ensure we can clean it up
+    let channel: RealtimeChannel | undefined;
+    
+    try {
+      channel = supabaseAdmin.channel('admin-families-channel');
+      
+      // Set up the subscription
+      channel
+        .on('postgres_changes', 
+          { event: '*', schema: 'public', table: 'families' }, 
+          () => {
+            // Refresh family data when families table changes
+            fetchFamilies();
+          }
+        )
+        .subscribe();
+      
+      // Store subscription reference
+      setSubscription(channel);
+    } catch (error: any) {
+      console.error('Error setting up real-time subscription:', error);
+      // Don't let subscription errors block the UI
+    }
+    
+    // Cleanup subscription on component unmount
+    return () => {
+      if (channel) {
+        try {
+          supabaseAdmin.removeChannel(channel);
+        } catch (error: any) {
+          console.error('Error removing channel:', error);
+        }
+      }
+    };
+  }, []); // Empty dependency array means this runs once on mount
+
+  // Fetch user profiles
+  const fetchUserProfiles = async () => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('profiles')
+        .select('id, full_name, email, avatar_url');
+      
+      if (error) {
+        throw error;
+      }
+      
+      // Create a map of user profiles by ID for quick access
+      const profilesMap: {[key: string]: UserProfile} = {};
+      data?.forEach(profile => {
+        profilesMap[profile.id] = {
+          id: profile.id,
+          full_name: profile.full_name || 'Unknown User',
+          email: profile.email || 'No Email',
+          avatar_url: profile.avatar_url
+        };
+      });
+      
+      setUserProfiles(profilesMap);
+    } catch (error: any) {
+      console.error("Error fetching user profiles:", error);
+      showErrorToast("Failed to load user data");
+    }
+  };
+
+  // Fetch families from Supabase
+  const fetchFamilies = async () => {
+    try {
+      setLoading(true);
+      
+      // Base query for counting total items
+      let countQuery = supabaseAdmin
+        .from('families')
+        .select('id', { count: 'exact' });
+      
+      // Apply filters for count query
+      applyFiltersToQuery(countQuery);
+      
+      // Get total count with filters applied
+      const { count: totalCount, error: countError } = await countQuery;
+      
+      if (countError) {
+        throw countError;
+      }
+      
+      // Construct query for families with all data
+      // Use a simpler query first to avoid 400 errors if schema is incomplete
+      let dataQuery = supabaseAdmin
+        .from('families')
+        .select('id, family_name, description, created_by, created_at, updated_at, currency_pref');
+      
+      // Apply sorting
+      if (filter.sortBy === "name") {
+        dataQuery = dataQuery.order('family_name', { ascending: filter.sortOrder === 'asc' });
+      } else if (filter.sortBy !== "members") { // Handle members sorting separately
+        dataQuery = dataQuery.order(filter.sortBy, { ascending: filter.sortOrder === 'asc' });
+      }
+      
+      // Apply same filters to main query
+      applyFiltersToQuery(dataQuery);
+      
+      // Apply pagination
+      const from = (currentPage - 1) * pageSize;
+      const to = from + pageSize - 1;
+      
+      // Final query with pagination
+      const { data: familiesData, error: familiesError } = await dataQuery
+        .range(from, to);
+      
+      if (familiesError) {
+        throw familiesError;
+      }
+      
+      if (!familiesData) {
+        setFamilyGroups([]);
+        setFilteredGroups([]);
+        setTotalItems(0);
+        setTotalPages(1);
+        calculateSummary([]);
+        setLoading(false);
+        return;
+      }
+      
+      // Get member counts for each family
+      const familyIds = familiesData.map(family => family.id);
+      
+      // Create a map of member counts by family ID
+      const memberCountMap: {[key: string]: number} = {};
+      
+      // Fetch member counts for each family separately
+      await Promise.all(
+        familyIds.map(async (familyId) => {
+          try {
+            const { count, error } = await supabaseAdmin
+              .from('family_members')
+              .select('*', { count: 'exact', head: true })
+              .eq('family_id', familyId)
+              .eq('status', 'active');
+              
+            if (!error && count !== null) {
+              memberCountMap[familyId] = count;
+            }
+          } catch (err) {
+            console.warn(`Error getting count for family ${familyId}:`, err);
+          }
+        })
+      );
+      
+      // Define a type for the raw family data from Supabase
+      type RawFamilyData = {
+        id: string;
+        family_name: string;
+        description?: string;
+        created_by: string;
+        created_at: string;
+        updated_at?: string;
+        currency_pref: string;
+        is_public?: boolean;
+        status?: "active" | "inactive";
+      };
+      
+      // Add creator info and member counts to families
+      const processedFamilies = await Promise.all(familiesData.map(async (family) => {
+        // Get creator profile
+        const creatorProfile = userProfiles[family.created_by];
+        
+        // Cast family to the right type for proper property access
+        const typedFamily = family as RawFamilyData;
+        
+        // Create a properly typed family object with all required properties
+        return {
+          ...typedFamily,
+          // Add default values for potentially missing columns
+          is_public: typedFamily.is_public !== undefined ? typedFamily.is_public : false,
+          status: typedFamily.status || 'active',
+          members_count: memberCountMap[typedFamily.id] || 0,
+          owner: creatorProfile
+        } as SupabaseFamily;
+      }));
+      
+      // Apply member count filtering here (client-side)
+      let filteredFamilies = [...processedFamilies];
+      
+      // Apply status filtering client-side since the column might be missing
+      if (filter.status !== "all") {
+        filteredFamilies = filteredFamilies.filter(family => 
+          family.status === filter.status
+        );
+      }
+      
+      if (filter.minMembers) {
+        const minMembers = parseInt(filter.minMembers);
+        filteredFamilies = filteredFamilies.filter(family => 
+          (family.members_count || 0) >= minMembers
+        );
+      }
+      
+      if (filter.maxMembers) {
+        const maxMembers = parseInt(filter.maxMembers);
+        filteredFamilies = filteredFamilies.filter(family => 
+          (family.members_count || 0) <= maxMembers
+        );
+      }
+      
+      // Apply member count sorting if selected
+      if (filter.sortBy === "members") {
+        filteredFamilies = filteredFamilies.sort((a, b) => {
+          const countA = a.members_count || 0;
+          const countB = b.members_count || 0;
+          return filter.sortOrder === 'asc' ? countA - countB : countB - countA;
+        });
+      }
+      
+      // Set families data
+      setFamilyGroups(filteredFamilies);
+      setFilteredGroups(filteredFamilies);
       
       // Calculate summary data
-      calculateSummary(mockFamilyGroups);
+      calculateSummary(filteredFamilies);
+      
+      // Calculate pagination
+      setTotalItems(totalCount || 0);
+      setTotalPages(Math.max(1, Math.ceil((totalCount || 0) / pageSize)));
       
       setLoading(false);
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, []);
+    } catch (error: any) {
+      console.error("Error fetching families:", error);
+      showErrorToast("Failed to load family data");
+      setLoading(false);
+    }
+  };
+  
+  // Helper function to apply filters to a query
+  const applyFiltersToQuery = (query: any) => {
+    // Filter by name (search)
+    if (filter.name) {
+      query = query.ilike('family_name', `%${filter.name}%`);
+    }
+    
+    // Don't filter by status on server side anymore since we handle it client-side
+    // This prevents 400 errors if the status column doesn't exist
+    
+    // Note: Member count filtering is handled client-side after fetching data
+    // since it requires a join or separate query
+    
+    return query;
+  };
 
   // Function to calculate family groups summary
-  const calculateSummary = (groups: FamilyGroup[]) => {
+  const calculateSummary = (groups: SupabaseFamily[]) => {
     const activeFamilies = groups.filter(group => group.status === 'active').length;
-    const totalMembers = groups.reduce((sum, group) => sum + group.members_count, 0);
+    const totalMembers = groups.reduce((sum, group) => sum + (group.members_count || 0), 0);
     
     setSummary({
       totalFamilies: groups.length,
@@ -178,8 +372,8 @@ const AdminFamily: React.FC = () => {
       if (filter.name) {
         const searchTerm = filter.name.toLowerCase();
         result = result.filter(group => 
-          group.name.toLowerCase().includes(searchTerm) || 
-          group.owner?.name.toLowerCase().includes(searchTerm)
+          group.family_name.toLowerCase().includes(searchTerm) || 
+          (group.owner?.full_name?.toLowerCase() || '').includes(searchTerm)
         );
       }
       
@@ -190,16 +384,16 @@ const AdminFamily: React.FC = () => {
       
       // Filter by min members
       if (filter.minMembers) {
-        result = result.filter(group => group.members_count >= parseInt(filter.minMembers));
+        result = result.filter(group => (group.members_count || 0) >= parseInt(filter.minMembers));
       }
       
       // Filter by max members
       if (filter.maxMembers) {
-        result = result.filter(group => group.members_count <= parseInt(filter.maxMembers));
+        result = result.filter(group => (group.members_count || 0) <= parseInt(filter.maxMembers));
       }
       
       // Sort results
-      result = sortFamilyGroups(result, filter.sortBy);
+      result = sortFamilyGroups(result, filter.sortBy, filter.sortOrder);
       
       setFilteredGroups(result);
       calculateSummary(result);
@@ -208,16 +402,22 @@ const AdminFamily: React.FC = () => {
   }, [filter, familyGroups]);
 
   // Function to sort family groups
-  const sortFamilyGroups = (groupsToSort: FamilyGroup[], sortBy: string): FamilyGroup[] => {
-    switch(sortBy) {
-      case "name":
-        return [...groupsToSort].sort((a, b) => a.name.localeCompare(b.name));
-      case "members":
-        return [...groupsToSort].sort((a, b) => b.members_count - a.members_count);
-      case "created_at":
-      default:
-        return [...groupsToSort].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    }
+  const sortFamilyGroups = (groupsToSort: SupabaseFamily[], sortBy: string, sortOrder: "asc" | "desc"): SupabaseFamily[] => {
+    return [...groupsToSort].sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+
+      if (sortBy === "created_at") {
+        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+      }
+      if (sortBy === "name") {
+        return sortOrder === "asc" ? a.family_name.localeCompare(b.family_name) : b.family_name.localeCompare(a.family_name);
+      }
+      if (sortBy === "members") {
+        return sortOrder === "asc" ? (a.members_count || 0) - (b.members_count || 0) : (b.members_count || 0) - (a.members_count || 0);
+      }
+      return 0;
+    });
   };
 
   // Handle filter changes
@@ -232,6 +432,9 @@ const AdminFamily: React.FC = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Reset to first page when filtering
+    setCurrentPage(1);
   };
 
   // Reset filters to default
@@ -243,8 +446,12 @@ const AdminFamily: React.FC = () => {
       status: "all",
       minMembers: "",
       maxMembers: "",
-      sortBy: "created_at"
+      sortBy: "created_at",
+      sortOrder: "desc"
     });
+    
+    // Reset to first page
+    setCurrentPage(1);
   };
 
   // Handle family group deletion
@@ -253,10 +460,20 @@ const AdminFamily: React.FC = () => {
     setShowDeleteModal(true);
   };
 
-  const confirmDelete = (): void => {
+  const confirmDelete = async (): Promise<void> => {
     if (selectedFamilyId) {
-      // In a real app, this would make an API call
-      console.log(`Deleting family group with ID: ${selectedFamilyId}`);
+      try {
+        const { error } = await supabaseAdmin
+          .from("families")
+          .delete()
+          .eq("id", selectedFamilyId);
+
+        if (error) {
+          showErrorToast(`Failed to delete family group: ${error.message}`);
+          return;
+        }
+
+        showSuccessToast("Family group deleted successfully!");
       
       // Filter out the deleted family group
       const updatedGroups = familyGroups.filter(group => group.id !== selectedFamilyId);
@@ -267,75 +484,147 @@ const AdminFamily: React.FC = () => {
       // Close modal
       setShowDeleteModal(false);
       setSelectedFamilyId(null);
+      } catch (error: any) {
+        console.error("Error deleting family group:", error);
+        showErrorToast("Failed to delete family group");
+      }
     }
   };
 
   // Handle viewing family members
-  const handleViewMembers = (familyId: string): void => {
+  const handleViewMembers = async (familyId: string): Promise<void> => {
     setSelectedFamilyId(familyId);
     
-    // Simulate API call to get family members
-    // This would normally be an API call to get members of a specific family
-    const mockFamilyMembers = [
-      {
-        id: "1",
-        user_id: "1",
-        family_id: familyId,
-        role: "admin",
-        join_date: "2023-01-15T10:30:00Z",
-        user: {
-          id: "1",
-          name: "John Johnson",
-          email: "john@example.com",
-          profilePicture: "/images/placeholder.png"
-        }
-      },
-      {
-        id: "2",
-        user_id: "6",
-        family_id: familyId,
-        role: "viewer",
-        join_date: "2023-01-16T14:20:00Z",
-        user: {
-          id: "6",
-          name: "Emily Johnson",
-          email: "emily@example.com",
-          profilePicture: "/images/placeholder.png"
-        }
-      },
-      {
-        id: "3",
-        user_id: "7",
-        family_id: familyId,
-        role: "viewer",
-        join_date: "2023-01-17T09:45:00Z",
-        user: {
-          id: "7",
-          name: "James Johnson",
-          email: "james@example.com",
-          profilePicture: "/images/placeholder.png"
-        }
+    try {
+      // First fetch the family members
+      const { data: membersData, error: membersError } = await supabaseAdmin
+        .from("family_members")
+        .select("*")
+        .eq("family_id", familyId)
+        .eq("status", "active") // Only active members
+        .order("role", { ascending: false }) // Sort by role (admin first)
+        .order("created_at", { ascending: true }); // Then by join date
+      
+      if (membersError) {
+        showErrorToast("Failed to fetch family members");
+        console.error("Error fetching family members:", membersError);
+        return;
       }
-    ] as FamilyMember[];
-    
-    setSelectedFamilyMembers(mockFamilyMembers);
+      
+      if (!membersData || membersData.length === 0) {
+        setSelectedFamilyMembers([]);
+        setShowMembersModal(true);
+        return;
+      }
+      
+      // Get all user IDs to fetch their profiles
+      const userIds = membersData.map(member => member.user_id);
+      
+      // Fetch user profiles for these members
+      const { data: profilesData, error: profilesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name, email, avatar_url")
+        .in("id", userIds);
+      
+      if (profilesError) {
+        console.warn("Error fetching member profiles:", profilesError);
+        // Continue with limited data
+      }
+      
+      // Create a map of profiles by user ID
+      const profileMap: {[key: string]: UserProfile} = {};
+      profilesData?.forEach(profile => {
+        profileMap[profile.id] = {
+          id: profile.id,
+          full_name: profile.full_name || 'Unknown User',
+          email: profile.email || 'No Email',
+          avatar_url: profile.avatar_url
+        };
+      });
+      
+      // Combine member data with user profiles
+      const membersWithProfiles = membersData.map(member => ({
+        ...member,
+        user: profileMap[member.user_id] || undefined
+      }));
+      
+      setSelectedFamilyMembers(membersWithProfiles);
     setShowMembersModal(true);
+    } catch (error: any) {
+      showErrorToast("Failed to fetch family members");
+      console.error("Error in handleViewMembers:", error);
+    }
   };
 
   // Get family group by ID
-  const getSelectedFamily = (): FamilyGroup | undefined => {
+  const getSelectedFamily = (): SupabaseFamily | undefined => {
     return familyGroups.find(group => group.id === selectedFamilyId);
   };
 
-  if (loading) {
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Handle page size change
+  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newSize = parseInt(e.target.value, 10);
+    setPageSize(newSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+  };
+
+  // Manual refresh function
+  const refreshFamilyData = async () => {
+    setLoading(true);
+    try {
+      await fetchFamilies();
+      await fetchUserProfiles();
+      showSuccessToast("Family data refreshed successfully");
+    } catch (error: any) {
+      showErrorToast("Failed to refresh family data");
+      console.error("Error refreshing family data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle removing a family member
+  const handleRemoveMember = async (memberId: string, userId: string) => {
+    if (!selectedFamilyId) return;
+    
+    try {
+      // Delete the family member record
+      const { error } = await supabaseAdmin
+        .from('family_members')
+        .delete()
+        .eq('id', memberId);
+      
+      if (error) {
+        console.error("Error removing family member:", error);
+        showErrorToast("Failed to remove family member");
+        return;
+      }
+      
+      // Update the local state
+      setSelectedFamilyMembers(prev => prev.filter(member => member.id !== memberId));
+      
+      // Show success message
+      showSuccessToast("Family member removed successfully");
+      
+      // Refresh family data to update member counts
+      fetchFamilies();
+    } catch (error: any) {
+      console.error("Error in handleRemoveMember:", error);
+      showErrorToast("Failed to remove family member");
+    }
+  };
+
+  if (loading && familyGroups.length === 0) {
     return (
-      <div className="container-fluid">
-        <div className="text-center mt-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="sr-only">Loading...</span>
-          </div>
-          <p className="mt-3 text-gray-600">Loading family group data...</p>
-        </div>
+      <div className="admin-loader-container">
+        <div className="admin-loader-spinner"></div>
+        <h2 className="admin-loader-title">Loading Family Groups</h2>
+        <p className="admin-loader-subtitle">Please wait while we fetch your family connections...</p>
       </div>
     );
   }
@@ -346,7 +635,7 @@ const AdminFamily: React.FC = () => {
       <div className="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 className="h3 mb-0 text-gray-800">Family Group Management</h1>
         <div>
-          <button className="btn btn-sm btn-primary shadow-sm mr-2">
+          <button className="btn btn-sm btn-danger shadow-sm mr-2">
             <i className="fas fa-download fa-sm text-white-50 mr-1"></i> Export Data
           </button>
           <Link to="/admin/family/create" className="btn btn-sm btn-success shadow-sm">
@@ -359,11 +648,11 @@ const AdminFamily: React.FC = () => {
       <div className="row">
         {/* Total Family Groups Card */}
         <div className="col-xl-3 col-md-6 mb-4">
-          <div className="card border-left-primary shadow h-100 py-2">
+          <div className="card border-left-danger shadow h-100 py-2">
             <div className="card-body">
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                  <div className="text-xs font-weight-bold text-danger text-uppercase mb-1">
                     Total Family Groups
                   </div>
                   <div className="h5 mb-0 font-weight-bold text-gray-800">
@@ -444,9 +733,9 @@ const AdminFamily: React.FC = () => {
 
       {/* Filters Card */}
       <div className="card shadow mb-4">
-        <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-          <h6 className="m-0 font-weight-bold text-primary">Filter Family Groups</h6>
-          <button onClick={resetFilters} className="btn btn-sm btn-outline-primary">
+        <div className="card-header py-3 admin-card-header d-flex flex-row align-items-center justify-content-between">
+          <h6 className="m-0 font-weight-bold text-danger">Filter Family Groups</h6>
+          <button onClick={resetFilters} className="btn btn-sm btn-outline-danger">
             <i className="fas fa-redo-alt fa-sm mr-1"></i> Reset
           </button>
         </div>
@@ -454,15 +743,26 @@ const AdminFamily: React.FC = () => {
           <div className="row">
             <div className="col-md-4 mb-3">
               <label htmlFor="name" className="font-weight-bold text-gray-800">Search</label>
+              <div className="input-group">
               <input
                 type="text"
                 id="name"
                 name="name"
                 value={filter.name}
                 onChange={handleFilterChange}
-                placeholder="Search by family or owner name..."
+                  placeholder="Search by family name..."
                 className="form-control"
               />
+                <div className="input-group-append">
+                  <button 
+                    className="btn btn-danger" 
+                    type="button"
+                    onClick={() => fetchFamilies()}
+                  >
+                    <i className="fas fa-search fa-sm"></i>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="col-md-2 mb-3">
@@ -522,20 +822,97 @@ const AdminFamily: React.FC = () => {
                 <option value="members">Member Count</option>
               </select>
             </div>
+            
+            <div className="col-md-2 mb-3">
+              <label htmlFor="sortOrder" className="font-weight-bold text-gray-800">Sort Order</label>
+              <select
+                id="sortOrder"
+                name="sortOrder"
+                value={filter.sortOrder}
+                onChange={handleFilterChange}
+                className="form-control"
+              >
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </div>
+            
+            <div className="col-md-12 mt-2 text-center">
+              <button 
+                className="btn btn-danger" 
+                onClick={() => fetchFamilies()}
+                disabled={loading}
+              >
+                <i className="fas fa-filter mr-1"></i> Apply Filters
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Family Groups Table */}
       <div className="card shadow mb-4">
-        <div className="card-header py-3">
-          <h6 className="m-0 font-weight-bold text-primary">All Family Groups</h6>
+        <div className="card-header py-3 admin-card-header">
+          <div className="d-flex justify-content-between align-items-center">
+            <h6 className="m-0 font-weight-bold text-danger">
+              All Family Groups
+              {loading && (
+                <span className="ml-2">
+                  <i className="fas fa-spinner fa-spin fa-sm"></i>
+                </span>
+              )}
+            </h6>
+            <div className="d-flex align-items-center">
+              <div className="input-group input-group-sm mr-3" style={{ width: "auto" }}>
+                <div className="input-group-prepend">
+                  <span 
+                    className="input-group-text border-right-0" 
+                    style={{ 
+                      backgroundColor: "#e74a3b", 
+                      color: "white", 
+                      borderColor: "#e74a3b"
+                    }}
+                  >Show</span>
+                </div>
+                <select 
+                  className="form-control form-control-sm border-left-0 border-right-0" 
+                  style={{ width: "70px" }}
+                  value={pageSize}
+                  onChange={handlePageSizeChange}
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+                <div className="input-group-append">
+                  <span 
+                    className="input-group-text border-left-0" 
+                    style={{ 
+                      backgroundColor: "#e74a3b", 
+                      color: "white", 
+                      borderColor: "#e74a3b" 
+                    }}
+                  >entries</span>
+                </div>
+              </div>
+              <button 
+                className="btn btn-sm btn-outline-danger" 
+                onClick={refreshFamilyData}
+                disabled={loading}
+                title="Refresh Family Data"
+              >
+                <i className="fas fa-sync-alt"></i>
+              </button>
+            </div>
+          </div>
         </div>
         <div className="card-body">
-          {isFiltering ? (
+          {isFiltering || loading ? (
             <div className="text-center my-4">
               <div className="spinner-border text-primary" role="status">
-                <span className="sr-only">Filtering...</span>
+                <span className="sr-only">Loading...</span>
               </div>
             </div>
           ) : filteredGroups.length === 0 ? (
@@ -546,6 +923,7 @@ const AdminFamily: React.FC = () => {
               <p className="text-gray-600 mb-0">No family groups found matching your criteria.</p>
             </div>
           ) : (
+            <>
             <div className="table-responsive">
               <table className="table table-bordered" width="100%" cellSpacing="0">
                 <thead>
@@ -562,24 +940,24 @@ const AdminFamily: React.FC = () => {
                   {filteredGroups.map((group) => {
                     return (
                       <tr key={group.id}>
-                        <td className="font-weight-bold">{group.name}</td>
+                          <td className="font-weight-bold">{group.family_name}</td>
                         <td>
                           <div className="d-flex align-items-center">
                             <img 
-                              src={group.owner?.profilePicture || "/images/placeholder.png"} 
+                                src={group.owner?.avatar_url || "/images/placeholder.png"} 
                               className="rounded-circle mr-2" 
                               width="30" 
                               height="30"
-                              alt={group.owner?.name}
+                                alt={group.owner?.full_name}
                             />
                             <div>
-                              <div>{group.owner?.name}</div>
+                                <div>{group.owner?.full_name}</div>
                               <div className="small text-gray-600">{group.owner?.email}</div>
                             </div>
                           </div>
                         </td>
                         <td>
-                          <span className="badge badge-primary p-2">{group.members_count}</span>
+                            <span className="badge badge-primary p-2">{group.members_count || 0}</span>
                         </td>
                         <td>{formatDate(group.created_at)}</td>
                         <td>
@@ -614,19 +992,175 @@ const AdminFamily: React.FC = () => {
                 </tbody>
               </table>
             </div>
+              
+              {/* Pagination */}
+              <div className="d-flex justify-content-between align-items-center mt-3">
+                <div>
+                  <span className="text-muted">
+                    {filteredGroups.length === 0 ? (
+                      "Showing 0 to 0 of 0 entries"
+                    ) : (
+                      `Showing ${Math.min((currentPage - 1) * pageSize + 1, totalItems)} to ${Math.min(currentPage * pageSize, totalItems)} of ${totalItems} entries`
+                    )}
+                  </span>
+                </div>
+                {totalPages > 0 && (
+                  <nav>
+                    <ul className="pagination admin-pagination">
+                      <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                        <button 
+                          className="page-link"
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={currentPage === 1}
+                        >
+                          <i className="fas fa-chevron-left"></i>
+                        </button>
+                      </li>
+                      {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
+                        // Show pages around current page
+                        let pageNumber: number;
+                        if (totalPages <= 5) {
+                          pageNumber = index + 1;
+                        } else if (currentPage <= 3) {
+                          pageNumber = index + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNumber = totalPages - 4 + index;
+                        } else {
+                          pageNumber = currentPage - 2 + index;
+                        }
+                        
+                        if (pageNumber <= totalPages) {
+                          return (
+                            <li
+                              key={index}
+                              className={`page-item ${pageNumber === currentPage ? "active" : ""}`}
+                            >
+                              <button 
+                                className="page-link"
+                                onClick={() => handlePageChange(pageNumber)}
+                              >
+                                {pageNumber}
+                              </button>
+                            </li>
+                          );
+                        }
+                        return null;
+                      })}
+                      <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                        <button 
+                          className="page-link"
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                        >
+                          <i className="fas fa-chevron-right"></i>
+                        </button>
+                      </li>
+                    </ul>
+                  </nav>
+                )}
+              </div>
+            </>
           )}
-          <div className="d-flex justify-content-between align-items-center mt-3">
-            <div>
-              <span className="text-gray-600">Showing {filteredGroups.length} of {familyGroups.length} family groups</span>
             </div>
-            <div>
-              <button className="btn btn-sm btn-outline-primary">
-                <i className="fas fa-download fa-sm mr-1"></i> Export Filtered Results
-              </button>
+          </div>
+
+      {/* Family Members Modal */}
+      {showMembersModal && (
+        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-lg">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  {getSelectedFamily()?.family_name} - Members ({selectedFamilyMembers.length})
+                </h5>
+                <button 
+                  type="button" 
+                  className="close" 
+                  onClick={() => setShowMembersModal(false)}
+                >
+                  <span>&times;</span>
+                </button>
+              </div>
+              <div className="modal-body">
+                {selectedFamilyMembers.length === 0 ? (
+                  <div className="text-center p-4">
+                    <div className="mb-3">
+                      <i className="fas fa-users fa-3x text-gray-300"></i>
+                    </div>
+                    <p className="text-gray-600 mb-0">No members found for this family group.</p>
+                  </div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-bordered" width="100%" cellSpacing="0">
+                      <thead>
+                        <tr>
+                          <th>User</th>
+                          <th>Role</th>
+                          <th>Join Date</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedFamilyMembers.map((member) => (
+                          <tr key={member.id}>
+                            <td>
+                              <div className="d-flex align-items-center">
+                                <img 
+                                  src={member.user?.avatar_url || "/images/placeholder.png"} 
+                                  className="rounded-circle mr-2" 
+                                  width="30" 
+                                  height="30"
+                                  alt={member.user?.full_name}
+                                />
+                                <div>
+                                  <div>{member.user?.full_name || "Unknown User"}</div>
+                                  <div className="small text-gray-600">{member.user?.email || "No email"}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`badge badge-${member.role === 'admin' ? 'primary' : 'secondary'} p-2`}>
+                                {member.role === 'admin' ? 'Admin' : 'Viewer'}
+                              </span>
+                            </td>
+                            <td>{formatDate(member.created_at)}</td>
+                            <td>
+                              <div className="btn-group">
+                                <Link to={`/admin/users/${member.user_id}`} className="btn btn-sm btn-outline-info mr-1" title="View User">
+                                  <i className="fas fa-user"></i>
+                                </Link>
+                                <button 
+                                  className="btn btn-sm btn-outline-danger" 
+                                  title="Remove from Family"
+                                  onClick={() => handleRemoveMember(member.id, member.user_id)}
+                                >
+                                  <i className="fas fa-user-minus"></i>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowMembersModal(false)}
+                >
+                  Close
+                </button>
+                <Link to={`/admin/family/${selectedFamilyId}/add-member`} className="btn btn-primary">
+                  <i className="fas fa-user-plus mr-1"></i> Add Member
+                </Link>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
@@ -662,100 +1196,6 @@ const AdminFamily: React.FC = () => {
                 >
                   Delete Family Group
                 </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Family Members Modal */}
-      {showMembersModal && (
-        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  {getSelectedFamily()?.name} - Members ({selectedFamilyMembers.length})
-                </h5>
-                <button 
-                  type="button" 
-                  className="close" 
-                  onClick={() => setShowMembersModal(false)}
-                >
-                  <span>&times;</span>
-                </button>
-              </div>
-              <div className="modal-body">
-                {selectedFamilyMembers.length === 0 ? (
-                  <div className="text-center p-4">
-                    <div className="mb-3">
-                      <i className="fas fa-users fa-3x text-gray-300"></i>
-                    </div>
-                    <p className="text-gray-600 mb-0">No members found for this family group.</p>
-                  </div>
-                ) : (
-                  <div className="table-responsive">
-                    <table className="table table-bordered" width="100%" cellSpacing="0">
-                      <thead>
-                        <tr>
-                          <th>User</th>
-                          <th>Role</th>
-                          <th>Join Date</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedFamilyMembers.map((member) => (
-                          <tr key={member.id}>
-                            <td>
-                              <div className="d-flex align-items-center">
-                                <img 
-                                  src={member.user?.profilePicture || "/images/placeholder.png"} 
-                                  className="rounded-circle mr-2" 
-                                  width="30" 
-                                  height="30"
-                                  alt={member.user?.name}
-                                />
-                                <div>
-                                  <div>{member.user?.name}</div>
-                                  <div className="small text-gray-600">{member.user?.email}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <span className={`badge badge-${member.role === 'admin' ? 'primary' : 'secondary'} p-2`}>
-                                {member.role === 'admin' ? 'Admin' : 'Viewer'}
-                              </span>
-                            </td>
-                            <td>{formatDate(member.join_date)}</td>
-                            <td>
-                              <div className="btn-group">
-                                <Link to={`/admin/users/${member.user_id}`} className="btn btn-sm btn-outline-info mr-1" title="View User">
-                                  <i className="fas fa-user"></i>
-                                </Link>
-                                <button className="btn btn-sm btn-outline-danger" title="Remove from Family">
-                                  <i className="fas fa-user-minus"></i>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setShowMembersModal(false)}
-                >
-                  Close
-                </button>
-                <Link to={`/admin/family/${selectedFamilyId}/add-member`} className="btn btn-primary">
-                  <i className="fas fa-user-plus mr-1"></i> Add Member
-                </Link>
               </div>
             </div>
           </div>

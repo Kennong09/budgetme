@@ -7,7 +7,12 @@ require('dotenv').config();
 // Supabase client initialization - needs to be run with SERVICE_ROLE key
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // Note: This should be the service role key
+  process.env.SUPABASE_SERVICE_ROLE_KEY, // Note: This should be the service role key
+  {
+    auth: {
+      debug: false
+    }
+  }
 );
 
 async function setupAdminRole() {

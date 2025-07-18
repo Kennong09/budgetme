@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             
             // If user is on login or signup page, redirect to dashboard
             const currentPath = window.location.pathname;
-            if (currentPath === '/login' || currentPath === '/signup' || currentPath === '/') {
+            if ((currentPath === '/login' || currentPath === '/signup' || currentPath === '/') && !currentPath.startsWith('/admin')) {
               window.location.href = '/dashboard';
             }
           }
@@ -150,8 +150,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               setShowEmailVerificationModal(false);
             }
             
-            // Redirect to dashboard after OAuth sign-in
-            window.location.href = '/dashboard';
+            // Redirect to dashboard after OAuth sign-in, but don't redirect if coming from admin area
+            const currentPath = window.location.pathname;
+            if (!currentPath.startsWith('/admin')) {
+              window.location.href = '/dashboard';
+            }
           } else {
             // Regular email sign-in
             if (!toastsShown.current.signIn) {
@@ -160,8 +163,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
             setSignInSuccess(true);
             
-            // Redirect to dashboard after email sign-in
-            window.location.href = '/dashboard';
+            // Redirect to dashboard after email sign-in, but don't redirect if coming from admin area
+            const currentPath = window.location.pathname;
+            if (!currentPath.startsWith('/admin')) {
+              window.location.href = '/dashboard';
+            }
           }
         } else if (event === 'SIGNED_OUT') {
           showSuccessToast('Successfully Signed Out');

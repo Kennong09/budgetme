@@ -1,0 +1,90 @@
+/* Header styles for feature details pages */
+
+/* Back button in logo area */
+.back-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  margin-right: 12px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.back-button:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  transform: translateX(-3px);
+  text-decoration: none;
+}
+
+.back-button i {
+  font-size: 20px;
+  color: white;
+}
+
+/* Mobile back button */
+.mobile-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  margin-right: 8px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.mobile-back-btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  text-decoration: none;
+}
+
+.mobile-back-btn i {
+  font-size: 20px;
+}
+
+/* Home link in menu */
+.home-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-link i {
+  font-size: 18px;
+}
+
+/* Sticky header adjustments for feature pages */
+.sticky-header .back-button i,
+.sticky-header .mobile-back-btn i {
+  color: white;
+}
+
+.sticky-header .back-button,
+.sticky-header .mobile-back-btn {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.sticky-header .back-button:hover,
+.sticky-header .mobile-back-btn:hover {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Feature header specific styles */
+.feature-header .back-button i {
+  color: var(--primary-color);
+}
+
+.feature-header .back-button {
+  background-color: rgba(99, 102, 241, 0.1);
+}
+
+.feature-header .back-button:hover {
+  background-color: rgba(99, 102, 241, 0.2);
+}

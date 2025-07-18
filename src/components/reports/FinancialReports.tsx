@@ -1,32 +1,13 @@
-import React, { useState, useRef, useEffect, FC, ChangeEvent, MouseEvent, FormEvent } from "react";
-import { Link } from "react-router-dom";
-import { supabase } from "../../utils/supabaseClient";
-import { useAuth } from "../../utils/AuthContext";
-import { useToast } from "../../utils/ToastContext";
-import Highcharts from 'highcharts';
-import HighchartsReact from 'highcharts-react-official';
-// Import accessibility module (optional but recommended for accessibility)
-import HighchartsAccessibility from 'highcharts/modules/accessibility';
-// Import additional modules
-import HighchartsExporting from 'highcharts/modules/exporting';
-import HighchartsExportData from 'highcharts/modules/export-data';
-import ErrorBoundary from "../ErrorBoundary";
-import { formatCurrency, formatPercentage } from "../../utils/helpers";
-import {
-  getCurrentUserData,
-  getTotalIncome, 
-  getTotalExpenses,
-  getMonthlySpendingData,
-  getCategorySpendingData,
-  getTransactionTrends,
-  calculateConsistentSpending,
-  calculateDebtReduction,
-  findUnusualTransactions,
-  getTransactionsByDate,
-  getBudgetProgressData,
-  getTopBudgetCategories,
-  calculateBudgetToGoalRelationship
-} from "../../data/mockData";
+import React, { useState, useEffect, useRef, FC, FormEvent } from 'react';
+import { useAuth } from '../../utils/AuthContext';
+import { useToast } from '../../utils/ToastContext';
+import { supabase } from '../../utils/supabaseClient';
+import { formatCurrency, formatDate, formatPercentage } from '../../utils/helpers';
+import HighchartsReact from "highcharts-react-official";
+import Highcharts from "../../utils/highchartsInit";
+import { getCurrentUserData, getTotalIncome, getTotalExpenses } from '../../data/mockData';
+import { Link } from 'react-router-dom';
+import { useCurrency } from '../../utils/CurrencyContext';
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -47,13 +28,6 @@ declare module 'highcharts' {
   interface ChartOptions {
     zoomType?: 'x' | 'y' | 'xy';
   }
-}
-
-// Initialize Highcharts modules
-if (typeof window !== 'undefined') {
-  HighchartsAccessibility(Highcharts);
-  HighchartsExporting(Highcharts);
-  HighchartsExportData(Highcharts);
 }
 
 interface SpendingDataItem {
@@ -187,6 +161,75 @@ const FinancialReports: FC = () => {
   
   // Fixed reference for Highcharts
   const chartRef = useRef<any>(null);
+
+  // CSS for better mobile responsiveness
+  const responsiveStyles = `
+    @media (max-width: 576px) {
+      .card-body {
+        padding: 0.75rem;
+      }
+      
+      .btn {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.8rem;
+      }
+      
+      .table-responsive {
+        font-size: 0.8rem;
+      }
+      
+      .h5 {
+        font-size: 1rem;
+      }
+      
+      .card-header {
+        padding: 0.75rem;
+      }
+      
+      .animate__animated {
+        animation-duration: 0.5s;
+      }
+      
+      .text-xs {
+        font-size: 0.65rem;
+      }
+      
+      .fa-2x {
+        font-size: 1.5em;
+      }
+      
+      .dropdown-menu {
+        width: 100%;
+        min-width: auto;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .dropdown-menu {
+        min-width: 180px;
+      }
+      
+      .h3 {
+        font-size: 1.5rem;
+      }
+      
+      .d-sm-flex.align-items-center {
+        flex-direction: column;
+        align-items: flex-start !important;
+      }
+    }
+  `;
+
+  // Inject the CSS into the document
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = responsiveStyles;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   // Function to determine default chart type based on report type
   const getDefaultChartType = (reportType: ReportType): ChartType => {
@@ -418,7 +461,7 @@ const FinancialReports: FC = () => {
     // Cleanup subscriptions on unmount or dependency change
     return () => {
       if (subscriptionsRef.current.length > 0) {
-        subscriptionsRef.current.forEach(subscription => {
+        subscriptionsRef.current.forEach((subscription: any) => {
         supabase.removeChannel(subscription);
       });
         subscriptionsRef.current = [];
@@ -432,7 +475,7 @@ const FinancialReports: FC = () => {
     
     // Clear any existing subscriptions
     if (subscriptionsRef.current.length > 0) {
-      subscriptionsRef.current.forEach(subscription => {
+      subscriptionsRef.current.forEach((subscription: any) => {
       supabase.removeChannel(subscription);
     });
       subscriptionsRef.current = [];
@@ -921,7 +964,13 @@ const FinancialReports: FC = () => {
         height: 400,
         style: {
           fontFamily: 'Nunito, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
-        }
+        },
+        // Make chart responsive
+        reflow: true,
+        spacingBottom: 15,
+        spacingTop: 10,
+        spacingLeft: 10,
+        spacingRight: 10
       },
       title: {
         text: ''
@@ -929,7 +978,22 @@ const FinancialReports: FC = () => {
       colors: [
         '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', 
         '#6f42c1', '#5a5c69', '#858796', '#2e59d9', '#17a673'
-      ]
+      ],
+      responsive: {
+        rules: [{
+          condition: {
+            maxWidth: 500
+          },
+          chartOptions: {
+            legend: {
+              enabled: false
+            },
+            tooltip: {
+              enabled: true
+            }
+          }
+        }]
+      }
     };
 
     // Configure chart based on report type
@@ -942,19 +1006,40 @@ const FinancialReports: FC = () => {
               pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b><br>Amount: <b>${point.y:,.2f}</b>'
             };
             options.plotOptions = {
-            pie: {
-              allowPointSelect: true,
-              cursor: 'pointer',
-              dataLabels: {
-                enabled: true,
+              pie: {
+                allowPointSelect: true,
+                cursor: 'pointer',
+                dataLabels: {
+                  enabled: true,
                   format: '<b>{point.name}</b>: {point.percentage:.1f} %',
                   style: {
                     textOutline: 'none'
                   }
-              },
-              showInLegend: true
-            }
+                },
+                showInLegend: true
+              }
             };
+            // Add responsive rules for small screens
+            if (!options.responsive) {
+              options.responsive = {
+                rules: []
+              };
+            }
+            options.responsive.rules.push({
+              condition: {
+                maxWidth: 500
+              },
+              chartOptions: {
+                plotOptions: {
+                  pie: {
+                    dataLabels: {
+                      enabled: false
+                    },
+                    showInLegend: true
+                  }
+                }
+              }
+            });
             options.series = [{
               name: 'Spending',
               colorByPoint: true,
@@ -968,12 +1053,34 @@ const FinancialReports: FC = () => {
             options.chart.type = chartType;
             options.xAxis = {
               categories: categoryData.map((item: SpendingDataItem) => item.name),
-            title: {
+              title: {
                 text: null
               }
             };
+            
+            // Add responsive rules for x-axis labels
+            if (!options.responsive) {
+              options.responsive = {
+                rules: []
+              };
+            }
+            options.responsive.rules.push({
+              condition: {
+                maxWidth: 500
+              },
+              chartOptions: {
+                xAxis: {
+                  labels: {
+                    rotation: -45,
+                    style: {
+                      fontSize: '10px'
+                    }
+                  }
+                }
+              }
+            });
             options.yAxis = {
-            title: {
+              title: {
                 text: 'Amount ($)'
               }
             };
@@ -1780,9 +1887,9 @@ const FinancialReports: FC = () => {
   const renderDataSummary = () => {
     return (
       <div className="row mb-4">
-        <div className="col-xl-3 col-md-6 mb-4">
+        <div className="col-6 col-md-6 col-lg-3 mb-4">
           <div className="card border-left-primary shadow h-100 py-2">
-            <div className="card-body">
+            <div className="card-body py-2 px-3">
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
@@ -1800,9 +1907,9 @@ const FinancialReports: FC = () => {
           </div>
         </div>
 
-        <div className="col-xl-3 col-md-6 mb-4">
+        <div className="col-6 col-md-6 col-lg-3 mb-4">
           <div className="card border-left-success shadow h-100 py-2">
-            <div className="card-body">
+            <div className="card-body py-2 px-3">
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className="text-xs font-weight-bold text-success text-uppercase mb-1">
@@ -1820,9 +1927,9 @@ const FinancialReports: FC = () => {
           </div>
         </div>
 
-        <div className="col-xl-3 col-md-6 mb-4">
+        <div className="col-6 col-md-6 col-lg-3 mb-4">
           <div className="card border-left-info shadow h-100 py-2">
-            <div className="card-body">
+            <div className="card-body py-2 px-3">
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
@@ -1840,9 +1947,9 @@ const FinancialReports: FC = () => {
           </div>
         </div>
 
-        <div className="col-xl-3 col-md-6 mb-4">
+        <div className="col-6 col-md-6 col-lg-3 mb-4">
           <div className="card border-left-warning shadow h-100 py-2">
-            <div className="card-body">
+            <div className="card-body py-2 px-3">
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className="text-xs font-weight-bold text-warning text-uppercase mb-1">
@@ -1884,10 +1991,10 @@ const FinancialReports: FC = () => {
     <div className="container-fluid">
       <div className="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 className="h3 mb-0 text-gray-800 animate__animated animate__fadeIn">Financial Reports</h1>
-        <div className="d-flex">
-          <div className="dropdown mr-2">
+        <div className="d-flex flex-column flex-sm-row mt-3 mt-sm-0">
+          <div className="dropdown mb-2 mb-sm-0 mr-0 mr-sm-2">
             <button 
-              className="btn btn-primary dropdown-toggle shadow-sm animate__animated animate__fadeIn"
+              className="btn btn-primary dropdown-toggle shadow-sm animate__animated animate__fadeIn w-100"
               type="button"
               id="exportDropdown"
               data-toggle="dropdown"
@@ -1909,7 +2016,7 @@ const FinancialReports: FC = () => {
           </div>
           <button
             onClick={handleEmailReport}
-            className="d-none d-sm-inline-block btn btn-secondary shadow-sm animate__animated animate__fadeIn"
+            className="btn btn-secondary shadow-sm animate__animated animate__fadeIn w-100 w-sm-auto"
           >
             <i className="fas fa-envelope fa-sm text-white-50 mr-2"></i>Email
           </button>
@@ -1935,50 +2042,112 @@ const FinancialReports: FC = () => {
         </div>
         <div className="card-body">
           <div className="row">
-            <div className="col-md-6 mb-4">
+            {/* Report Type - Full width on xs, half width on md and up */}
+            <div className="col-12 col-md-6 mb-4">
               <label className="text-xs font-weight-bold text-gray-700 text-uppercase mb-2">Report Type</label>
-              <div className="btn-group btn-group-toggle w-100" data-toggle="buttons">
-                <button 
-                  className={`btn ${reportType === "spending" ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => handleReportTypeButtonClick("spending")}
-                >
-                  <i className="fas fa-chart-pie fa-sm mr-1"></i> Spending
-                </button>
-                <button 
-                  className={`btn ${reportType === "income-expense" ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => handleReportTypeButtonClick("income-expense")}
-                >
-                  <i className="fas fa-exchange-alt fa-sm mr-1"></i> Income/Expense
-                </button>
-                <button 
-                  className={`btn ${reportType === "savings" ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => handleReportTypeButtonClick("savings")}
-                >
-                  <i className="fas fa-piggy-bank fa-sm mr-1"></i> Savings
-                </button>
-                <button 
-                  className={`btn ${reportType === "trends" ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => handleReportTypeButtonClick("trends")}
-                >
-                  <i className="fas fa-chart-line fa-sm mr-1"></i> Trends
-                </button>
-                <button 
-                  className={`btn ${reportType === "goals" ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => handleReportTypeButtonClick("goals")}
-                >
-                  <i className="fas fa-bullseye fa-sm mr-1"></i> Goals
-                </button>
-                <button 
-                  className={`btn ${reportType === "predictions" ? "btn-primary" : "btn-outline-primary"}`}
-                  onClick={() => handleReportTypeButtonClick("predictions")}
-                >
-                  <i className="fas fa-magic fa-sm mr-1"></i> Predictions
-                </button>
+              <div className="d-flex flex-wrap">
+                <div className="btn-group-vertical btn-group-sm d-block d-sm-none w-100" role="group">
+                  <button 
+                    className={`btn ${reportType === "spending" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                    onClick={() => handleReportTypeButtonClick("spending")}
+                  >
+                    <i className="fas fa-chart-pie fa-sm mr-1"></i> Spending
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "income-expense" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                    onClick={() => handleReportTypeButtonClick("income-expense")}
+                  >
+                    <i className="fas fa-exchange-alt fa-sm mr-1"></i> Income/Expense
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "savings" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                    onClick={() => handleReportTypeButtonClick("savings")}
+                  >
+                    <i className="fas fa-piggy-bank fa-sm mr-1"></i> Savings
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "trends" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                    onClick={() => handleReportTypeButtonClick("trends")}
+                  >
+                    <i className="fas fa-chart-line fa-sm mr-1"></i> Trends
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "goals" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                    onClick={() => handleReportTypeButtonClick("goals")}
+                  >
+                    <i className="fas fa-bullseye fa-sm mr-1"></i> Goals
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "predictions" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                    onClick={() => handleReportTypeButtonClick("predictions")}
+                  >
+                    <i className="fas fa-magic fa-sm mr-1"></i> Predictions
+                  </button>
+                </div>
+                <div className="btn-group btn-group-toggle d-none d-sm-flex flex-wrap w-100" data-toggle="buttons">
+                  <button 
+                    className={`btn ${reportType === "spending" ? "btn-primary" : "btn-outline-primary"} mb-2 mr-1`}
+                    onClick={() => handleReportTypeButtonClick("spending")}
+                  >
+                    <i className="fas fa-chart-pie fa-sm mr-1"></i> Spending
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "income-expense" ? "btn-primary" : "btn-outline-primary"} mb-2 mr-1`}
+                    onClick={() => handleReportTypeButtonClick("income-expense")}
+                  >
+                    <i className="fas fa-exchange-alt fa-sm mr-1"></i> Income/Expense
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "savings" ? "btn-primary" : "btn-outline-primary"} mb-2 mr-1`}
+                    onClick={() => handleReportTypeButtonClick("savings")}
+                  >
+                    <i className="fas fa-piggy-bank fa-sm mr-1"></i> Savings
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "trends" ? "btn-primary" : "btn-outline-primary"} mb-2 mr-1`}
+                    onClick={() => handleReportTypeButtonClick("trends")}
+                  >
+                    <i className="fas fa-chart-line fa-sm mr-1"></i> Trends
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "goals" ? "btn-primary" : "btn-outline-primary"} mb-2 mr-1`}
+                    onClick={() => handleReportTypeButtonClick("goals")}
+                  >
+                    <i className="fas fa-bullseye fa-sm mr-1"></i> Goals
+                  </button>
+                  <button 
+                    className={`btn ${reportType === "predictions" ? "btn-primary" : "btn-outline-primary"} mb-2`}
+                    onClick={() => handleReportTypeButtonClick("predictions")}
+                  >
+                    <i className="fas fa-magic fa-sm mr-1"></i> Predictions
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="col-md-3 mb-4">
+            {/* Timeframe - Half width on xs, quarter width on md and up */}
+            <div className="col-6 col-md-3 mb-4">
               <label className="text-xs font-weight-bold text-gray-700 text-uppercase mb-2">Timeframe</label>
-              <div className="btn-group btn-group-toggle w-100" data-toggle="buttons">
+              <div className="btn-group-vertical btn-group-sm d-block d-sm-none w-100" data-toggle="buttons">
+                <button 
+                  className={`btn ${timeframe === "month" ? "btn-secondary" : "btn-outline-secondary"} mb-2 w-100`}
+                  onClick={() => handleTimeframeButtonClick("month")}
+                >
+                  Month
+                </button>
+                <button 
+                  className={`btn ${timeframe === "quarter" ? "btn-secondary" : "btn-outline-secondary"} mb-2 w-100`}
+                  onClick={() => handleTimeframeButtonClick("quarter")}
+                >
+                  Quarter
+                </button>
+                <button 
+                  className={`btn ${timeframe === "year" ? "btn-secondary" : "btn-outline-secondary"} w-100`}
+                  onClick={() => handleTimeframeButtonClick("year")}
+                >
+                  Year
+                </button>
+              </div>
+              <div className="btn-group btn-group-toggle d-none d-sm-flex w-100" data-toggle="buttons">
                 <button 
                   className={`btn ${timeframe === "month" ? "btn-secondary" : "btn-outline-secondary"}`}
                   onClick={() => handleTimeframeButtonClick("month")}
@@ -1999,9 +2168,24 @@ const FinancialReports: FC = () => {
                 </button>
               </div>
             </div>
-            <div className="col-md-3 mb-4">
+            {/* View Format - Half width on xs, quarter width on md and up */}
+            <div className="col-6 col-md-3 mb-4">
               <label className="text-xs font-weight-bold text-gray-700 text-uppercase mb-2">View Format</label>
-              <div className="btn-group btn-group-toggle w-100" data-toggle="buttons">
+              <div className="btn-group-vertical btn-group-sm d-block d-sm-none w-100" data-toggle="buttons">
+                <button 
+                  className={`btn ${format === "chart" ? "btn-info" : "btn-outline-info"} mb-2 w-100`}
+                  onClick={() => handleFormatButtonClick("chart")}
+                >
+                  <i className="fas fa-chart-bar mr-1"></i> Chart
+                </button>
+                <button 
+                  className={`btn ${format === "table" ? "btn-info" : "btn-outline-info"} w-100`}
+                  onClick={() => handleFormatButtonClick("table")}
+                >
+                  <i className="fas fa-table mr-1"></i> Table
+                </button>
+              </div>
+              <div className="btn-group btn-group-toggle d-none d-sm-flex w-100" data-toggle="buttons">
                 <button 
                   className={`btn ${format === "chart" ? "btn-info" : "btn-outline-info"}`}
                   onClick={() => handleFormatButtonClick("chart")}
@@ -2019,13 +2203,120 @@ const FinancialReports: FC = () => {
           </div>
           {format === "chart" && (
             <div className="row mt-2">
-              <div className="col-md-12 mb-4">
+              <div className="col-12 mb-4">
                 <label className="text-xs font-weight-bold text-gray-700 text-uppercase mb-2">Chart Type</label>
-                <div className="btn-group btn-group-toggle w-100" data-toggle="buttons">
+                {/* Chart Type buttons for mobile */}
+                <div className="d-block d-sm-none">
+                  {reportType === "spending" && (
+                    <div className="btn-group-vertical btn-group-sm w-100">
+                      <button 
+                        className={`btn ${chartType === "pie" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                        onClick={() => handleChartTypeButtonClick("pie")}
+                      >
+                        <i className="fas fa-chart-pie mr-1"></i> Pie
+                      </button>
+                      <button 
+                        className={`btn ${chartType === "column" ? "btn-primary" : "btn-outline-primary"} w-100`}
+                        onClick={() => handleChartTypeButtonClick("column")}
+                      >
+                        <i className="fas fa-chart-bar mr-1"></i> Column
+                      </button>
+                    </div>
+                  )}
+                  {reportType === "income-expense" && (
+                    <div className="btn-group-vertical btn-group-sm w-100">
+                      <button 
+                        className={`btn ${chartType === "column" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                        onClick={() => handleChartTypeButtonClick("column")}
+                      >
+                        <i className="fas fa-chart-bar mr-1"></i> Column
+                      </button>
+                      <button 
+                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                        onClick={() => handleChartTypeButtonClick("line")}
+                      >
+                        <i className="fas fa-chart-line mr-1"></i> Line
+                      </button>
+                      <button 
+                        className={`btn ${chartType === "area" ? "btn-primary" : "btn-outline-primary"} w-100`}
+                        onClick={() => handleChartTypeButtonClick("area")}
+                      >
+                        <i className="fas fa-chart-area mr-1"></i> Area
+                      </button>
+                    </div>
+                  )}
+                  {reportType === "trends" && (
+                    <div className="btn-group-vertical btn-group-sm w-100">
+                      <button 
+                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                        onClick={() => handleChartTypeButtonClick("line")}
+                      >
+                        <i className="fas fa-chart-line mr-1"></i> Line
+                      </button>
+                      <button 
+                        className={`btn ${chartType === "column" ? "btn-primary" : "btn-outline-primary"} w-100`}
+                        onClick={() => handleChartTypeButtonClick("column")}
+                      >
+                        <i className="fas fa-chart-bar mr-1"></i> Column
+                      </button>
+                    </div>
+                  )}
+                  {reportType === "goals" && (
+                    <div className="btn-group-vertical btn-group-sm w-100">
+                      <button 
+                        className={`btn ${chartType === "column" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                        onClick={() => handleChartTypeButtonClick("column")}
+                      >
+                        <i className="fas fa-chart-bar mr-1"></i> Column
+                      </button>
+                      <button 
+                        className={`btn ${chartType === "pie" ? "btn-primary" : "btn-outline-primary"} w-100`}
+                        onClick={() => handleChartTypeButtonClick("pie")}
+                      >
+                        <i className="fas fa-chart-pie mr-1"></i> Pie
+                      </button>
+                    </div>
+                  )}
+                  {reportType === "savings" && (
+                    <div className="btn-group-vertical btn-group-sm w-100">
+                      <button 
+                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                        onClick={() => handleChartTypeButtonClick("line")}
+                      >
+                        <i className="fas fa-chart-line mr-1"></i> Line
+                      </button>
+                      <button 
+                        className={`btn ${chartType === "area" ? "btn-primary" : "btn-outline-primary"} w-100`}
+                        onClick={() => handleChartTypeButtonClick("area")}
+                      >
+                        <i className="fas fa-chart-area mr-1"></i> Area
+                      </button>
+                    </div>
+                  )}
+                  {reportType === "predictions" && (
+                    <div className="btn-group-vertical btn-group-sm w-100">
+                      <button 
+                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"} mb-2 w-100`}
+                        onClick={() => handleChartTypeButtonClick("line")}
+                      >
+                        <i className="fas fa-chart-line mr-1"></i> Line
+                      </button>
+                      <button 
+                        className={`btn ${chartType === "area" ? "btn-primary" : "btn-outline-primary"} w-100`}
+                        onClick={() => handleChartTypeButtonClick("area")}
+                      >
+                        <i className="fas fa-chart-area mr-1"></i> Area
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Chart Type buttons for desktop */}
+                <div className="btn-group btn-group-toggle d-none d-sm-flex flex-wrap" data-toggle="buttons">
                   {reportType === "spending" && (
                     <>
                       <button 
-                        className={`btn ${chartType === "pie" ? "btn-primary" : "btn-outline-primary"}`}
+                        className={`btn ${chartType === "pie" ? "btn-primary" : "btn-outline-primary"} mr-2`}
                         onClick={() => handleChartTypeButtonClick("pie")}
                       >
                         <i className="fas fa-chart-pie mr-1"></i> Pie
@@ -2041,13 +2332,13 @@ const FinancialReports: FC = () => {
                   {reportType === "income-expense" && (
                     <>
                       <button 
-                        className={`btn ${chartType === "column" ? "btn-primary" : "btn-outline-primary"}`}
+                        className={`btn ${chartType === "column" ? "btn-primary" : "btn-outline-primary"} mr-2`}
                         onClick={() => handleChartTypeButtonClick("column")}
                       >
                         <i className="fas fa-chart-bar mr-1"></i> Column
                       </button>
                       <button 
-                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"}`}
+                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"} mr-2`}
                         onClick={() => handleChartTypeButtonClick("line")}
                       >
                         <i className="fas fa-chart-line mr-1"></i> Line
@@ -2063,7 +2354,7 @@ const FinancialReports: FC = () => {
                   {reportType === "trends" && (
                     <>
                       <button 
-                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"}`}
+                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"} mr-2`}
                         onClick={() => handleChartTypeButtonClick("line")}
                       >
                         <i className="fas fa-chart-line mr-1"></i> Line
@@ -2079,7 +2370,7 @@ const FinancialReports: FC = () => {
                   {reportType === "goals" && (
                     <>
                       <button 
-                        className={`btn ${chartType === "column" ? "btn-primary" : "btn-outline-primary"}`}
+                        className={`btn ${chartType === "column" ? "btn-primary" : "btn-outline-primary"} mr-2`}
                         onClick={() => handleChartTypeButtonClick("column")}
                       >
                         <i className="fas fa-chart-bar mr-1"></i> Column
@@ -2095,7 +2386,7 @@ const FinancialReports: FC = () => {
                   {reportType === "savings" && (
                     <>
                       <button 
-                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"}`}
+                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"} mr-2`}
                         onClick={() => handleChartTypeButtonClick("line")}
                       >
                         <i className="fas fa-chart-line mr-1"></i> Line
@@ -2111,7 +2402,7 @@ const FinancialReports: FC = () => {
                   {reportType === "predictions" && (
                     <>
                       <button 
-                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"}`}
+                        className={`btn ${chartType === "line" ? "btn-primary" : "btn-outline-primary"} mr-2`}
                         onClick={() => handleChartTypeButtonClick("line")}
                       >
                         <i className="fas fa-chart-line mr-1"></i> Line
@@ -2128,8 +2419,8 @@ const FinancialReports: FC = () => {
                 <div className="mt-2 small text-gray-600">
                   <i className="fas fa-info-circle mr-1"></i> 
                   Different chart types provide unique insights into your financial data.
-                  <br/>
-                  <span className="font-weight-bold">Auto-selected default chart type based on report type.</span>
+                  <br className="d-none d-md-block" />
+                  <span className="font-weight-bold d-md-inline-block">Auto-selected default chart type based on report type.</span>
                 </div>
               </div>
             </div>
@@ -2147,7 +2438,11 @@ const FinancialReports: FC = () => {
               ? "Income vs Expenses" 
               : reportType === "trends"
               ? "Financial Trends"
-              : "Goal Allocations"
+              : reportType === "goals"
+              ? "Goal Allocations"
+              : reportType === "savings"
+              ? "Savings Rate"
+              : "Financial Projections"
             } ({timeframe === "month" 
               ? "Monthly" 
               : timeframe === "quarter" 
@@ -2165,7 +2460,7 @@ const FinancialReports: FC = () => {
         </div>
         <div className="card-body">
           {format === "chart" ? (
-            <div style={{ height: "450px" }}>
+            <div style={{ height: "auto", minHeight: "300px", maxHeight: "600px" }}>
               <HighchartsReact
                 highcharts={Highcharts}
                 options={chartOptions}

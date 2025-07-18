@@ -36,3 +36,33 @@
     transform: rotate(360deg);
   }
 }
+
+/* Auth loading indicator - subtle spinner without text */
+.auth-loading-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.5);
+  z-index: 1000;
+}
+
+.auth-loading-indicator::after {
+  content: "";
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #6366f1; /* Primary color */
+  animation: auth-spinner 0.8s linear infinite;
+}
+
+@keyframes auth-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}

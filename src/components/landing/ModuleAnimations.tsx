@@ -79,8 +79,7 @@ export const TransactionsAnimation: FC<AnimationProps> = ({ animated }) => {
         color: isHovered ? '#10B981' : 'inherit'
       }}>Transactions</h3>
       <p>
-        Record and categorize all your financial transactions with easy
-        filtering and search features.
+        Record your transactions.
       </p>
     </div>
   );
@@ -120,8 +119,7 @@ export const BudgetsAnimation: FC<AnimationProps> = ({ animated }) => {
         color: isHovered ? '#F59E0B' : 'inherit'
       }}>Budgets</h3>
       <p>
-        Create custom budgets for different categories and track your spending
-        against set limits.
+        Create custom budgets.
       </p>
     </div>
   );
@@ -161,8 +159,7 @@ export const GoalsAnimation: FC<AnimationProps> = ({ animated }) => {
         color: isHovered ? '#EC4899' : 'inherit'
       }}>Goals</h3>
       <p>
-        Set financial goals like saving for a vacation or paying off debt, and
-        track your progress.
+        Set financial goals.
       </p>
     </div>
   );
@@ -202,8 +199,7 @@ export const FamilyAnimation: FC<AnimationProps> = ({ animated }) => {
         color: isHovered ? '#3B82F6' : 'inherit'
       }}>Family</h3>
       <p>
-        Manage finances together with family members. Share budgets and goals
-        while maintaining privacy.
+        Manage finances together.
       </p>
     </div>
   );
@@ -243,8 +239,7 @@ export const AIPredictionsAnimation: FC<AnimationProps> = ({ animated }) => {
         color: isHovered ? '#8B5CF6' : 'inherit'
       }}>AI Predictions</h3>
       <p>
-        Leverage AI to predict future expenses, identify savings opportunities,
-        and get personalized advice.
+        Leverage AI to predict.
       </p>
     </div>
   );

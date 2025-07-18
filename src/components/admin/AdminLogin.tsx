@@ -1,4 +1,4 @@
-import React, { useState, FormEvent, useEffect } from 'react';
+import React, { useState, FormEvent, useEffect, useTransition } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import { useToast } from '../../utils/ToastContext';
@@ -7,47 +7,84 @@ import Meta from '../layout/Meta';
 import '../admin/admin.css';
 
 const AdminLogin: React.FC = () => {
-  const { signIn, loading, error, clearError, user } = useAuth();
+  const { signIn, loading: authLoading, error, clearError, user } = useAuth();
   const { showSuccessToast, showErrorToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isPending, startTransition] = useTransition();
 
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [passwordVisible, setPasswordVisible] = useState<boolean>(false);
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
-  const [checkingAdmin, setCheckingAdmin] = useState<boolean>(true);
+  const [checkingAdmin, setCheckingAdmin] = useState<boolean>(false);
   const [accessDenied, setAccessDenied] = useState<boolean>(false);
+  const [loginInProgress, setLoginInProgress] = useState<boolean>(false);
+  
+  // Combined loading state
+  const loading = authLoading || checkingAdmin || isPending || loginInProgress;
 
   // Check URL parameters for access_denied flag
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
     if (queryParams.get('access_denied') === 'true') {
-      setAccessDenied(true);
-      showErrorToast("Access denied: You don't have admin privileges");
+      // Use startTransition to wrap state updates
+      startTransition(() => {
+        setAccessDenied(true);
+        showErrorToast("Access denied: You don't have admin privileges");
+      });
     }
   }, [location, showErrorToast]);
 
   // Check if user is already logged in and is an admin
   useEffect(() => {
+    // Only check if user is defined and there's no login in progress
+    if (!user || loginInProgress) return;
+    
+    let isMounted = true;
+    
     const checkAdminStatus = async () => {
-      if (user) {
+      // Set checking state
+      setCheckingAdmin(true);
+      
+      try {
         // Check if user has admin role
         const adminStatus = await isUserAdmin();
         
-        if (adminStatus) {
-          // If admin, redirect to admin dashboard
-          navigate('/admin/dashboard');
-        } else {
-          // If not admin, show access denied message
-          setAccessDenied(true);
-        }
+        // If component unmounted, don't update state
+        if (!isMounted) return;
+        
+        // Use startTransition to prevent synchronous suspension
+        startTransition(() => {
+          setCheckingAdmin(false);
+          
+          if (adminStatus) {
+            // If admin, redirect to admin dashboard
+            window.location.href = '/admin/dashboard';
+          } else {
+            // If not admin, show access denied message
+            setAccessDenied(true);
+            showErrorToast("Access denied: You don't have admin privileges");
+          }
+        });
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        
+        if (!isMounted) return;
+        
+        startTransition(() => {
+          showErrorToast('Error checking admin status. Please try again.');
+          setCheckingAdmin(false);
+        });
       }
-      setCheckingAdmin(false);
     };
     
     checkAdminStatus();
-  }, [user, navigate]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user, showErrorToast]);
 
   // Form validation
   const validateForm = (): boolean => {
@@ -67,39 +104,63 @@ const AdminLogin: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
-  const handleLogin = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!validateForm()) return;
     
+    // Clear previous errors
     clearError();
+    setFormErrors({});
+    
+    // Form validation
+    if (!validateForm()) {
+      return;
+    }
+    
+    // Set login in progress to prevent multiple submissions
+    setLoginInProgress(true);
+    
     try {
       await signIn(email, password);
       
-      // After login, check if user is admin
-      const adminStatus = await isUserAdmin();
+      // Wait a bit to ensure auth state is updated
+      setTimeout(async () => {
+        try {
+          // After successful login, verify admin role
+          const adminStatus = await isUserAdmin();
+          
+          // Use startTransition to handle state updates
+          startTransition(() => {
+            if (adminStatus) {
+              showSuccessToast('Successfully logged in as administrator');
+              // Force navigation with replace to prevent history issues
+              window.location.href = '/admin/dashboard';
+            } else {
+              setAccessDenied(true);
+              showErrorToast("Access denied: You don't have admin privileges");
+            }
+            setLoginInProgress(false);
+          });
+        } catch (verifyError) {
+          console.error('Error verifying admin status:', verifyError);
+          
+          startTransition(() => {
+            showErrorToast('Error verifying admin status. Please try again.');
+            setLoginInProgress(false);
+          });
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Login error:', error);
       
-      if (adminStatus) {
-        showSuccessToast("Successfully logged in as admin");
-        navigate('/admin/dashboard');
-      } else {
-        // If not admin, show access denied message
-        setAccessDenied(true);
-        showErrorToast("Access denied: You don't have admin privileges");
-      }
-    } catch (err) {
-      console.error('Login error:', err);
-      if (error) {
-        showErrorToast(error);
-      } else if (err instanceof Error) {
-        showErrorToast(err.message);
-      } else {
-        showErrorToast("Failed to log in. Please try again.");
-      }
+      startTransition(() => {
+        showErrorToast('Login failed: ' + (error as Error).message);
+        setLoginInProgress(false);
+      });
     }
   };
 
-  // Show loading state while checking admin status
-  if (loading || checkingAdmin) {
+  // Show loading state
+  if (loading) {
     return (
       <div className="d-flex align-items-center justify-content-center" style={{ height: "100vh" }}>
         <div className="text-center">
@@ -143,9 +204,11 @@ const AdminLogin: React.FC = () => {
                 <button 
                   className="btn btn-outline-secondary mr-2"
                   onClick={() => {
-                    setAccessDenied(false);
-                    setEmail('');
-                    setPassword('');
+                    startTransition(() => {
+                      setAccessDenied(false);
+                      setEmail('');
+                      setPassword('');
+                    });
                   }}
                 >
                   Try Another Account
@@ -156,7 +219,7 @@ const AdminLogin: React.FC = () => {
               </div>
             </div>
           ) : (
-            <form onSubmit={handleLogin} className="admin-login-form">
+            <form onSubmit={handleSubmit} className="admin-login-form">
               <div className="form-group">
                 <label htmlFor="adminEmail">Email Address</label>
                 <div className="input-group">

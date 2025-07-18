@@ -204,7 +204,7 @@ const TransactionDetails: FC = () => {
         table: 'transactions',
         filter: `id=eq.${id}`
       }, (payload) => {
-        console.log('Transaction change received:', payload);
+        
         
         // If transaction was deleted, navigate back to transactions list
         if (payload.eventType === 'DELETE') {

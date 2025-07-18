@@ -19,7 +19,6 @@ import {
 } from "../../data/mockData";
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
-import ErrorBoundary from "../ErrorBoundary";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -385,7 +384,7 @@ const Transactions: FC = () => {
             filter: `user_id=eq.${user.id}`
           },
           (payload) => {
-            console.log('Transactions change received!', payload);
+            
             // Refresh data when changes occur
             fetchUserData();
           }
@@ -1373,7 +1372,6 @@ const Transactions: FC = () => {
               </h6>
             </div>
             <div className="card-body">
-              <ErrorBoundary>
                 {lineChartOptions && filteredTransactions.length > 0 ? (
                   <>
                     <HighchartsReact
@@ -1399,7 +1397,6 @@ const Transactions: FC = () => {
                     </Link>
                   </div>
                 )}
-              </ErrorBoundary>
             </div>
           </div>
 
@@ -1517,7 +1514,6 @@ const Transactions: FC = () => {
               </h6>
             </div>
             <div className="card-body">
-              <ErrorBoundary>
                 {pieChartOptions && filteredTransactions.filter(tx => tx.type === 'expense').length > 0 ? (
                   <>
                     <HighchartsReact
@@ -1540,7 +1536,6 @@ const Transactions: FC = () => {
                     <p className="text-gray-500 mb-0 small">Add expense transactions to see your spending distribution.</p>
                   </div>
                 )}
-              </ErrorBoundary>
             </div>
           </div>
                 

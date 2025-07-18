@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FC, useRef, ChangeEvent } from "react";
+import React, { useState, useEffect, ChangeEvent, FC, useRef } from 'react';
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   formatCurrency,
@@ -10,7 +10,8 @@ import {
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
-import ErrorBoundary from "../ErrorBoundary";
+import HighchartsReact from "highcharts-react-official";
+import Highcharts from "../../utils/highchartsInit";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";

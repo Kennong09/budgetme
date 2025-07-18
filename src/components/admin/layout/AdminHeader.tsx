@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FC } from "react";
+import React, { useState, useEffect, FC, useTransition } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../../utils/AuthContext";
 
@@ -12,21 +12,29 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
   const [userName, setUserName] = useState<string>("");
   const [userAvatar, setUserAvatar] = useState<string>("");
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
+  const [isPending, startTransition] = useTransition();
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   
   useEffect(() => {
     // Set user info from auth context
     if (user) {
-      setUserName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Admin");
-      setUserAvatar(user.user_metadata?.avatar_url || "../images/placeholder.png");
+      startTransition(() => {
+        setUserName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Admin");
+        setUserAvatar(user.user_metadata?.avatar_url || "../images/placeholder.png");
+      });
     }
-  }, [user]);
+  }, [user, startTransition]);
 
   const handleLogout = async () => {
+    setIsLoading(true);
     try {
       await logout();
-      navigate("/admin");
+      // Use replace: true to prevent back button from returning to admin pages
+      navigate("/admin/login", { replace: true });
     } catch (error) {
       console.error("Logout failed:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -46,6 +54,23 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showDropdown]);
 
+  // Use default values for userName and userAvatar if not set yet
+  const displayName = userName || (user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Admin");
+  const displayAvatar = userAvatar || (user?.user_metadata?.avatar_url || "../images/placeholder.png");
+
+  // Show loading state during transition
+  if (isPending || isLoading) {
+    return (
+      <nav className="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+        <div className="d-flex justify-content-center align-items-center w-100">
+          <div className="spinner-border spinner-border-sm text-danger" role="status">
+            <span className="sr-only">Loading...</span>
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
   return (
     <nav className="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
       {/* Sidebar Toggle (Topbar) */}
@@ -53,6 +78,7 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
         id="sidebarToggleTop"
         className="btn btn-link d-md-none rounded-circle mr-3"
         onClick={toggleSidebar}
+        type="button"
       >
         <i className="fa fa-bars"></i>
       </button>
@@ -65,7 +91,13 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
       </div>
 
       {/* Topbar Search */}
-      <form className="d-none d-sm-inline-block form-inline mr-auto ml-md-3 my-2 my-md-0 mw-100 navbar-search">
+      <form 
+        className="d-none d-sm-inline-block form-inline mr-auto ml-md-3 my-2 my-md-0 mw-100 navbar-search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          // Handle search functionality without page refresh
+        }}
+      >
         <div className="input-group">
           <input
             type="text"
@@ -75,7 +107,7 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
             aria-describedby="basic-addon2"
           />
           <div className="input-group-append">
-            <button className="btn btn-danger" type="button">
+            <button className="btn btn-danger" type="submit">
               <i className="fas fa-search fa-sm"></i>
             </button>
           </div>
@@ -86,66 +118,42 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
       <ul className="navbar-nav ml-auto">
         {/* Nav Item - Search Dropdown (Visible Only XS) */}
         <li className="nav-item dropdown no-arrow d-sm-none">
-          <a
-            className="nav-link dropdown-toggle"
-            href="#!"
+          <button
+            className="nav-link dropdown-toggle btn btn-link"
             id="searchDropdown"
-            role="button"
-            data-toggle="dropdown"
-            aria-haspopup="true"
-            aria-expanded="false"
             onClick={(e) => {
               e.preventDefault();
-              // Mobile search functionality
+              // Mobile search functionality without page refresh
             }}
+            aria-haspopup="true"
+            aria-expanded="false"
           >
             <i className="fas fa-search fa-fw"></i>
-          </a>
+          </button>
         </li>
 
         {/* Nav Item - Alerts */}
         <li className="nav-item dropdown no-arrow mx-1">
-          <a
-            className="nav-link dropdown-toggle"
-            href="#!"
+          <button
+            className="nav-link dropdown-toggle btn btn-link"
             id="alertsDropdown"
-            role="button"
-            data-toggle="dropdown"
+            onClick={(e) => e.preventDefault()}
             aria-haspopup="true"
             aria-expanded="false"
           >
             <i className="fas fa-bell fa-fw"></i>
             {/* Counter - Alerts */}
             <span className="badge badge-danger badge-counter">3+</span>
-          </a>
-        </li>
-
-        {/* Nav Item - Messages */}
-        <li className="nav-item dropdown no-arrow mx-1">
-          <a
-            className="nav-link dropdown-toggle"
-            href="#!"
-            id="messagesDropdown"
-            role="button"
-            data-toggle="dropdown"
-            aria-haspopup="true"
-            aria-expanded="false"
-          >
-            <i className="fas fa-envelope fa-fw"></i>
-            {/* Counter - Messages */}
-            <span className="badge badge-danger badge-counter">7</span>
-          </a>
+          </button>
         </li>
 
         <div className="topbar-divider d-none d-sm-block"></div>
 
         {/* Nav Item - User Information */}
         <li className="nav-item dropdown no-arrow">
-          <a
-            className="nav-link dropdown-toggle"
-            href="#!"
+          <button
+            className="nav-link dropdown-toggle btn btn-link"
             id="userDropdown"
-            role="button"
             onClick={(e) => {
               e.preventDefault();
               toggleDropdown();
@@ -154,14 +162,14 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
             aria-expanded={showDropdown}
           >
             <span className="mr-2 d-none d-lg-inline text-gray-600 small">
-              {userName}
+              {displayName}
             </span>
             <img
               className="img-profile rounded-circle"
-              src={userAvatar}
+              src={displayAvatar}
               alt="User avatar"
             />
-          </a>
+          </button>
           {/* Dropdown - User Information */}
           <div
             className={`dropdown-menu dropdown-menu-right shadow animated--grow-in ${
@@ -178,9 +186,8 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
               Admin Settings
             </Link>
             <div className="dropdown-divider"></div>
-            <a
-              className="dropdown-item"
-              href="#!"
+            <button
+              className="dropdown-item btn btn-link"
               onClick={(e) => {
                 e.preventDefault();
                 handleLogout();
@@ -188,7 +195,7 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
             >
               <i className="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
               Logout
-            </a>
+            </button>
           </div>
         </li>
       </ul>

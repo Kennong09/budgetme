@@ -8,7 +8,6 @@ import {
 } from "../../utils/helpers";
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
-import ErrorBoundary from "../ErrorBoundary";
 import { Budget } from "../../types";
 import { useCurrency } from "../../utils/CurrencyContext";
 import { supabase } from "../../utils/supabaseClient";

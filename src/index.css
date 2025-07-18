@@ -1,3 +1,6 @@
+/* Import base styles */
+@import './components/featureDetails/featureDetails.css';
+
 :root {
   --primary-color: #6366f1; /* Indigo */
   --primary-dark: #4f46e5;
@@ -484,6 +487,30 @@ body {
   font-size: 0.875rem;
   color: var(--text-muted);
   margin-left: 1rem;
+}
+
+/* Loading Spinner */
+.app-loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100%;
+}
+
+.app-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spinner 0.8s linear infinite;
+}
+
+@keyframes spinner {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 768px) {

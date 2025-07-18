@@ -6,6 +6,17 @@ import { SidebarProps } from "../../types";
 import { getCurrentUserData } from "../../data/mockData";
 import { HelpButton } from "../../components/onboarding";
 
+// Add CSS styles for consistent navigation item colors
+const navItemStyles = {
+  navLink: {
+    color: 'var(--light)',
+    transition: 'all 0.2s ease'
+  },
+  activeNavItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)'
+  }
+};
+
 interface NavItem {
   id: number;
   path: string;
@@ -38,6 +49,27 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
   });
   const sidebarRef = useRef<HTMLUListElement>(null);
   const navRefs = useRef<{[key: number]: HTMLLIElement | null}>({});
+  
+  // Force a consistent style override to the sidebar
+  useEffect(() => {
+    // Apply style overrides after component mount and on any updates
+    const applyNavStyles = () => {
+      const navItems = document.querySelectorAll('.sidebar .nav-item .nav-link');
+      navItems.forEach((item: any) => {
+        item.style.color = '#ffffff';
+        const icons = item.querySelectorAll('i');
+        icons.forEach((icon: any) => {
+          icon.style.color = '#ffffff';
+        });
+      });
+    };
+    
+    // Run immediately and after a small delay to handle any style flashing
+    applyNavStyles();
+    const timer = setTimeout(applyNavStyles, 50);
+    
+    return () => clearTimeout(timer);
+  }, [isOpen, activeItem]);
 
   useEffect(() => {
     // Get user data from mock data service - load immediately
@@ -228,6 +260,7 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
           ${compactMode ? "sidebar-compact" : ""}`}
         id="accordionSidebar"
         ref={sidebarRef}
+        style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
       >
         {/* Sidebar - Brand */}
         <Link
@@ -252,7 +285,7 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
             style={{ 
               width: compactMode ? "40px" : "65px", 
               height: compactMode ? "40px" : "65px", 
-              border: "2px solid rgba(255,255,255,0.3)" 
+              border: "2px solid var(--primary-light, rgba(255,255,255,0.3))" 
             }}
           />
           <div className="sidebar-user-details">
@@ -268,112 +301,158 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
         {/* Divider */}
         <hr className="sidebar-divider my-0" />
 
-        {/* Nav Items */}
-        {navItems.map((item) => (
-          <li
-            key={item.id}
-            ref={el => navRefs.current[item.id] = el}
-            className={`nav-item ${activeItem === item.id ? "active" : ""}`}
-            onMouseEnter={(e) => handleMouseEnter(item.id, item.label, e)}
+        {/* Scrollable content area */}
+        <div className="sidebar-content" style={{ flex: '1', overflowY: 'auto', overflowX: 'hidden' }}>
+          {/* Nav Items */}
+          {navItems.map((item) => (
+            <li
+              key={item.id}
+              ref={el => navRefs.current[item.id] = el}
+              className={`nav-item ${activeItem === item.id ? "active" : ""}`}
+              onMouseEnter={(e) => handleMouseEnter(item.id, item.label, e)}
+              onMouseLeave={handleMouseLeave}
+              style={activeItem === item.id ? navItemStyles.activeNavItem : {}}
+            >
+              <Link
+                className="nav-link"
+                to={item.path}
+                onClick={() => {
+                  setActiveItem(item.id);
+                  // Close sidebar on mobile after navigation
+                  if (window.innerWidth < 768 && isOpen && onToggleSidebar) {
+                    onToggleSidebar();
+                  }
+                }}
+                style={{
+                  color: '#ffffff !important', // Force white color
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <i 
+                  className={`fas ${item.icon} fa-fw`} 
+                  style={{ color: '#ffffff !important' }} // Force white color for icon
+                ></i>
+                {!compactMode && <span style={{ color: '#ffffff' }}>{item.label}</span>}
+                {activeItem === item.id && (
+                  <span className="position-absolute right-0 mr-3 pulse-dot"></span>
+                )}
+              </Link>
+            </li>
+          ))}
+
+          {/* Divider */}
+          <hr className="sidebar-divider" />
+          
+          {/* Help Button */}
+          <li 
+            className="nav-item"
+            onMouseEnter={(e) => handleMouseEnter(101, "Help & Tour", e)}
             onMouseLeave={handleMouseLeave}
           >
-            <Link
-              className="nav-link"
-              to={item.path}
-              onClick={() => {
-                setActiveItem(item.id);
-                // Close sidebar on mobile after navigation
-                if (window.innerWidth < 768 && isOpen && onToggleSidebar) {
-                  onToggleSidebar();
-                }
+            <HelpButton compactMode={compactMode} />
+          </li>
+          
+          {/* Logout */}
+          <li 
+            className="nav-item"
+            onMouseEnter={(e) => handleMouseEnter(102, "Logout", e)}
+            onMouseLeave={handleMouseLeave}
+          >
+            <button 
+              className="nav-link btn btn-link text-left w-100" 
+              onClick={handleLogout}
+              style={{ color: '#ffffff' }}
+            >
+              <i 
+                className="fas fa-sign-out-alt fa-fw" 
+                style={{ color: '#ffffff' }}
+              ></i>
+              {!compactMode && <span>Logout</span>}
+            </button>
+          </li>
+
+          {/* Divider */}
+          <hr className="sidebar-divider d-none d-md-block" />
+
+          {/* Sidebar Toggler */}
+          <div className="text-center d-none d-md-inline">
+            <button 
+              className="rounded-circle border-0 sidebar-toggle-btn" 
+              id="sidebarToggle"
+              onClick={handleToggleSidebar}
+              style={{ 
+                color: 'var(--light)', 
+                background: 'var(--primary)' 
               }}
             >
-              <i className={`fas ${item.icon} fa-fw`}></i>
-              {!compactMode && <span>{item.label}</span>}
-              {activeItem === item.id && !compactMode && (
-                <span className="position-absolute right-0 mr-3 pulse-border"></span>
-              )}
-            </Link>
-          </li>
-        ))}
-
-        {/* Divider */}
-        <hr className="sidebar-divider" />
-        
-        {/* Help Button */}
-        <li 
-          className="nav-item"
-          onMouseEnter={(e) => handleMouseEnter(101, "Help & Tour", e)}
-          onMouseLeave={handleMouseLeave}
-        >
-          <HelpButton compactMode={compactMode} />
-        </li>
-        
-        {/* Logout */}
-        <li 
-          className="nav-item"
-          onMouseEnter={(e) => handleMouseEnter(102, "Logout", e)}
-          onMouseLeave={handleMouseLeave}
-        >
-          <button 
-            className="nav-link btn btn-link text-left w-100" 
-            onClick={handleLogout}
-          >
-            <i className="fas fa-sign-out-alt fa-fw"></i>
-            {!compactMode && <span>Logout</span>}
-          </button>
-        </li>
-
-        {/* Divider */}
-        <hr className="sidebar-divider d-none d-md-block" />
-
-        {/* Sidebar Toggler */}
-        <div className="text-center d-none d-md-inline">
-          <button 
-            className="rounded-circle border-0 sidebar-toggle-btn" 
-            id="sidebarToggle"
-            onClick={handleToggleSidebar}
-            style={{ color: 'var(--light)', background: 'var(--primary)' }}
-          >
-            <i className={`fas ${isOpen ? "fa-angle-left" : "fa-angle-right"}`}></i>
-          </button>
-        </div>
-        
-        {/* Favorite Section - Quick Access */}
-        {!compactMode && (
-          <>
-            <hr className="sidebar-divider" />
-            <div className="sidebar-heading">Favorites</div>
-            <div className="sidebar-favorites px-3 py-2">
-              <div className="d-flex flex-wrap justify-content-around">
-                <Link to="/transactions/add" className="favorite-item mb-2">
-                  <div className="circle-icon">
-                    <i className="fas fa-plus"></i>
-                  </div>
-                  <span>Add</span>
-                </Link>
-                <Link to="/dashboard/analytics" className="favorite-item mb-2">
-                  <div className="circle-icon">
-                    <i className="fas fa-chart-bar"></i>
-                  </div>
-                  <span>Analytics</span>
-                </Link>
-                <Link to="/goals" className="favorite-item mb-2">
-                  <div className="circle-icon">
-                    <i className="fas fa-flag"></i>
-                  </div>
-                  <span>Goals</span>
-                </Link>
-                <Link to="/budgets" className="favorite-item">
-                  <div className="circle-icon">
-                    <i className="fas fa-balance-scale"></i>
-                  </div>
-                  <span>Budget</span>
-                </Link>
+              <i className={`fas ${isOpen ? "fa-angle-left" : "fa-angle-right"}`}></i>
+              <span className="toggle-pulse-dot"></span>
+            </button>
+          </div>
+          
+          {/* Favorite Section - Quick Access */}
+          {!compactMode && (
+            <>
+              <hr className="sidebar-divider" />
+              <div className="sidebar-heading">Favorites</div>
+              <div className="sidebar-favorites px-3 py-2">
+                <div className="d-flex flex-wrap justify-content-around">
+                  <Link to="/transactions/add" className="favorite-item mb-2">
+                    <div className="circle-icon">
+                      <i className="fas fa-plus"></i>
+                    </div>
+                    <span>Add</span>
+                  </Link>
+                  <Link to="/dashboard/analytics" className="favorite-item mb-2">
+                    <div className="circle-icon">
+                      <i className="fas fa-chart-bar"></i>
+                    </div>
+                    <span>Analytics</span>
+                  </Link>
+                  <Link to="/goals" className="favorite-item mb-2">
+                    <div className="circle-icon">
+                      <i className="fas fa-flag"></i>
+                    </div>
+                    <span>Goals</span>
+                  </Link>
+                  <Link to="/budgets" className="favorite-item">
+                    <div className="circle-icon">
+                      <i className="fas fa-balance-scale"></i>
+                    </div>
+                    <span>Budget</span>
+                  </Link>
+                </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
+
+        {/* Fixed Footer */}
+        <div 
+          className="sidebar-footer"
+          style={{ 
+            marginTop: 'auto',
+            padding: '10px',
+            borderTop: '1px solid rgba(255,255,255,0.1)',
+            textAlign: 'center',
+            color: 'var(--light)',
+            fontSize: compactMode ? '0.7rem' : '0.8rem',
+            background: 'rgba(0,0,0,0.1)'
+          }}
+        >
+          <div className="footer-content">
+            {!compactMode ? (
+              <>
+                <p className="mb-1">&copy; {new Date().getFullYear()} BudgetMe</p>
+                <p className="mb-0 text-white-50">Version 1.5.2</p>
+              </>
+            ) : (
+              <p className="mb-0">
+                <i className="fas fa-copyright"></i> {new Date().getFullYear()}
+              </p>
+            )}
+          </div>
+        </div>
       </ul>
       
       {/* Tooltip for compact mode */}
@@ -382,12 +461,86 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
           className="sidebar-tooltip" 
           style={{ 
             top: tooltipPosition.top, 
-            left: tooltipPosition.left 
+            left: tooltipPosition.left,
+            background: 'var(--primary)',
+            color: 'var(--light)' 
           }}
         >
           {showTooltip.label}
         </div>
       )}
+
+      {/* CSS override to ensure consistent colors */}
+      <style dangerouslySetInnerHTML={{ 
+        __html: `
+          /* Force primary theme colors with higher specificity and !important */
+          #accordionSidebar, 
+          #accordionSidebar.sidebar,
+          .navbar-nav.sidebar.sidebar-dark.accordion,
+          .navbar-nav.bg-gradient-primary {
+            background: var(--primary) !important;
+            background-image: linear-gradient(180deg, var(--primary) 10%, var(--primary-dark) 100%) !important;
+          }
+          
+          .sidebar .nav-item .nav-link,
+          #accordionSidebar .nav-item .nav-link {
+            color: #ffffff !important;
+            transition: background-color 0.2s ease !important;
+          }
+          
+          .sidebar .nav-item .nav-link i,
+          #accordionSidebar .nav-item .nav-link i {
+            color: #ffffff !important;
+          }
+          
+          .sidebar .nav-item .nav-link span,
+          #accordionSidebar .nav-item .nav-link span {
+            color: #ffffff !important;
+          }
+          
+          .sidebar .nav-item.active .nav-link,
+          #accordionSidebar .nav-item.active .nav-link {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            font-weight: bold !important;
+          }
+          
+          .sidebar .nav-item .nav-link:hover,
+          #accordionSidebar .nav-item .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+          }
+          
+          /* Make sure the sidebar brand elements are white */
+          .sidebar-brand-text, 
+          .sidebar-brand-icon i {
+            color: #ffffff !important;
+          }
+          
+          /* Force sidebar toggle button styling */
+          .sidebar-toggle-btn {
+            color: #ffffff !important;
+            background: var(--primary) !important;
+          }
+          
+          /* Force sidebar favorites styling */
+          .sidebar-favorites .favorite-item,
+          .sidebar-favorites .favorite-item span,
+          .sidebar-favorites .favorite-item i {
+            color: #ffffff !important;
+          }
+          
+          /* Force footer text colors */
+          .sidebar-footer,
+          .sidebar-footer p,
+          .sidebar-footer .footer-content {
+            color: #ffffff !important;
+          }
+          
+          /* Apply styles immediately without transition to prevent color flash */
+          .sidebar * {
+            transition-delay: 0s !important;
+          }
+        `
+      }} />
     </>
   );
 };

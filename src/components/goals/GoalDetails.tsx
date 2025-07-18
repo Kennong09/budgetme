@@ -350,7 +350,7 @@ const GoalDetails: FC = () => {
     };
     
     checkFamilyStatus();
-  }, [user, goal, familyName]);
+  }, [user, goal, familyName, supabase]);
   
   // Contribution handling functions
   const openContributeModal = () => {

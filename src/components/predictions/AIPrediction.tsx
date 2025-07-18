@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, FC } from "react";
+import React, { useState, useEffect, useRef, FC } from "react";
 import {
   LineChart,
   Line,
@@ -14,7 +14,6 @@ import {
   BarChart,
   ComposedChart,
 } from "recharts";
-import ErrorBoundary from "../ErrorBoundary";
 import { formatCurrency, formatPercentage } from "../../utils/helpers";
 import {
   getCurrentUserData,
@@ -136,7 +135,7 @@ const AIPrediction: FC = () => {
           // Clean up chart reference if needed
           chartRef.current = null;
         } catch (error) {
-          console.log("Error cleaning up chart:", error);
+          
         }
       }
     };
@@ -392,7 +391,7 @@ const AIPrediction: FC = () => {
   // Handle export to CSV
   const handleExportCSV = (): void => {
     // In a real app, this would generate and download a CSV file
-    console.log("Exporting prediction data to CSV");
+    
     alert("CSV file downloaded successfully!");
   };
 

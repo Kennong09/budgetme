@@ -10,7 +10,6 @@ import {
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
 import { supabase } from "../../utils/supabaseClient";
-import ErrorBoundary from "../ErrorBoundary";
 
 // Import initialized Highcharts from utils
 import Highcharts from "../../utils/highchartsInit";
@@ -340,7 +339,6 @@ const Dashboard: FC = () => {
     }
 
     try {
-      console.log('Starting to fetch dashboard data for user:', user.id);
       setLoading(true);
       
       // Fetch user's accounts
@@ -354,8 +352,6 @@ const Dashboard: FC = () => {
         throw accountsError;
       }
       
-      console.log('Accounts data:', accountsData?.length || 0, 'accounts found');
-      
       // Fetch income categories
       const { data: incomeData, error: incomeError } = await supabase
         .from('income_categories')
@@ -366,8 +362,6 @@ const Dashboard: FC = () => {
         console.error('Error fetching income categories:', incomeError);
         throw incomeError;
       }
-      
-      console.log('Income categories data:', incomeData?.length || 0, 'categories found');
       
       // Fetch expense categories
       const { data: expenseData, error: expenseError } = await supabase
@@ -380,8 +374,6 @@ const Dashboard: FC = () => {
         throw expenseError;
       }
       
-      console.log('Expense categories data:', expenseData?.length || 0, 'categories found');
-      
       // Fetch goals
       const { data: goalsData, error: goalsError } = await supabase
         .from('goals')
@@ -393,14 +385,10 @@ const Dashboard: FC = () => {
         throw goalsError;
       }
       
-      console.log('Goals data:', goalsData?.length || 0, 'goals found');
-      
       // Get current month's date range for transactions
       const currentDate = new Date();
       const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString().split('T')[0];
       const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).toISOString().split('T')[0];
-      
-      console.log('Fetching transactions from', firstDayOfMonth, 'to', lastDayOfMonth);
       
       // Fetch recent transactions (limited to 30 days)
       const { data: transactionsData, error: transactionsError } = await supabase
@@ -415,10 +403,7 @@ const Dashboard: FC = () => {
         throw transactionsError;
       }
       
-      console.log('Transactions data:', transactionsData?.length || 0, 'transactions found');
-      
       // Fetch budget progress data
-      console.log('Fetching budget data...');
       let budgetsData = null;
       let budgetsError = null;
       
@@ -450,8 +435,6 @@ const Dashboard: FC = () => {
       if (budgetsError) {
         console.error('Error fetching budgets:', budgetsError);
       }
-      
-      console.log('Budgets data:', budgetsData?.length || 0, 'budgets found');
       
       // Get pending family invitations
       const { data: invitationsData, error: invitationsError } = await supabase
@@ -568,31 +551,21 @@ const Dashboard: FC = () => {
       ).slice(0, 5);
       setRecentTransactions(sortedTransactions);
       
-      console.log('Recent transactions:', sortedTransactions.length, 'items');
-      
       // Calculate and set monthly spending data
       const calculatedMonthlyData = calculateMonthlyData(user.id, transactionsData || []);
       setMonthlyData(formatMonthlyDataForHighcharts(calculatedMonthlyData));
-      
-      console.log('Monthly data calculated');
       
       // Set category data for expenses pie chart
       const calculatedCategoryData = calculateCategoryData(user.id, firstDayOfMonth, lastDayOfMonth, transactionsData || [], expenseData || []);
       setCategoryData(formatCategoryDataForHighcharts(calculatedCategoryData));
       
-      console.log('Category data calculated');
-      
       // Generate insights
       generateInsights(income, expenses, savingsRate, formattedBudgetData, transactionsData || []);
-      
-      console.log('Insights generated');
       
       // Calculate transaction trends
       if (transactionsData && transactionsData.length > 0 && expenseData) {
         calculateTransactionTrends(transactionsData, expenseData);
-        console.log('Trends calculated');
       } else {
-        console.log('Not enough data to calculate trends');
         setTrends([]);
       }
       
@@ -611,8 +584,6 @@ const Dashboard: FC = () => {
   const setupRealtimeSubscription = () => {
     if (!user || subscriptionEstablished) return;
 
-    console.log('Setting up real-time subscriptions for user:', user.id);
-
     // Subscribe to transactions table changes
     const subscription = supabase
       .channel('dashboard-transactions-changes')
@@ -622,13 +593,10 @@ const Dashboard: FC = () => {
         table: 'transactions',
         filter: `user_id=eq.${user.id}`
       }, (payload) => {
-        console.log('Transaction change received:', payload);
         // Refresh data when transactions change
         fetchUserData();
       })
-      .subscribe((status) => {
-        console.log('Transaction subscription status:', status);
-      });
+      .subscribe();
 
     // Subscribe to account balance changes
     const accountSubscription = supabase
@@ -639,13 +607,10 @@ const Dashboard: FC = () => {
         table: 'accounts',
         filter: `user_id=eq.${user.id}`
       }, (payload) => {
-        console.log('Account change received:', payload);
         // Refresh data when accounts change
         fetchUserData();
       })
-      .subscribe((status) => {
-        console.log('Account subscription status:', status);
-      });
+      .subscribe();
 
     // Subscribe to goal changes
     const goalSubscription = supabase
@@ -656,13 +621,10 @@ const Dashboard: FC = () => {
         table: 'goals',
         filter: `user_id=eq.${user.id}`
       }, (payload) => {
-        console.log('Goal change received:', payload);
         // Refresh data when goals change
         fetchUserData();
       })
-      .subscribe((status) => {
-        console.log('Goal subscription status:', status);
-      });
+      .subscribe();
       
     // Subscribe to budget changes
     const budgetSubscription = supabase
@@ -673,13 +635,10 @@ const Dashboard: FC = () => {
         table: 'budgets',
         filter: `user_id=eq.${user.id}`
       }, (payload) => {
-        console.log('Budget change received:', payload);
         // Refresh data when budgets change
         fetchUserData();
       })
-      .subscribe((status) => {
-        console.log('Budget subscription status:', status);
-      });
+      .subscribe();
 
     // Subscribe to invitation changes
     const invitationSubscription = supabase
@@ -690,13 +649,10 @@ const Dashboard: FC = () => {
         table: 'family_invitations',
         filter: `invitee_id=eq.${user.id}`
       }, (payload) => {
-        console.log('Invitation change received:', payload);
         // Refresh data when invitations change
         fetchUserData();
       })
-      .subscribe((status) => {
-        console.log('Invitation subscription status:', status);
-      });
+      .subscribe();
 
     setSubscriptionEstablished(true);
 
@@ -711,7 +667,6 @@ const Dashboard: FC = () => {
 
     // Cleanup function
     return () => {
-      console.log('Cleaning up real-time subscriptions');
       [subscription, accountSubscription, goalSubscription, budgetSubscription, invitationSubscription]
         .forEach(sub => supabase.removeChannel(sub));
     };
@@ -725,7 +680,6 @@ const Dashboard: FC = () => {
   // Set up real-time subscriptions after fetching initial data
   useEffect(() => {
     if (user && !loading && !subscriptionEstablished) {
-      console.log('Setting up real-time subscriptions after initial data fetch');
       const cleanup = setupRealtimeSubscription();
       
       // Return cleanup function
@@ -737,7 +691,6 @@ const Dashboard: FC = () => {
   useEffect(() => {
     return () => {
       if (activeSubscriptions.length > 0) {
-        console.log('Component unmounting, cleaning up subscriptions');
         activeSubscriptions.forEach(sub => {
           supabase.removeChannel(sub);
         });
@@ -1861,18 +1814,24 @@ const Dashboard: FC = () => {
             </div>
             <div className="card-body">
               {highchartsLoaded && monthlyData && monthlyData.series && monthlyData.series.some(series => series.data && series.data.length > 0 && series.data.some(value => value > 0)) ? (
-                <ErrorBoundary>
-                  <HighchartsReact
-                    highcharts={Highcharts}
-                    options={monthlyData}
-                    ref={monthlyChartRef}
-                    callback={monthlyChartCallback}
-                  />
-                  <div className="mt-3 text-xs text-gray-500">
-                    <i className="fas fa-lightbulb text-warning mr-1"></i>
-                    <strong>Tip:</strong> Hover over the bars to see exact amounts. Click on a bar to see transaction details for that month.
+                <div className="text-center p-5">
+                  <div className="mb-3">
+                    <i className="fas fa-chart-bar fa-3x text-gray-300 mb-2"></i>
                   </div>
-                </ErrorBoundary>
+                  <h5 className="text-gray-700 mb-2">No Monthly Data Available</h5>
+                  <p className="text-gray-500 mb-3">Add transactions to see your monthly income and expense trends.</p>
+                  <div className="mt-2">
+                    <Link to="/transactions/add" className="btn btn-primary btn-sm shadow-sm">
+                      <i className="fas fa-plus fa-sm mr-2"></i>Add Your First Transaction
+                    </Link>
+                    {userData?.transactions.length === 0 && (
+                      <div className="mt-3 small text-gray-500">
+                        <i className="fas fa-info-circle mr-1"></i> 
+                        You need at least one transaction to generate monthly trends
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className="text-center p-5">
                   <div className="mb-3">
@@ -1913,18 +1872,16 @@ const Dashboard: FC = () => {
             </div>
             <div className="card-body pie-chart-container">
               {highchartsLoaded && categoryData && categoryData.series && categoryData.series[0] && categoryData.series[0].data && categoryData.series[0].data.length > 0 ? (
-                <ErrorBoundary>
-                  <HighchartsReact
-                    highcharts={Highcharts}
-                    options={categoryData}
-                    ref={categoryChartRef}
-                    callback={categoryChartCallback}
-                  />
-                  <div className="mt-2 text-xs text-gray-500">
-                    <i className="fas fa-lightbulb text-warning mr-1"></i>
-                    <strong>Tip:</strong> Click on a category to see detailed transactions.
+                <div className="text-center p-5">
+                  <div className="mb-3">
+                    <i className="fas fa-chart-pie fa-3x text-gray-300 mb-2"></i>
                   </div>
-                </ErrorBoundary>
+                  <h5 className="text-gray-700 mb-2">No Spending Data</h5>
+                  <p className="text-gray-500 mb-3">Add expense transactions to see your spending distribution by category.</p>
+                  <Link to="/transactions/add" className="btn btn-primary btn-sm shadow-sm">
+                    <i className="fas fa-plus fa-sm mr-2"></i>Record an Expense
+                  </Link>
+                </div>
               ) : (
                 <div className="text-center p-5">
                   <div className="mb-3">

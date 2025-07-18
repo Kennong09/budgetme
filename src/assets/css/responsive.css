@@ -310,7 +310,7 @@
 /* Sidebar tooltips */
 .sidebar-tooltip {
   position: absolute;
-  background-color: #4e73df;
+  background-color: var(--primary-color);
   color: white;
   padding: 0.5rem 1rem;
   border-radius: 0.25rem;
@@ -327,7 +327,7 @@
   top: 50%;
   transform: translateY(-50%);
   border-top: 5px solid transparent;
-  border-right: 5px solid #4e73df;
+  border-right: 5px solid var(--primary-color);
   border-bottom: 5px solid transparent;
 }
 

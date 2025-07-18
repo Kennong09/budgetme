@@ -31,6 +31,7 @@ export const signUpWithEmail = async (email: string, password: string, metadata:
     password,
     options: {
       data: metadata,
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
     },
   });
   
@@ -76,6 +77,9 @@ export const resendVerificationEmail = async (email: string): Promise<{ error: A
   const { error } = await supabase.auth.resend({
     type: 'signup',
     email,
+    options: {
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
   });
   
   return {

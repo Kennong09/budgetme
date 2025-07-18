@@ -33,31 +33,31 @@ h6 {
   --danger-color: #e74a3b;
   --warning-color: #f6c23e;
   --success-color: #1cc88a;
-  --primary-color: #4e73df;
+  --primary-color: #6366f1;
   --info-color: #36b9cc;
 }
 
 /* Background Colors */
 .bg-gradient-primary {
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark, #4f46e5) 100%);
 }
 
 .bg-primary {
-  background-color: #6366f1 !important;
+  background-color: var(--primary) !important;
 }
 
 .btn-primary {
-  background-color: #6366f1;
-  border-color: #6366f1;
+  background-color: var(--primary);
+  border-color: var(--primary);
 }
 
 .btn-primary:hover {
-  background-color: #4f46e5;
-  border-color: #4f46e5;
+  background-color: var(--primary-dark, #4f46e5);
+  border-color: var(--primary-dark, #4f46e5);
 }
 
 .text-primary {
-  color: #6366f1 !important;
+  color: var(--primary) !important;
 }
 
 /* Enhanced Animation for Cards */
@@ -107,7 +107,7 @@ h6 {
   
   /* Make sure the hamburger button is visible and prominent */
   #sidebarToggleTop {
-    color: var(--primary) !important;
+    color: var(--primary-color) !important;
     background-color: white !important;
     display: block !important;
     font-size: 1.25rem !important;

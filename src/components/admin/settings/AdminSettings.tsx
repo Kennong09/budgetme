@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FC } from "react";
+import React, { useState, useEffect, FC, useTransition } from "react";
 import { supabase } from "../../../utils/supabaseClient";
 import { useToast } from "../../../utils/ToastContext";
 import "../admin.css";
@@ -48,7 +48,11 @@ const AdminSettings: FC = () => {
   const [activeSection, setActiveSection] = useState<SettingsSectionType>('system');
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
+  const [isPending, startTransition] = useTransition();
   const { showSuccessToast, showErrorToast } = useToast();
+
+  // Combined loading state
+  const isLoading = loading || isPending || saving;
 
   // Settings state
   const [systemSettings, setSystemSettings] = useState<SystemSettings>({
@@ -92,6 +96,8 @@ const AdminSettings: FC = () => {
 
   // Fetch settings from database on component mount
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchSettings = async () => {
       try {
         setLoading(true);
@@ -111,26 +117,44 @@ const AdminSettings: FC = () => {
         // setSystemSettings(systemData);
         
         // For now, we'll just use the default values defined above
-        setLoading(false);
+        
+        // Use startTransition to wrap state updates
+        if (isMounted) {
+          startTransition(() => {
+            setLoading(false);
+          });
+        }
       } catch (error) {
         console.error("Error fetching settings:", error);
-        showErrorToast("Failed to load settings");
-        setLoading(false);
+        
+        if (isMounted) {
+          showErrorToast("Failed to load settings");
+          startTransition(() => {
+            setLoading(false);
+          });
+        }
       }
     };
 
     fetchSettings();
+    
+    // Cleanup function to handle unmounting
+    return () => {
+      isMounted = false;
+    };
   }, [showErrorToast]);
 
-  // Handlers for form changes
+  // Handlers for form changes - use startTransition for all state updates
   const handleSystemChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
     
-    setSystemSettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
+    startTransition(() => {
+      setSystemSettings(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : value
+      }));
+    });
   };
 
   const handleSecurityChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -138,10 +162,12 @@ const AdminSettings: FC = () => {
     const checked = (e.target as HTMLInputElement).checked;
     const numValue = type === 'number' ? parseInt(value) : value;
     
-    setSecuritySettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : numValue
-    }));
+    startTransition(() => {
+      setSecuritySettings(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : numValue
+      }));
+    });
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -149,10 +175,12 @@ const AdminSettings: FC = () => {
     const checked = (e.target as HTMLInputElement).checked;
     const numValue = type === 'number' ? parseInt(value) : value;
     
-    setEmailSettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : numValue
-    }));
+    startTransition(() => {
+      setEmailSettings(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : numValue
+      }));
+    });
   };
 
   const handleBackupChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -160,15 +188,29 @@ const AdminSettings: FC = () => {
     const checked = (e.target as HTMLInputElement).checked;
     const numValue = name === 'backupRetention' ? parseInt(value) : value;
     
-    setBackupSettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : numValue
-    }));
+    startTransition(() => {
+      setBackupSettings(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : numValue
+      }));
+    });
+  };
+
+  // Handle section change with startTransition
+  const handleSectionChange = (section: SettingsSectionType) => {
+    startTransition(() => {
+      setActiveSection(section);
+    });
   };
 
   // Save settings
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (saving) return;
+    
+    let isMounted = true;
     
     try {
       setSaving(true);
@@ -180,17 +222,30 @@ const AdminSettings: FC = () => {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      showSuccessToast("Settings saved successfully");
-      setSaving(false);
+      // Use isMounted guard
+      if (isMounted) {
+        showSuccessToast("Settings saved successfully");
+        setSaving(false);
+      }
     } catch (error) {
       console.error("Error saving settings:", error);
-      showErrorToast("Failed to save settings");
-      setSaving(false);
+      
+      if (isMounted) {
+        showErrorToast("Failed to save settings");
+        setSaving(false);
+      }
     }
+    
+    // Cleanup function is defined in component unmount
   };
 
   // Send test email
   const sendTestEmail = async () => {
+    // Prevent double submission
+    if (saving) return;
+    
+    let isMounted = true;
+    
     try {
       // Show loading state
       setSaving(true);
@@ -198,17 +253,33 @@ const AdminSettings: FC = () => {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      showSuccessToast("Test email sent successfully");
-      setSaving(false);
+      // Use isMounted guard
+      if (isMounted) {
+        showSuccessToast("Test email sent successfully");
+        setSaving(false);
+      }
     } catch (error) {
       console.error("Error sending test email:", error);
-      showErrorToast("Failed to send test email");
-      setSaving(false);
+      
+      if (isMounted) {
+        showErrorToast("Failed to send test email");
+        setSaving(false);
+      }
     }
+    
+    // Return a cleanup function
+    return () => {
+      isMounted = false;
+    };
   };
 
   // Trigger manual backup
   const triggerBackup = async () => {
+    // Prevent double submission
+    if (saving) return;
+    
+    let isMounted = true;
+    
     try {
       // Show loading state
       setSaving(true);
@@ -216,22 +287,34 @@ const AdminSettings: FC = () => {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Update last backup date
-      setBackupSettings(prev => ({
-        ...prev,
-        lastBackupDate: new Date().toISOString()
-      }));
-      
-      showSuccessToast("Manual backup completed successfully");
-      setSaving(false);
+      // Update last backup date - wrapped in startTransition
+      if (isMounted) {
+        startTransition(() => {
+          setBackupSettings(prev => ({
+            ...prev,
+            lastBackupDate: new Date().toISOString()
+          }));
+        });
+        
+        showSuccessToast("Manual backup completed successfully");
+        setSaving(false);
+      }
     } catch (error) {
       console.error("Error performing manual backup:", error);
-      showErrorToast("Failed to complete backup");
-      setSaving(false);
+      
+      if (isMounted) {
+        showErrorToast("Failed to complete backup");
+        setSaving(false);
+      }
     }
+    
+    // Return a cleanup function
+    return () => {
+      isMounted = false;
+    };
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="text-center py-5">
         <div className="spinner-border text-danger" role="status">
@@ -264,25 +347,25 @@ const AdminSettings: FC = () => {
               <div className="list-group list-group-flush">
                 <button
                   className={`list-group-item list-group-item-action ${activeSection === 'system' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('system')}
+                  onClick={() => handleSectionChange('system')}
                 >
                   <i className="fas fa-cog mr-2"></i> System Settings
                 </button>
                 <button
                   className={`list-group-item list-group-item-action ${activeSection === 'security' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('security')}
+                  onClick={() => handleSectionChange('security')}
                 >
                   <i className="fas fa-shield-alt mr-2"></i> Security
                 </button>
                 <button
                   className={`list-group-item list-group-item-action ${activeSection === 'email' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('email')}
+                  onClick={() => handleSectionChange('email')}
                 >
                   <i className="fas fa-envelope mr-2"></i> Email Configuration
                 </button>
                 <button
                   className={`list-group-item list-group-item-action ${activeSection === 'backup' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('backup')}
+                  onClick={() => handleSectionChange('backup')}
                 >
                   <i className="fas fa-database mr-2"></i> Backup & Maintenance
                 </button>

@@ -136,6 +136,20 @@ CREATE POLICY "Only family creators can update family details" ON families
 CREATE POLICY "Only family creators can delete families" ON families
     FOR DELETE USING (auth.uid() = created_by);
 
+-- Replace the problematic policies with a single policy for public families
+-- This policy allows anyone to view families marked as public
+-- without creating circular references to other tables
+DROP POLICY IF EXISTS view_public_families ON families;
+DROP POLICY IF EXISTS view_member_families ON families;
+
+CREATE POLICY view_public_families ON families
+  FOR SELECT
+  TO authenticated
+  USING (is_public = true);
+
+-- Note: The existing policies for family members should already handle
+-- the case where a user can see families they belong to
+
 -- Enable RLS on family_members table
 ALTER TABLE family_members ENABLE ROW LEVEL SECURITY;
 

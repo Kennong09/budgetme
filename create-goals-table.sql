@@ -123,6 +123,46 @@ CREATE TRIGGER goal_contribution_trigger
     WHEN (NEW.goal_id IS NOT NULL)
     EXECUTE FUNCTION add_goal_contribution();
 
+-- Populate initial goal data for demo purposes
+DO $$
+DECLARE
+    v_user_id UUID := '952a101d-d64d-42a8-89ce-cb4061aaaf5e'; -- Use the same admin user ID
+    v_start_date DATE := CURRENT_DATE;
+    v_short_term_date DATE := (CURRENT_DATE + INTERVAL '6 months')::DATE;
+    v_medium_term_date DATE := (CURRENT_DATE + INTERVAL '1 year')::DATE;
+    v_long_term_date DATE := (CURRENT_DATE + INTERVAL '5 years')::DATE;
+BEGIN
+    -- Insert demo goals
+    INSERT INTO public.goals (
+        id, user_id, goal_name, target_amount, current_amount, target_date, priority, notes, status, created_at
+    ) VALUES 
+    (
+        uuid_generate_v4(), v_user_id, 'Emergency Fund',
+        10000.00, 2500.00, v_medium_term_date, 'high',
+        'Save 3 months worth of expenses for emergencies', 'in_progress', NOW()
+    ),
+    (
+        uuid_generate_v4(), v_user_id, 'Vacation to Japan',
+        5000.00, 1200.00, v_short_term_date, 'medium',
+        'Trip to Tokyo and Kyoto', 'in_progress', NOW() - INTERVAL '1 day'
+    ),
+    (
+        uuid_generate_v4(), v_user_id, 'New Car',
+        25000.00, 8000.00, v_long_term_date, 'medium',
+        'Save for a reliable SUV', 'in_progress', NOW() - INTERVAL '2 days'
+    ),
+    (
+        uuid_generate_v4(), v_user_id, 'Down Payment for House',
+        50000.00, 12000.00, v_long_term_date, 'high',
+        '20% down payment for a house', 'in_progress', NOW() - INTERVAL '3 days'
+    ),
+    (
+        uuid_generate_v4(), v_user_id, 'Gaming Computer',
+        2000.00, 2000.00, v_start_date, 'low',
+        'High-end gaming PC setup', 'completed', NOW() - INTERVAL '30 days'
+    );
+END $$;
+
 -- Now that the table structure is guaranteed to be complete, create the view
 -- Create goal_details view for more convenient queries
 DROP VIEW IF EXISTS public.goal_details;

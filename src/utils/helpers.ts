@@ -193,7 +193,7 @@ export const refreshFamilyMembershipsView = async (): Promise<boolean> => {
       return true;
     }
     
-    console.log("Successfully called materialized view refresh function");
+    
     return true;
   } catch (refreshError) {
     console.warn("Failed to refresh materialized view (non-critical):", refreshError);

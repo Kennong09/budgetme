@@ -1,262 +1,204 @@
-import React, { FC, useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
+import React, { FC, useState, useEffect, useCallback, useMemo } from 'react';
 import { useOnboarding } from '../../utils/OnboardingContext';
+import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
+import { useLocation, useNavigate } from 'react-router-dom';
 import './onboarding.css';
 
-// Define the tutorial steps for each route
+// Define steps for each route
 const getStepsByRoute = (route: string): Step[] => {
-  console.log(`Getting steps for route: ${route}`);
-  
-  switch (route) {
-    case '/dashboard':
-      console.log('Returning dashboard steps');
-      return [
-        {
-          target: '.sidebar-brand',
-          content: <div>
-            <h4>Welcome to BudgetMe!</h4>
-            <p>This is your personal finance management system. Let's explore the key features.</p>
-          </div>,
-          title: 'Welcome',
-          disableBeacon: true,
-          placement: 'right',
-        },
-        {
-          target: '#accordionSidebar',
-          content: <div>
-            <p>Use this sidebar to navigate between different sections of the app.</p>
-            <p>You can collapse it using the toggle button if you need more space.</p>
-          </div>,
-          title: 'Navigation',
-          placement: 'right',
-        },
-        {
-          target: '.summary-cards',
-          content: <div>
-            <p>These cards provide a quick overview of your financial situation.</p>
-            <p>Income, expenses, and savings at a glance.</p>
-          </div>,
-          title: 'Financial Summary',
-          placement: 'bottom',
-        },
-        {
-          target: '.recent-transactions',
-          content: <div>
-            <p>Your most recent transactions appear here.</p>
-            <p>Click on any transaction to view more details.</p>
-          </div>,
-          title: 'Recent Transactions',
-          placement: 'top',
-        },
-        {
-          target: '.dashboard-actions',
-          content: <div>
-            <p>Add new transactions or set up new budgets quickly from the dashboard.</p>
-            <p>When you're ready, click the 'Next' button to continue to the Budgets section.</p>
-          </div>,
-          title: 'Quick Actions',
-          placement: 'bottom',
-        }
-      ];
-    case '/budgets':
-      console.log('Returning budget steps');
-      return [
-        {
-          target: '.budgets-header',
-          content: <div>
-            <h4>Budgets Section</h4>
-            <p>Create and manage your spending plans here.</p>
-          </div>,
-          title: 'Budgets',
-          disableBeacon: true,
-        },
-        {
-          target: '.create-budget-btn',
-          content: <div>
-            <p>Let's start by creating your first budget. Click this button to create a new budget.</p>
-          </div>,
-          title: 'Create Budget',
-        },
-        {
-          target: '.budget-list',
-          content: <div>
-            <p>Your active budgets will appear here.</p>
-            <p>Monitor your spending against each budget target.</p>
-          </div>,
-          title: 'Budget List',
-        }
-      ];
-    case '/budgets/create':
-      return [
-        {
-          target: '.budget-form',
-          content: <div>
-            <h4>Create Your First Budget</h4>
-            <p>Fill out this form to create your first budget. Give it a name, set a spending limit, and choose a category.</p>
-          </div>,
-          title: 'Budget Form',
-          disableBeacon: true,
-        },
-        {
-          target: '.budget-amount-field',
-          content: <div>
-            <p>Enter the maximum amount you want to spend in this category.</p>
-          </div>,
-          title: 'Budget Amount',
-        },
-        {
-          target: '.budget-category-field',
-          content: <div>
-            <p>Choose a spending category for this budget.</p>
-          </div>,
-          title: 'Budget Category',
-        },
-        {
-          target: '.budget-submit-btn',
-          content: <div>
-            <p>Click here to save your budget when you're done.</p>
-            <p>After creating your budget, we'll move on to recording your first transaction.</p>
-          </div>,
-          title: 'Save Budget',
-        }
-      ];
-    case '/goals':
-      return [
-        {
-          target: '.goals-header',
-          content: <div>
-            <h4>Financial Goals</h4>
-            <p>Set and track progress towards your financial goals.</p>
-          </div>,
-          title: 'Goals',
-          disableBeacon: true,
-        },
-        {
-          target: '.create-goal-btn',
-          content: <div>
-            <p>Click here to create a new financial goal such as saving for a vacation or paying off debt.</p>
-          </div>,
-          title: 'Create Goal',
-        },
-        {
-          target: '.goal-cards',
-          content: <div>
-            <p>Your active goals will appear here.</p>
-            <p>Track your progress and contribute to your goals.</p>
-          </div>,
-          title: 'Goal Progress',
-        }
-      ];
-    case '/transactions':
-      return [
-        {
-          target: '.transactions-header',
-          content: <div>
-            <h4>Transactions</h4>
-            <p>Record and track all your income and expenses here.</p>
-          </div>,
-          title: 'Transactions',
-          disableBeacon: true,
-        },
-        {
-          target: '.add-transaction-btn',
-          content: <div>
-            <p>Let's add your first transaction. Click here to add a new income or expense.</p>
-          </div>,
-          title: 'Add Transaction',
-        },
-        {
-          target: '.transaction-filters',
-          content: <div>
-            <p>Filter transactions by date, category, or type.</p>
-          </div>,
-          title: 'Filter Transactions',
-        },
-        {
-          target: '.transaction-table',
-          content: <div>
-            <p>All your transactions will be listed here.</p>
-            <p>Click on any transaction to view details or edit it.</p>
-          </div>,
-          title: 'Transaction List',
-        }
-      ];
-    case '/transactions/add':
-      return [
-        {
-          target: '.transaction-form',
-          content: <div>
-            <h4>Add Your First Transaction</h4>
-            <p>Use this form to record your income and expenses.</p>
-          </div>,
-          title: 'Transaction Form',
-          disableBeacon: true,
-        },
-        {
-          target: '.transaction-type-field',
-          content: <div>
-            <p>Select whether this is income or an expense.</p>
-          </div>,
-          title: 'Transaction Type',
-        },
-        {
-          target: '.transaction-amount-field',
-          content: <div>
-            <p>Enter the amount of the transaction.</p>
-          </div>,
-          title: 'Amount',
-        },
-        {
-          target: '.transaction-category-field',
-          content: <div>
-            <p>Choose a category for this transaction.</p>
-            <p>Categories help you track where your money is going.</p>
-          </div>,
-          title: 'Category',
-        },
-        {
-          target: '.transaction-submit-btn',
-          content: <div>
-            <p>Click here to save your transaction.</p>
-          </div>,
-          title: 'Save Transaction',
-        }
-      ];
-    case '/reports':
-      return [
-        {
-          target: '.reports-header',
-          content: <div>
-            <h4>Financial Reports</h4>
-            <p>Analyze your spending patterns and financial progress.</p>
-          </div>,
-          title: 'Reports',
-          disableBeacon: true,
-        },
-        {
-          target: '.report-charts',
-          content: <div>
-            <p>These charts provide visual insights into your financial data.</p>
-            <p>Analyze trends and patterns to improve your financial habits.</p>
-          </div>,
-          title: 'Visual Analytics',
-        }
-      ];
-    default:
-      return [
-        {
-          target: '.sidebar-brand',
-          content: <div>
-            <h4>Welcome to BudgetMe!</h4>
-            <p>Let's get started by exploring the dashboard.</p>
-          </div>,
-          title: 'Welcome',
-          disableBeacon: true,
-          placement: 'right',
-        }
-      ];
+  if (route === 'dashboard') {
+    return [
+      {
+        target: '.dashboard-welcome',
+        title: 'Welcome to Your Dashboard',
+        content: 'This is your personal finance dashboard. Here you can see an overview of your finances at a glance.',
+        disableBeacon: true,
+        placement: 'center'
+      },
+      {
+        target: '.summary-cards',
+        content: 'These cards show your overall financial status, including income, expenses, and savings rate.',
+        disableBeacon: true,
+      },
+      {
+        target: '.monthly-chart',
+        content: 'This chart shows your income and expenses over time, helping you track your financial trends.',
+        disableBeacon: true,
+      },
+      {
+        target: '.category-chart',
+        content: 'See where your money goes with this breakdown of your spending by category.',
+        disableBeacon: true,
+      },
+      {
+        target: '.budget-progress',
+        content: 'Track your budget progress here. Stay within budget to achieve your financial goals.',
+        disableBeacon: true,
+      },
+      {
+        target: '.recent-transactions',
+        content: 'Your most recent transactions appear here. Click on any transaction for more details.',
+        disableBeacon: true,
+      },
+      {
+        target: '.insights-section',
+        content: 'These insights are generated based on your spending patterns to help you make better financial decisions.',
+        disableBeacon: true,
+      }
+    ];
+  } else if (route === 'budgets') {
+    return [
+      {
+        target: '.budgets-heading',
+        title: 'Budget Management',
+        content: 'This is where you manage your budgets. Setting budgets helps you control spending and reach your goals.',
+        disableBeacon: true,
+        placement: 'center'
+      },
+      {
+        target: '.budget-list',
+        content: 'Here you can see all your active budgets and their progress.',
+        disableBeacon: true,
+      },
+      {
+        target: '.create-budget-button',
+        content: 'Click here to create a new budget for any spending category.',
+        disableBeacon: true,
+      },
+      {
+        target: '.budget-card',
+        content: 'Each budget card shows your spending against your limit. Click on a card to see details or make adjustments.',
+        disableBeacon: true,
+      }
+    ];
+  } else if (route === 'budgets/create') {
+    return [
+      {
+        target: '.budget-form',
+        title: 'Create New Budget',
+        content: 'Fill out this form to create a new budget. Give it a name, set a spending limit, and choose a category.',
+        disableBeacon: true,
+      },
+      {
+        target: '.budget-amount-field',
+        content: 'Enter the maximum amount you want to spend in this category.',
+        disableBeacon: true,
+      },
+      {
+        target: '.budget-category-field',
+        content: 'Choose a spending category for this budget.',
+        disableBeacon: true,
+      },
+      {
+        target: '.budget-submit-btn',
+        content: 'Click here to save your budget when you\'re done.',
+        disableBeacon: true,
+      }
+    ];
+  } else if (route === 'goals') {
+    return [
+      {
+        target: '.goals-header',
+        title: 'Financial Goals',
+        content: 'This is where you set and track your financial goals. Setting goals helps you stay motivated and focused on your financial journey.',
+        disableBeacon: true,
+        placement: 'center'
+      },
+      {
+        target: '.goal-list',
+        content: 'Here you can see all your active goals and their progress.',
+        disableBeacon: true,
+      },
+      {
+        target: '.create-goal-button',
+        content: 'Click here to create a new financial goal such as saving for a vacation or paying off debt.',
+        disableBeacon: true,
+      },
+      {
+        target: '.goal-card',
+        content: 'Each goal card shows your progress towards your goal. Click on a card to see details or make adjustments.',
+        disableBeacon: true,
+      }
+    ];
+  } else if (route === 'transactions') {
+    return [
+      {
+        target: '.transactions-header',
+        title: 'Transaction Management',
+        content: 'This is where you record and track all your income and expenses. Recording transactions is the foundation of your financial records.',
+        disableBeacon: true,
+        placement: 'center'
+      },
+      {
+        target: '.add-transaction-button',
+        content: 'Click here to add a new income or expense to your records.',
+        disableBeacon: true,
+      },
+      {
+        target: '.transaction-filters',
+        content: 'Filter transactions by date, category, or type to find specific transactions easily.',
+        disableBeacon: true,
+      },
+      {
+        target: '.transaction-table',
+        content: 'All your transactions are listed here. Click on any transaction to view details or edit it.',
+        disableBeacon: true,
+      }
+    ];
+  } else if (route === 'transactions/add') {
+    return [
+      {
+        target: '.transaction-form',
+        title: 'Add New Transaction',
+        content: 'Use this form to record your income and expenses. Select the type (income or expense), enter the amount, choose a category, and click save.',
+        disableBeacon: true,
+      },
+      {
+        target: '.transaction-type-field',
+        content: 'Select whether this is income or an expense.',
+        disableBeacon: true,
+      },
+      {
+        target: '.transaction-amount-field',
+        content: 'Enter the amount of the transaction.',
+        disableBeacon: true,
+      },
+      {
+        target: '.transaction-category-field',
+        content: 'Choose a category for this transaction. Categories help you track where your money is going.',
+        disableBeacon: true,
+      },
+      {
+        target: '.transaction-submit-btn',
+        content: 'Click here to save your transaction. After saving, you can add another transaction or return to the dashboard.',
+        disableBeacon: true,
+      }
+    ];
+  } else if (route === 'reports') {
+    return [
+      {
+        target: '.reports-header',
+        title: 'Financial Reports',
+        content: 'This is where you analyze your spending patterns and financial progress. Reports help you understand your financial habits and make informed decisions.',
+        disableBeacon: true,
+        placement: 'center'
+      },
+      {
+        target: '.report-charts',
+        content: 'These charts provide visual insights into your financial data. Analyze trends and patterns to improve your financial habits.',
+        disableBeacon: true,
+      }
+    ];
   }
+  return [
+    {
+      target: '.sidebar-brand',
+      title: 'Welcome to BudgetMe!',
+      content: 'Let\'s get started by exploring the dashboard. This is your personal finance management system.',
+      disableBeacon: true,
+      placement: 'right'
+    }
+  ];
 };
 
 const TutorialJoyride: FC = () => {
@@ -278,21 +220,21 @@ const TutorialJoyride: FC = () => {
 
   // Debug log for current state
   useEffect(() => {
-    console.log('TutorialJoyride state:', { 
-      showTutorial, 
-      run, 
-      currentTutorialRoute, 
-      tutorialStep, 
-      stepsLength: steps.length,
-      currentPath: location.pathname
-    });
+    // console.log('TutorialJoyride state:', { 
+    //   showTutorial, 
+    //   run, 
+    //   currentTutorialRoute, 
+    //   tutorialStep, 
+    //   stepsLength: steps.length,
+    //   currentPath: location.pathname
+    // });
   }, [showTutorial, run, currentTutorialRoute, tutorialStep, steps.length, location.pathname]);
 
   // Update steps when route changes
   useEffect(() => {
     if (showTutorial) {
       const newSteps = getStepsByRoute(currentTutorialRoute);
-      console.log(`Setting steps for route ${currentTutorialRoute}:`, newSteps);
+      // console.log(`Setting steps for route ${currentTutorialRoute}:`, newSteps);
       setSteps(newSteps);
     }
   }, [currentTutorialRoute, showTutorial]);
@@ -321,7 +263,7 @@ const TutorialJoyride: FC = () => {
       
       // If we found a matching route and it's different from the current one, update it
       if (bestMatch && bestMatch !== currentTutorialRoute) {
-        console.log(`Synchronizing tutorial route: ${currentTutorialRoute} -> ${bestMatch} (current path: ${currentPath})`);
+        // console.log(`Synchronizing tutorial route: ${currentTutorialRoute} -> ${bestMatch} (current path: ${currentPath})`);
         setCurrentTutorialRoute(bestMatch);
         setTutorialStep(0); // Reset step when changing routes
         
@@ -361,16 +303,16 @@ const TutorialJoyride: FC = () => {
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { action, index, status, type } = data;
     
-    console.log('Joyride callback:', { 
-      action, 
-      index, 
-      status, 
-      type, 
-      currentTutorialRoute, 
-      stepsLength: steps.length, 
-      pathname: location.pathname,
-      tutorialStep
-    });
+    // console.log('Joyride callback:', { 
+    //   action, 
+    //   index, 
+    //   status, 
+    //   type, 
+    //   currentTutorialRoute, 
+    //   stepsLength: steps.length, 
+    //   pathname: location.pathname,
+    //   tutorialStep
+    // });
     
     // Update current step in database
     if (type === 'step:after' && action !== 'close') {
@@ -385,12 +327,12 @@ const TutorialJoyride: FC = () => {
       
       // If this is the last step in the current section
       if (index === steps.length - 1) {
-        console.log(`Last step in section ${currentTutorialRoute}. Current index: ${index}, Total steps: ${steps.length}`);
+        // console.log(`Last step in section ${currentTutorialRoute}. Current index: ${index}, Total steps: ${steps.length}`);
         
         if (currentIndex < routes.length - 1) {
           // Move to next section
           const nextRoute = routes[currentIndex + 1];
-          console.log(`Last button clicked on final step. Moving to: ${nextRoute}`);
+          // console.log(`Last button clicked on final step. Moving to: ${nextRoute}`);
           
           // Mark the current section as seen
           if (currentTutorialRoute === '/dashboard') {
@@ -407,7 +349,7 @@ const TutorialJoyride: FC = () => {
           
           // Force navigation with a small delay to ensure UI updates properly
           setTimeout(() => {
-            console.log(`Navigating to ${nextRoute} and updating tutorial route`);
+            // console.log(`Navigating to ${nextRoute} and updating tutorial route`);
             setCurrentTutorialRoute(nextRoute);
             navigate(nextRoute);
             
@@ -417,7 +359,7 @@ const TutorialJoyride: FC = () => {
             
             // Force run to true to make sure the tutorial continues
             setRun(true);
-            console.log(`Navigation complete. Current route: ${nextRoute}, Steps: ${getStepsByRoute(nextRoute).length}`);
+            // console.log(`Navigation complete. Current route: ${nextRoute}, Steps: ${getStepsByRoute(nextRoute).length}`);
           }, 800); // Increased delay for better reliability
           
           // Return early to prevent the status === 'finished' block from executing
@@ -435,7 +377,7 @@ const TutorialJoyride: FC = () => {
       if (currentIndex < routes.length - 1) {
         // Move to next section
         const nextRoute = routes[currentIndex + 1];
-        console.log(`Section finished. Moving to next section: ${nextRoute}`);
+        // console.log(`Section finished. Moving to next section: ${nextRoute}`);
         
         // Force navigation with a small delay to ensure UI updates properly
         setTimeout(() => {
@@ -448,19 +390,19 @@ const TutorialJoyride: FC = () => {
           
           // Force run to true to make sure the tutorial continues
           setRun(true);
-          console.log(`Navigation complete. Current route: ${nextRoute}, Steps: ${getStepsByRoute(nextRoute).length}`);
+          // console.log(`Navigation complete. Current route: ${nextRoute}, Steps: ${getStepsByRoute(nextRoute).length}`);
         }, 500); // Increased delay for better reliability
       } else {
         // Finished all sections
         completeTutorial();
-        console.log('Tutorial completed - all sections finished');
+        // console.log('Tutorial completed - all sections finished');
       }
     }
 
     // Handle tour skip or manual close
     if (action === 'close' || status === 'skipped') {
       completeTutorial();
-      console.log('Tutorial skipped or closed manually');
+      // console.log('Tutorial skipped or closed manually');
     }
   };
 
