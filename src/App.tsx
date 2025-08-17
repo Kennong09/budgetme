@@ -4,7 +4,7 @@ import AppRoutes from "./AppRoutes";
 import { AuthProvider } from "./utils/AuthContext";
 import { ToastProvider } from "./utils/ToastContext";
 import { CurrencyProvider } from "./utils/CurrencyContext";
-import { OnboardingProvider } from "./utils/OnboardingContext";
+import FloatingChatbot from "./components/chatbot/FloatingChatbot";
 import "./App.css";
 
 // Error Boundary Component
@@ -120,9 +120,8 @@ function App() {
       <ToastProvider>
         <AuthProvider>
           <CurrencyProvider>
-            <OnboardingProvider>
-              <AppRoutes />
-            </OnboardingProvider>
+            <AppRoutes />
+            <FloatingChatbot />
           </CurrencyProvider>
         </AuthProvider>
       </ToastProvider>

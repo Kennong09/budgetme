@@ -4,7 +4,6 @@ import { useAuth } from "../../utils/AuthContext";
 import "animate.css";
 import { SidebarProps } from "../../types";
 import { getCurrentUserData } from "../../data/mockData";
-import { HelpButton } from "../../components/onboarding";
 
 // Add CSS styles for consistent navigation item colors
 const navItemStyles = {
@@ -342,15 +341,6 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
 
           {/* Divider */}
           <hr className="sidebar-divider" />
-          
-          {/* Help Button */}
-          <li 
-            className="nav-item"
-            onMouseEnter={(e) => handleMouseEnter(101, "Help & Tour", e)}
-            onMouseLeave={handleMouseLeave}
-          >
-            <HelpButton compactMode={compactMode} />
-          </li>
           
           {/* Logout */}
           <li 

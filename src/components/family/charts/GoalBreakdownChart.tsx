@@ -1,0 +1,29 @@
+import React from 'react';
+import HighchartsReact from 'highcharts-react-official';
+import Highcharts from 'highcharts';
+
+interface GoalBreakdownChartProps {
+  data: any;
+  chartRef?: React.RefObject<HighchartsReact.RefObject>;
+}
+
+const GoalBreakdownChart: React.FC<GoalBreakdownChartProps> = ({ data, chartRef }) => {
+  if (!data) {
+    return (
+      <div className="text-center text-muted p-4">
+        <i className="fas fa-chart-pie fa-3x mb-3"></i>
+        <p>No goals to display</p>
+      </div>
+    );
+  }
+
+  return (
+    <HighchartsReact 
+      highcharts={Highcharts} 
+      options={data}
+      ref={chartRef} 
+    />
+  );
+};
+
+export default GoalBreakdownChart;

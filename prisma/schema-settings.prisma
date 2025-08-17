@@ -1,0 +1,58 @@
+// This is your Prisma schema file for settings integration
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UserProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique @map("user_id")
+  name             String?
+  profilePicture   String?  @map("profile_picture")
+  currency         String   @default("PHP")
+  language         String   @default("en")
+  notificationEmail Boolean @default(true) @map("notification_email")
+  notificationPush  Boolean @default(true) @map("notification_push")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("user_profiles")
+  @@index([userId])
+}
+
+model Account {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  accountName  String   @map("account_name")
+  accountType  AccountType @map("account_type")
+  balance      Decimal  @default(0) @db.Decimal(15, 2)
+  currency     String   @default("PHP")
+  status       AccountStatus @default(ACTIVE)
+  isDefault    Boolean  @default(false) @map("is_default")
+  color        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("accounts")
+  @@index([userId])
+  @@index([status])
+}
+
+enum AccountType {
+  checking
+  savings
+  credit
+  investment
+  other
+}
+
+enum AccountStatus {
+  active
+  inactive
+}

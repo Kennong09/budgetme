@@ -1436,13 +1436,416 @@ const Goals: FC = () => {
         </div>
       </div>
 
-      {/* Filter Section */}
-      {renderFilterUI()}
-
-      {/* Goals Table or Grid depending on viewMode */}
+      {/* Goals Table with Integrated Filters or Grid depending on viewMode */}
       {viewMode === "table" ? (
-        renderGoalsTable()
+        <div className="card shadow mb-4 transaction-table">
+          <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
+              Goal List
+              <div className="ml-2 position-relative">
+                <i 
+                  className="fas fa-info-circle text-gray-400 cursor-pointer" 
+                  onClick={(e) => toggleTip('goalList', e)}
+                  aria-label="Goal list information"
+                  style={{ cursor: "pointer" }}
+                ></i>
+              </div>
+            </h6>
+            <div>
+              <button 
+                className="btn btn-sm btn-outline-secondary mr-2" 
+                onClick={resetFilters}
+                disabled={isFiltering}
+              >
+                <i className="fas fa-undo fa-sm mr-1"></i> Reset Filters
+              </button>
+              <button className="btn btn-sm btn-outline-primary">
+                <i className="fas fa-download fa-sm mr-1"></i> Export
+              </button>
+            </div>
+          </div>
+          
+          {/* Integrated Filters Section */}
+          <div className="card-body border-bottom bg-light">
+            <div className="row">
+              <div className="col-md-2 mb-3">
+                <label htmlFor="priority" className="font-weight-bold text-gray-800 small">Priority</label>
+                <select
+                  id="priority"
+                  name="priority"
+                  value={filter.priority}
+                  onChange={handleFilterChange}
+                  className="form-control form-control-sm"
+                  disabled={isFiltering}
+                >
+                  <option value="all">All Priorities</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+
+              <div className="col-md-2 mb-3">
+                <label htmlFor="category" className="font-weight-bold text-gray-800 small">Status</label>
+                <select
+                  id="category"
+                  name="category"
+                  value={filter.category}
+                  onChange={handleFilterChange}
+                  className="form-control form-control-sm"
+                  disabled={isFiltering}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="not_started">Not Started</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+
+              {/* Scope Filter - only show if user is part of a family */}
+              {isFamilyMember && (
+                <div className="col-md-2 mb-3">
+                  <label htmlFor="scope" className="font-weight-bold text-gray-800 small">Scope</label>
+                  <select
+                    id="scope"
+                    name="scope"
+                    value={filter.scope}
+                    onChange={handleFilterChange}
+                    className="form-control form-control-sm"
+                    disabled={isFiltering}
+                  >
+                    <option value="all">All Goals</option>
+                    <option value="personal">My Personal Goals</option>
+                    <option value="family">Family Shared Goals</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="col-md-2 mb-3">
+                <label htmlFor="sortBy" className="font-weight-bold text-gray-800 small">Sort By</label>
+                <select
+                  id="sortBy"
+                  name="sortBy"
+                  value={filter.sortBy}
+                  onChange={handleFilterChange}
+                  className="form-control form-control-sm"
+                  disabled={isFiltering}
+                >
+                  <option value="name">Goal Name</option>
+                  <option value="target_date">Target Date</option>
+                  <option value="progress">Progress</option>
+                  <option value="amount">Amount</option>
+                </select>
+              </div>
+              
+              <div className="col-md-4 mb-3">
+                <label htmlFor="search" className="font-weight-bold text-gray-800 small">Search</label>
+                <input
+                  type="text"
+                  id="search"
+                  name="search"
+                  value={filter.search}
+                  onChange={handleFilterChange}
+                  placeholder="Search goal name or notes..."
+                  className="form-control form-control-sm"
+                  disabled={isFiltering}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Table Section */}
+          <div className="card-body">
+            <div className="table-responsive">
+              <table className="table table-bordered" width="100%" cellSpacing="0">
+                <thead>
+                  <tr>
+                    <th>Goal Name</th>
+                    <th>Target Date</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th>Amount</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isFiltering ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-5">
+                        <div className="spinner-border text-primary mb-3" role="status">
+                          <span className="sr-only">Loading...</span>
+                        </div>
+                        <p className="text-gray-600 mt-3">Filtering goals...</p>
+                      </td>
+                    </tr>
+                  ) : filteredGoals.length > 0 ? (
+                    filteredGoals.map((goal) => {
+                      const progressPercentage = Math.min(goal.percentage, 100);
+                      const priorityClass = goal.priority === "high" ? "text-danger" : 
+                                           goal.priority === "medium" ? "text-warning" : "text-info";
+                      const statusClass = goal.status === "completed" ? "badge-success" : 
+                                         goal.status === "in_progress" ? "badge-primary" :
+                                         goal.status === "not_started" ? "badge-secondary" : "badge-danger";
+                      
+                      const monthlySavingsNeeded: number = calculateMonthlySavingsForGoal({
+                        target_amount: goal.target_amount,
+                        current_amount: goal.current_amount,
+                        target_date: goal.target_date
+                      });
+
+                      return (
+                        <tr key={goal.id}>
+                          <td>
+                            <div className="font-weight-bold">
+                              {goal.goal_name}
+                            </div>
+                            {goal.is_shared && (
+                              <div className="small mt-1">
+                                <span className="badge badge-info">
+                                  <i className="fas fa-users mr-1"></i> Family
+                                </span>
+                                {goal.shared_by_name && (
+                                  <span className="badge badge-light ml-1 small">
+                                    {goal.shared_by_name}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {!goal.is_shared && (
+                              <div className="small mt-1">
+                                <span className="badge badge-secondary">
+                                  <i className="fas fa-user mr-1"></i> Personal
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <div>{formatDate(goal.target_date)}</div>
+                            <div className="small text-gray-600">
+                              {getRemainingDays(goal.target_date) > 0 ? 
+                                `${getRemainingDays(goal.target_date)} days left` : 
+                                <span className="text-danger">Past due</span>
+                              }
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`font-weight-bold ${priorityClass}`}>
+                              <i className={`fas fa-flag mr-1 ${priorityClass}`}></i>
+                              {goal.priority.charAt(0).toUpperCase() + goal.priority.slice(1)}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`badge ${statusClass}`}>
+                              {formatStatusName(goal.status)}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="progress mr-2" style={{ height: '10px', width: '80px' }}>
+                                <div 
+                                  className={`progress-bar ${
+                                    progressPercentage >= 90 ? "bg-success" : 
+                                    progressPercentage >= 50 ? "bg-info" : 
+                                    progressPercentage >= 25 ? "bg-warning" : 
+                                    "bg-danger"
+                                  }`}
+                                  role="progressbar" 
+                                  style={{ width: `${progressPercentage}%` }}
+                                  aria-valuenow={progressPercentage}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                ></div>
+                              </div>
+                              <span>{formatPercentage(progressPercentage)}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex flex-column">
+                              <span className="font-weight-bold">
+                                {formatCurrency(goal.current_amount)} / {formatCurrency(goal.target_amount)}
+                              </span>
+                              <small className="text-gray-600">
+                                {formatCurrency(monthlySavingsNeeded)} monthly
+                              </small>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex justify-content-center align-items-center">
+                              <Link
+                                to={`/goals/${goal.id}`}
+                                className="btn btn-info btn-circle btn-sm mx-1"
+                                title="View Goal"
+                              >
+                                <i className="fas fa-eye"></i>
+                              </Link>
+                              {/* Show edit and delete buttons for personal goals */}
+                              {!goal.is_shared && (
+                                <>
+                                  <Link
+                                    to={`/goals/${goal.id}/edit`}
+                                    className="btn btn-primary btn-circle btn-sm mx-1"
+                                    title="Edit Goal"
+                                  >
+                                    <i className="fas fa-edit"></i>
+                                  </Link>
+                                  <button
+                                    className="btn btn-danger btn-circle btn-sm mx-1"
+                                    onClick={() => openDeleteModal(goal.id)}
+                                    title="Delete Goal"
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </>
+                              )}
+                              {/* Allow editing shared goals if user is the owner */}
+                              {goal.is_shared && goal.user_id === user?.id && (
+                                <>
+                                  <Link
+                                    to={`/goals/${goal.id}/edit`}
+                                    className="btn btn-primary btn-circle btn-sm mx-1"
+                                    title="Edit Goal"
+                                  >
+                                    <i className="fas fa-edit"></i>
+                                  </Link>
+                                  <button
+                                    className="btn btn-danger btn-circle btn-sm mx-1"
+                                    onClick={() => openDeleteModal(goal.id)}
+                                    title="Delete Goal"
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="text-center py-4">
+                        <i className="fas fa-filter fa-2x text-gray-300 mb-3 d-block"></i>
+                        <p className="text-gray-500">No goals found matching your filters.</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       ) : (
+        <>
+          {/* Filter Section for Grid View */}
+          <div className="card shadow mb-4">
+            <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+              <h6 className="m-0 font-weight-bold text-primary">Filter Goals</h6>
+              <button 
+                onClick={resetFilters} 
+                className="btn btn-sm btn-outline-primary"
+                disabled={isFiltering}
+              >
+                <i className="fas fa-redo-alt fa-sm mr-1"></i> Reset
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="row">
+                <div className="col-md-3 mb-3">
+                  <label htmlFor="priority" className="font-weight-bold text-gray-800">Priority</label>
+                  <select
+                    id="priority"
+                    name="priority"
+                    value={filter.priority}
+                    onChange={handleFilterChange}
+                    className="form-control"
+                    disabled={isFiltering}
+                  >
+                    <option value="all">All Priorities</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+
+                <div className="col-md-3 mb-3">
+                  <label htmlFor="category" className="font-weight-bold text-gray-800">Status</label>
+                  <select
+                    id="category"
+                    name="category"
+                    value={filter.category}
+                    onChange={handleFilterChange}
+                    className="form-control"
+                    disabled={isFiltering}
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="not_started">Not Started</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                {/* Scope Filter - only show if user is part of a family */}
+                {isFamilyMember && (
+                  <div className="col-md-3 mb-3">
+                    <label htmlFor="scope" className="font-weight-bold text-gray-800">Scope</label>
+                    <select
+                      id="scope"
+                      name="scope"
+                      value={filter.scope}
+                      onChange={handleFilterChange}
+                      className="form-control"
+                      disabled={isFiltering}
+                    >
+                      <option value="all">All Goals</option>
+                      <option value="personal">My Personal Goals</option>
+                      <option value="family">Family Shared Goals</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className={`col-md-${isFamilyMember ? 3 : 6} mb-3`}>
+                  <label htmlFor="sortBy" className="font-weight-bold text-gray-800">Sort By</label>
+                  <select
+                    id="sortBy"
+                    name="sortBy"
+                    value={filter.sortBy}
+                    onChange={handleFilterChange}
+                    className="form-control"
+                    disabled={isFiltering}
+                  >
+                    <option value="name">Goal Name</option>
+                    <option value="target_date">Target Date</option>
+                    <option value="progress">Progress</option>
+                    <option value="amount">Amount</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="row">
+                <div className="col-12 mb-3">
+                  <label htmlFor="search" className="font-weight-bold text-gray-800">Search</label>
+                  <input
+                    type="text"
+                    id="search"
+                    name="search"
+                    value={filter.search}
+                    onChange={handleFilterChange}
+                    placeholder="Search goal name or notes..."
+                    className="form-control"
+                    disabled={isFiltering}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Grid View Goals Display */}
+      {viewMode === "grid" && (
         <div className="row" ref={goalListRef}>
           {isFiltering ? (
             <div className="col-12 text-center my-5">

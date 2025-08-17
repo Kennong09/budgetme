@@ -9,6 +9,8 @@
     "@supabase/functions-js": "^2.4.5",
     "@supabase/realtime-js": "^2.12.2",
     "@supabase/supabase-js": "^2.51.0",
+    "@tailwindcss/postcss": "^4.1.12",
+    "@tailwindcss/postcss7-compat": "^2.2.17",
     "@testing-library/dom": "^9.3.3",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^14.0.0",
@@ -24,13 +26,15 @@
     "bootstrap": "^4.6.0",
     "boxicons": "^2.1.4",
     "chart.js": "^4.4.0",
-    "dotenv": "^16.4.0",
+    "dotenv": "^16.6.1",
     "highcharts": "^11.4.8",
     "highcharts-react-official": "^3.2.2",
     "html2canvas": "^1.4.1",
     "jquery": "^3.7.1",
+    "jquery-easing": "^0.0.1",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
+    "node-fetch": "^3.3.2",
     "popper.js": "^1.16.1",
     "react": "^18.2.0",
     "react-bootstrap": "^2.10.10",
@@ -39,17 +43,23 @@
     "react-helmet": "^6.1.0",
     "react-icons": "^5.5.0",
     "react-joyride": "^2.9.3",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.16.0",
     "react-scripts": "5.0.1",
     "react-toastify": "^11.0.5",
     "recharts": "^2.8.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
     "startbootstrap-sb-admin-2": "^4.1.4",
     "typescript": "4.9.5",
     "web-vitals": "^2.1.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "@prisma/client": "^5.7.1",
+    "ts-node": "^10.9.1"
   },
   "scripts": {
     "start": "react-scripts start",
+    "dev": "react-scripts start",
     "build": "react-scripts build",
     "build:ci": "CI=false react-scripts build",
     "test": "react-scripts test",
@@ -61,7 +71,19 @@
     "format:fix": "biome format --write .",
     "setup-database": "node setupDatabase.js",
     "fix-css": "node fix-css-warnings.js",
-    "postinstall": "node fix-css-warnings.js"
+    "postinstall": "node fix-css-warnings.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:reset": "prisma migrate reset",
+    "prisma:pull": "prisma db pull",
+    "prisma:push": "prisma db push",
+    "prisma:format": "prisma format"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "browserslist": {
     "production": [
@@ -78,10 +100,11 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/jquery": "^3.5.17",
-    "autoprefixer": "^10.4.15",
+    "autoprefixer": "^10.4.21",
     "eslint-plugin-react-hooks": "^5.2.0",
-    "postcss": "^8.4.30",
+    "postcss": "^8.5.6",
     "svg2png": "^4.1.1",
-    "tailwindcss": "^3.3.3"
+    "tailwindcss": "^3.4.3",
+    "prisma": "^5.7.1"
   }
 }

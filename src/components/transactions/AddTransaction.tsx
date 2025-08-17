@@ -1,6 +1,5 @@
 import React, { useState, useEffect, FC, ChangeEvent, FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { formatCurrency, formatDate } from "../../utils/helpers";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
@@ -46,6 +45,7 @@ interface TransactionFormData {
 
 const AddTransaction: FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { showSuccessToast, showErrorToast } = useToast();
   const [userData, setUserData] = useState<UserData>({
@@ -71,6 +71,7 @@ const AddTransaction: FC = () => {
   });
 
   useEffect(() => {
+    
     const fetchUserData = async () => {
       try {
         if (!user) {
@@ -141,7 +142,7 @@ const AddTransaction: FC = () => {
     };
 
     fetchUserData();
-  }, [user, navigate, showErrorToast]);
+  }, [user, navigate, showErrorToast, location.search]);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -231,7 +232,7 @@ const AddTransaction: FC = () => {
       // Start a transaction in Supabase using RPC (if available) or multiple queries
       
       // 1. Insert the transaction
-      const { data: transactionData, error: transactionError } = await supabase
+      const { error: transactionError } = await supabase
         .from('transactions')
         .insert([
           {
@@ -538,6 +539,7 @@ const AddTransaction: FC = () => {
           <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Transactions
         </Link>
       </div>
+      
       
       {/* Tooltip */}
       {activeTip && tooltipPosition && (

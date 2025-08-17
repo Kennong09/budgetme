@@ -5,6 +5,21 @@ import "../../assets/css/landing.css";
 import "../../assets/css/dashboard-graphic.css";
 import "boxicons/css/boxicons.min.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
+import Header from "./Header";
+import Footer from "./Footer";
+import {
+  TransactionsAnimation,
+  BudgetsAnimation,
+  GoalsAnimation,
+  FamilyAnimation,
+  AIPredictionsAnimation,
+} from "./ModuleAnimations";
+// Import SVG Icons
+import { ReactComponent as GoogleIcon } from "../../assets/icons/google-original.svg";
+import { ReactComponent as FacebookIcon } from "../../assets/icons/facebook-original.svg";
+import { useAuth } from "../../utils/AuthContext";
+import { useToast } from "../../utils/ToastContext";
+import EmailVerificationModal from "../auth/EmailVerificationModal";
 
 // Add testimonial styling
 const testimonialStyles = `
@@ -961,22 +976,6 @@ const buttonStyles = `
   }
 `;
 
-import Header from "./Header";
-import Footer from "./Footer";
-import {
-  TransactionsAnimation,
-  BudgetsAnimation,
-  GoalsAnimation,
-  FamilyAnimation,
-  AIPredictionsAnimation,
-} from "./ModuleAnimations";
-// Import SVG Icons
-import { ReactComponent as GoogleIcon } from "../../assets/icons/google-original.svg";
-import { ReactComponent as FacebookIcon } from "../../assets/icons/facebook-original.svg";
-import { useAuth } from "../../utils/AuthContext";
-import { useToast } from "../../utils/ToastContext";
-import EmailVerificationModal from "../auth/EmailVerificationModal";
-
 interface LandingPageProps {
   activeTab?: string;
 }
@@ -1537,6 +1536,20 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                 <div className="shape shape-2"></div>
                 <div className="shape shape-3"></div>
               </div>
+              
+              {/* Floating Icons */}
+              <div className="floating-elements">
+                <div className="floating-element fe-1">
+                  <i className="bx bx-dollar-circle"></i>
+                </div>
+                <div className="floating-element fe-2">
+                  <i className="bx bx-trending-up"></i>
+                </div>
+                <div className="floating-element fe-3">
+                  <i className="bx bx-target-lock"></i>
+                </div>
+              </div>
+              
               <div className="device-mockup" style={{ 
                 transform: `perspective(800px) rotateX(${deviceRotation.x}deg) rotateY(${deviceRotation.y}deg)` 
               }}>
@@ -1612,26 +1625,6 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                       ></div>
                     </div>
                   </div>
-                </div>
-              </div>
-              <div className="floating-elements">
-                <div 
-                  className="floating-element fe-1"
-                  onClick={() => scrollToSection(featuresRef)}
-                >
-                  <i className="fas fa-coins"></i>
-                </div>
-                <div 
-                  className="floating-element fe-2"
-                  onClick={() => scrollToSection(howItWorksRef)}
-                >
-                  <i className="fas fa-chart-line"></i>
-                </div>
-                <div 
-                  className="floating-element fe-3"
-                  onClick={() => scrollToSection(modulesRef)}
-                >
-                  <i className="fas fa-piggy-bank"></i>
                 </div>
               </div>
             </div>

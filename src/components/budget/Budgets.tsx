@@ -2,13 +2,10 @@ import React, { useState, useEffect, useRef, FC, ChangeEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   formatCurrency,
-  formatDate,
   formatPercentage,
-  getCurrentMonthYear,
 } from "../../utils/helpers";
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
-import { Budget } from "../../types";
 import { useCurrency } from "../../utils/CurrencyContext";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
@@ -19,6 +16,8 @@ import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
 
 // Import Animate.css
 import "animate.css";
+
+// Component interfaces
 
 interface BudgetItem {
   id: string;
@@ -44,6 +43,7 @@ interface FilterState {
   year: string;
   scope: "all" | "personal" | "family"; // Filter for personal or family budgets
 }
+
 
 interface BarChartConfig {
   chart: {
@@ -204,7 +204,7 @@ const Budgets: FC = () => {
   // Family status states
   const [isFamilyMember, setIsFamilyMember] = useState<boolean>(false);
   const [userFamilyId, setUserFamilyId] = useState<string | null>(null);
-  const [familyRole, setFamilyRole] = useState<"admin" | "viewer" | null>(null);
+  const [, setFamilyRole] = useState<"admin" | "viewer" | null>(null);
   const [familyBudgets, setFamilyBudgets] = useState<BudgetItem[]>([]);
   const [showingFamilyBudgets, setShowingFamilyBudgets] = useState<boolean>(false);
   
@@ -213,13 +213,13 @@ const Budgets: FC = () => {
   const [budgetToDelete, setBudgetToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   
+  
   // Get URL parameters
   const queryParams = new URLSearchParams(location.search);
   
-  // Get current date for default filter
-  const currentDate = new Date();
-  const defaultMonth = queryParams.get('month') || (currentDate.getMonth() + 1).toString(); // 1-12 for Jan-Dec
-  const defaultYear = queryParams.get('year') || currentDate.getFullYear().toString();
+  // Default to "all" instead of current date for filters
+  const defaultMonth = queryParams.get('month') || "all";
+  const defaultYear = queryParams.get('year') || "all";
   const defaultStatus = queryParams.get('status') as "all" | "success" | "warning" | "danger" || "all";
   const defaultCategoryId = queryParams.get('categoryId') || "all";
   const defaultSearch = queryParams.get('search') || "";
@@ -270,6 +270,7 @@ const Budgets: FC = () => {
     }
   };
 
+
   // Fetch budget data from Supabase
   useEffect(() => {
     const fetchBudgetData = async () => {
@@ -277,8 +278,8 @@ const Budgets: FC = () => {
         if (!user) {
           console.log("No user found, redirecting to login");
           navigate("/login");
-        return;
-      }
+          return;
+        }
 
         setLoading(true);
         console.log("Fetching budget data for user:", user.id);
@@ -299,7 +300,7 @@ const Budgets: FC = () => {
           setBudgets(budgetData);
           setFilteredBudgets(budgetData);
 
-      // Extract unique categories for the dropdown
+          // Extract unique categories for the dropdown
           const { data: categoryData, error: categoryError } = await supabase
             .from('expense_categories')
             .select('id, category_name')
@@ -339,6 +340,7 @@ const Budgets: FC = () => {
     return () => {
       // Nothing to clean up for data fetching
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, navigate, showErrorToast]);
 
   // Set up real-time subscriptions in a separate useEffect
@@ -486,6 +488,7 @@ const Budgets: FC = () => {
         supabase.removeChannel(newTransactionSubscription);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, budgetChannelName, transactionChannelName]);
   
   // Function to update chart visualizations with data
@@ -784,6 +787,7 @@ const Budgets: FC = () => {
     // Apply filters with loader
     applyFilters();
     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, budgets, navigate]);
   
   // Function to apply filters with loading indicator
@@ -1047,11 +1051,6 @@ const Budgets: FC = () => {
   };
 
   const resetFilters = (): void => {
-    // Get current date for resetting filters
-    const currentDate = new Date();
-    const currentMonth = (currentDate.getMonth() + 1).toString();
-    const currentYear = currentDate.getFullYear().toString();
-    
     // Show filtering state
     setIsFiltering(true);
     
@@ -1059,8 +1058,8 @@ const Budgets: FC = () => {
       categoryId: "all",
       status: "all",
       search: "",
-      month: currentMonth,
-      year: currentYear,
+      month: "all",
+      year: "all",
       scope: "all",
     });
     
@@ -1263,6 +1262,9 @@ const Budgets: FC = () => {
     }
   };
 
+
+  
+  
   // Create a new method to render budget as table rows instead of cards
   const renderBudgetRows = () => {
     return (
@@ -1725,8 +1727,8 @@ const Budgets: FC = () => {
                   <div className="mb-3">
                     <i className="fas fa-chart-pie fa-3x text-gray-300"></i>
                   </div>
-                  <h5 className="text-gray-500 font-weight-light">No allocation data</h5>
-                  <p className="text-gray-500 mb-0 small">Your budget allocation chart will appear here.</p>
+                  <h5 className="text-gray-500 font-weight-light">No budget data</h5>
+                  <p className="text-gray-500 mb-0 small">Add budgets to see your budget allocation.</p>
                 </div>
               )}
             </div>
@@ -1780,29 +1782,47 @@ const Budgets: FC = () => {
         </div>
       </div>
       
-      {/* Filters Card */}
-      <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.45s" }}>
+      {/* Budget Categories with Integrated Filters */}
+      <div className="card shadow mb-4 transaction-table">
         <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-          <h6 className="m-0 font-weight-bold text-primary">Filter Budgets</h6>
-          <button onClick={resetFilters} className="btn btn-sm btn-outline-primary">
-            <i className="fas fa-redo-alt fa-sm mr-1"></i> Reset
-          </button>
+          <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
+            Budget Categories
+            <div className="ml-2 position-relative">
+              <i 
+                className="fas fa-info-circle text-gray-400 cursor-pointer" 
+                onClick={(e) => toggleTip('budgetCategories', e)}
+                aria-label="Budget categories information"
+                style={{ cursor: "pointer" }}
+              ></i>
+            </div>
+          </h6>
+          <div>
+            <button 
+              className="btn btn-sm btn-outline-secondary mr-2" 
+              onClick={resetFilters}
+            >
+              <i className="fas fa-undo fa-sm mr-1"></i> Reset Filters
+            </button>
+            <button className="btn btn-sm btn-outline-primary">
+              <i className="fas fa-download fa-sm mr-1"></i> Export
+            </button>
+          </div>
         </div>
-        <div className="card-body">
-          <div className="row">
-            <div className="col-md-2 mb-3">
-              <label htmlFor="category" className="font-weight-bold text-gray-800">
-                Category
-              </label>
+        
+        {/* Integrated Filters Section */}
+        <div className="card-body border-bottom bg-light py-2">
+          <div className="row align-items-end">
+            <div className="col-lg-2 col-md-3 mb-2">
+              <label htmlFor="categoryId" className="text-xs font-weight-bold text-gray-700 mb-1">Category</label>
               <select
                 id="categoryId"
                 name="categoryId"
                 value={filter.categoryId}
                 onChange={handleFilterChange}
-                className="form-control"
+                className="form-control form-control-sm"
                 disabled={isFiltering}
               >
-                <option value="all">All Categories</option>
+                <option value="all">All</option>
                 {categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -1811,62 +1831,60 @@ const Budgets: FC = () => {
               </select>
             </div>
             
-            <div className="col-md-2 mb-3">
-              <label htmlFor="status" className="font-weight-bold text-gray-800">
-                Status
-              </label>
+            <div className="col-lg-2 col-md-3 mb-2">
+              <label htmlFor="status" className="text-xs font-weight-bold text-gray-700 mb-1">Status</label>
               <select
                 id="status"
                 name="status"
                 value={filter.status}
                 onChange={handleFilterChange}
-                className="form-control"
+                className="form-control form-control-sm"
                 disabled={isFiltering}
               >
-                <option value="all">All Status</option>
+                <option value="all">All</option>
                 <option value="success">Under Budget</option>
                 <option value="warning">Near Limit</option>
                 <option value="danger">Over Budget</option>
               </select>
             </div>
             
-            <div className="col-md-2 mb-3">
-              <label htmlFor="month" className="font-weight-bold text-gray-800">Month</label>
+            <div className="col-lg-1 col-md-2 mb-2">
+              <label htmlFor="month" className="text-xs font-weight-bold text-gray-700 mb-1">Month</label>
               <select
                 id="month"
                 name="month"
                 value={filter.month}
                 onChange={handleFilterChange}
-                className="form-control"
+                className="form-control form-control-sm"
                 disabled={isFiltering}
               >
-                <option value="all">All Months</option>
-                <option value="1">January</option>
-                <option value="2">February</option>
-                <option value="3">March</option>
-                <option value="4">April</option>
+                <option value="all">All</option>
+                <option value="1">Jan</option>
+                <option value="2">Feb</option>
+                <option value="3">Mar</option>
+                <option value="4">Apr</option>
                 <option value="5">May</option>
-                <option value="6">June</option>
-                <option value="7">July</option>
-                <option value="8">August</option>
-                <option value="9">September</option>
-                <option value="10">October</option>
-                <option value="11">November</option>
-                <option value="12">December</option>
+                <option value="6">Jun</option>
+                <option value="7">Jul</option>
+                <option value="8">Aug</option>
+                <option value="9">Sep</option>
+                <option value="10">Oct</option>
+                <option value="11">Nov</option>
+                <option value="12">Dec</option>
               </select>
             </div>
             
-            <div className="col-md-2 mb-3">
-              <label htmlFor="year" className="font-weight-bold text-gray-800">Year</label>
+            <div className="col-lg-1 col-md-2 mb-2">
+              <label htmlFor="year" className="text-xs font-weight-bold text-gray-700 mb-1">Year</label>
               <select
                 id="year"
                 name="year"
                 value={filter.year}
                 onChange={handleFilterChange}
-                className="form-control"
+                className="form-control form-control-sm"
                 disabled={isFiltering}
               >
-                <option value="all">All Years</option>
+                <option value="all">All</option>
                 <option value="2025">2025</option>
                 <option value="2024">2024</option>
                 <option value="2023">2023</option>
@@ -1876,46 +1894,166 @@ const Budgets: FC = () => {
             
             {/* Scope filter - only show if user is part of a family */}
             {isFamilyMember && (
-              <div className="col-md-2 mb-3">
-                <label htmlFor="scope" className="font-weight-bold text-gray-800">
-                  Budget Type
-                </label>
+              <div className="col-lg-2 col-md-3 mb-2">
+                <label htmlFor="scope" className="text-xs font-weight-bold text-gray-700 mb-1">Type</label>
                 <select
                   id="scope"
                   name="scope"
                   value={filter.scope}
                   onChange={handleFilterChange}
-                  className="form-control"
+                  className="form-control form-control-sm"
                   disabled={isFiltering}
                 >
-                  <option value="all">All Budgets</option>
-                  <option value="personal">My Personal</option>
+                  <option value="all">All</option>
+                  <option value="personal">Personal</option>
                   <option value="family">Family</option>
                 </select>
               </div>
             )}
             
-            <div className="col-md-2 mb-3">
-              <label htmlFor="search" className="font-weight-bold text-gray-800">
-                Search
-              </label>
+            <div className={`col-lg-${isFamilyMember ? '4' : '6'} col-md-${isFamilyMember ? '4' : '6'} mb-2`}>
+              <label htmlFor="search" className="text-xs font-weight-bold text-gray-700 mb-1">Search</label>
               <input
                 type="text"
                 id="search"
                 name="search"
                 value={filter.search}
                 onChange={handleFilterChange}
-                placeholder="Search..."
-                className="form-control"
+                placeholder="Search categories..."
+                className="form-control form-control-sm"
                 disabled={isFiltering}
               />
             </div>
           </div>
         </div>
+
+        {/* Table Section */}
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table table-bordered" width="100%" cellSpacing="0">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Period</th>
+                  <th>Budget</th>
+                  <th>Spent</th>
+                  <th>Remaining</th>
+                  <th>Status</th>
+                  <th>Progress</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isFiltering ? (
+                  <tr>
+                    <td colSpan={8} className="text-center py-5">
+                      <div className="spinner-border text-primary mb-3" role="status">
+                        <span className="sr-only">Loading...</span>
+                      </div>
+                      <p className="text-gray-600 mt-3">Filtering budgets...</p>
+                    </td>
+                  </tr>
+                ) : filteredBudgets.length > 0 ? (
+                  filteredBudgets.map((budget) => {
+                    const statusClass = getStatusClass(budget.status);
+                    const progressPercentage = Math.min(budget.percentage, 100);
+                    
+                    return (
+                      <tr key={budget.id}>
+                        <td>
+                          <span className="font-weight-bold">{budget.category_name}</span>
+                        </td>
+                        <td>
+                          <div>
+                            {budget.month} {budget.year}
+                          </div>
+                          <small className="text-gray-600">{budget.period}</small>
+                        </td>
+                        <td className="font-weight-bold">
+                          {formatCurrency(budget.amount)}
+                        </td>
+                        <td>
+                          {formatCurrency(budget.spent)}
+                        </td>
+                        <td className={budget.remaining < 0 ? "text-danger font-weight-bold" : "text-success font-weight-bold"}>
+                          {formatCurrency(budget.remaining)}
+                        </td>
+                        <td>
+                          {budget.percentage >= 100 ? (
+                            <span className="badge badge-danger">
+                              <i className="fas fa-exclamation-circle mr-1"></i>
+                              Over Budget
+                            </span>
+                          ) : budget.percentage >= 90 ? (
+                            <span className="badge badge-warning">
+                              <i className="fas fa-exclamation-triangle mr-1"></i>
+                              Near Limit
+                            </span>
+                          ) : (
+                            <span className="badge badge-success">
+                              <i className="fas fa-check-circle mr-1"></i>
+                              On Track
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <div className="d-flex align-items-center">
+                            <div className="progress mr-2" style={{ height: '10px', width: '80px' }}>
+                              <div
+                                className={`progress-bar bg-${statusClass}`}
+                                role="progressbar"
+                                style={{ width: `${progressPercentage}%` }}
+                                aria-valuenow={progressPercentage}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                              ></div>
+                            </div>
+                            <span className={`text-${statusClass}`}>
+                              {formatPercentage(progressPercentage)}
+                            </span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="d-flex justify-content-center align-items-center">
+                            <Link
+                              to={`/budgets/${budget.id}`}
+                              className="btn btn-info btn-circle btn-sm mx-1"
+                              title="View Budget Details"
+                            >
+                              <i className="fas fa-eye"></i>
+                            </Link>
+                            <Link
+                              to={`/budgets/${budget.id}/edit`}
+                              className="btn btn-primary btn-circle btn-sm mx-1"
+                              title="Edit Budget"
+                            >
+                              <i className="fas fa-edit"></i>
+                            </Link>
+                            <button
+                              className="btn btn-danger btn-circle btn-sm mx-1"
+                              onClick={() => openDeleteModal(budget.id)}
+                              title="Delete Budget"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="text-center py-4">
+                      <i className="fas fa-filter fa-2x text-gray-300 mb-3 d-block"></i>
+                      <p className="text-gray-500">No budgets found matching your filters.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      
-      {/* Budget Categories Table */}
-      {renderBudgetRows()}
 
       {/* Global tooltip that appears based on activeTip state */}
       {activeTip && tooltipPosition && (

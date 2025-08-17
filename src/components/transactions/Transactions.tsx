@@ -7,16 +7,9 @@ import { useToast } from "../../utils/ToastContext";
 import {
   formatCurrency,
   formatDate,
-  getCurrentMonthDates,
   formatPercentage,
-  getCurrentMonthYear,
 } from "../../utils/helpers";
-import {
-  getCurrentUserData,
-  getCategoryById,
-  getAccountById,
-  sortByDate,
-} from "../../data/mockData";
+// Import data utilities - removed unused imports
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
 
@@ -222,22 +215,14 @@ const Transactions: FC = () => {
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   
-  // Family status states
-  const [isFamilyMember, setIsFamilyMember] = useState<boolean>(false);
-  const [userFamilyId, setUserFamilyId] = useState<string | null>(null);
-  const [familyRole, setFamilyRole] = useState<"admin" | "viewer" | null>(null);
-  const [familyTransactions, setFamilyTransactions] = useState<Transaction[]>([]);
-  const [showingFamilyTransactions, setShowingFamilyTransactions] = useState<boolean>(false);
+  // Family status states (removed unused variables)
   
   // Get URL parameters
   const queryParams = new URLSearchParams(location.search);
   
-  // Get current date for default filter
-  const currentDate = new Date();
-  const currentMonth = currentDate.getMonth().toString(); // 0-11 for Jan-Dec
-  const currentYear = currentDate.getFullYear().toString();
-  const defaultMonth = queryParams.get('month') || currentMonth;
-  const defaultYear = queryParams.get('year') || currentYear;
+  // Default to "all" instead of current date for filters
+  const defaultMonth = queryParams.get('month') || "all";
+  const defaultYear = queryParams.get('year') || "all";
   const defaultType = queryParams.get('type') as "all" | "income" | "expense" || "all";
   const defaultCategoryId = queryParams.get('categoryId') || "all";
   const defaultAccountId = queryParams.get('accountId') || "all";
@@ -403,6 +388,7 @@ const Transactions: FC = () => {
   // Fetch data on component mount
   useEffect(() => {
     fetchUserData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Set up real-time subscriptions after fetching initial data
@@ -411,6 +397,7 @@ const Transactions: FC = () => {
       const cleanup = setupRealtimeSubscription();
       return cleanup;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading, subscriptionEstablished]);
 
   // Update URL when filters change
@@ -437,8 +424,9 @@ const Transactions: FC = () => {
     // Apply filters with loader
     applyFilters();
     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter, transactions, navigate]);
-  
+
   // Function to apply filters with loading indicator
   const applyFilters = () => {
     if (transactions.length === 0) return;
@@ -781,7 +769,7 @@ const Transactions: FC = () => {
         text: null,
       },
       tooltip: {
-        pointFormat: "{series.name}: <b>{point.percentage:.1f}%</b> (${point.y:,.2f})",
+        pointFormat: '{series.name}: <b>{point.percentage:.1f}%</b> (${point.y:,.2f})',
         valuePrefix: "$",
       },
       plotOptions: {
@@ -922,8 +910,8 @@ const Transactions: FC = () => {
       type: "all",
       accountId: "all",
       categoryId: "all",
-      month: currentMonth,
-      year: currentYear,
+      month: "all",
+      year: "all",
       search: "",
       // Add the missing required properties
       startDate: "",
@@ -1219,14 +1207,6 @@ const Transactions: FC = () => {
     if (!userData) return "Unknown Account";
     const account = userData.accounts.find(a => a.id === accountId);
     return account ? account.account_name : "Unknown Account";
-  };
-
-  // Helper function to get goal name by id
-  const getGoalName = (goalId?: string): string => {
-    if (!goalId || !userData) return "Unknown Goal";
-    
-    const goal = userData.goals.find(g => g.id === goalId);
-    return goal ? goal.goal_name : "Unknown Goal";
   };
 
   // Add a banner for goal filtering
@@ -1583,192 +1563,7 @@ const Transactions: FC = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="card shadow mb-4 transaction-filters">
-        <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-          <h6 className="m-0 font-weight-bold text-primary">Filters</h6>
-          <button 
-            className="btn btn-sm btn-outline-secondary" 
-            onClick={resetFilters}
-          >
-            Reset
-          </button>
-        </div>
-        <div className="card-body">
-          <div className="row">
-            <div className="col-md-4 mb-3">
-              <label htmlFor="type" className="font-weight-bold text-gray-800">Type</label>
-              <select
-                id="type"
-                name="type"
-                value={filter.type}
-                onChange={handleFilterChange}
-                className={`form-control ${filter.categoryId !== "all" ? "border-info" : ""}`}
-              >
-                <option value="all">All Types</option>
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
-              </select>
-              {filter.categoryId !== "all" && (
-                <small className="form-text text-info">
-                  <i className="fas fa-info-circle mr-1"></i>
-                  Type auto-selected based on category
-                </small>
-              )}
-            </div>
-
-            <div className="col-md-4 mb-3">
-              <label htmlFor="accountId" className="font-weight-bold text-gray-800">Account</label>
-              <select
-                id="accountId"
-                name="accountId"
-                value={filter.accountId}
-                onChange={handleFilterChange}
-                className="form-control"
-              >
-                <option value="all">All Accounts</option>
-                {userData?.accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.account_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="col-md-4 mb-3">
-              <label htmlFor="categoryId" className="font-weight-bold text-gray-800">Category</label>
-              <select
-                id="categoryId"
-                name="categoryId"
-                value={filter.categoryId}
-                onChange={handleFilterChange}
-                className={`form-control ${filter.type !== "all" ? "border-info" : ""}`}
-              >
-                <option value="all">All Categories</option>
-                {filter.type === 'all' && (
-                  <>
-                    <optgroup label="Income Categories">
-                      {userData?.incomeCategories.map((cat) => (
-                        <option key={`income-${cat.id}`} value={cat.id}>
-                          {cat.category_name}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Expense Categories">
-                      {userData?.expenseCategories.map((cat) => (
-                        <option key={`expense-${cat.id}`} value={cat.id}>
-                          {cat.category_name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  </>
-                )}
-                {filter.type === 'income' && (
-                  <optgroup label="Income Categories">
-                    {userData?.incomeCategories.map((cat) => (
-                      <option key={`income-${cat.id}`} value={cat.id}>
-                        {cat.category_name}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                {filter.type === 'expense' && (
-                  <optgroup label="Expense Categories">
-                    {userData?.expenseCategories.map((cat) => (
-                      <option key={`expense-${cat.id}`} value={cat.id}>
-                        {cat.category_name}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-              {filter.type !== "all" && (
-                <small className="form-text text-info">
-                  <i className="fas fa-filter mr-1"></i>
-                  Showing only {filter.type} categories
-                </small>
-              )}
-            </div>
-
-            <div className="col-md-4 mb-3">
-              <label htmlFor="month" className="font-weight-bold text-gray-800">Month</label>
-              <select
-                id="month"
-                name="month"
-                value={filter.month}
-                onChange={handleFilterChange}
-                className="form-control"
-              >
-                <option value="all">All Months</option>
-                <option value="0">January</option>
-                <option value="1">February</option>
-                <option value="2">March</option>
-                <option value="3">April</option>
-                <option value="4">May</option>
-                <option value="5">June</option>
-                <option value="6">July</option>
-                <option value="7">August</option>
-                <option value="8">September</option>
-                <option value="9">October</option>
-                <option value="10">November</option>
-                <option value="11">December</option>
-              </select>
-            </div>
-
-            <div className="col-md-4 mb-3">
-              <label htmlFor="year" className="font-weight-bold text-gray-800">Year</label>
-              <select
-                id="year"
-                name="year"
-                value={filter.year}
-                onChange={handleFilterChange}
-                className="form-control"
-              >
-                <option value="all">All Years</option>
-                {/* Generate options for the last 5 years */}
-                {Array.from({ length: 5 }, (_, i) => {
-                  const year = currentDate.getFullYear() - i;
-                  return (
-                    <option key={year} value={year.toString()}>
-                      {year}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div className="col-md-4 mb-3">
-              <label htmlFor="search" className="font-weight-bold text-gray-800">Search</label>
-              <input
-                type="text"
-                id="search"
-                name="search"
-                value={filter.search}
-                onChange={handleFilterChange}
-                placeholder="Search in notes..."
-                className="form-control"
-              />
-            </div>
-
-            <div className="col-md-4 mb-3">
-              <label htmlFor="scope" className="font-weight-bold text-gray-800">Scope</label>
-              <select
-                id="scope"
-                name="scope"
-                value={filter.scope}
-                onChange={handleFilterChange}
-                className="form-control"
-              >
-                <option value="all">All Transactions</option>
-                <option value="personal">Personal Transactions</option>
-                <option value="family">Family Transactions</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Transactions Table */}
+      {/* Transactions with Integrated Filters */}
       <div className="card shadow mb-4 transaction-table">
         <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
           <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
@@ -1782,11 +1577,193 @@ const Transactions: FC = () => {
             </div>
           </h6>
           <div>
-            <button className="btn btn-sm btn-outline-primary mr-2">
-              <i className="fas fa-download fa-sm"></i> Export
+            <button 
+              className="btn btn-sm btn-outline-secondary mr-2" 
+              onClick={resetFilters}
+            >
+              <i className="fas fa-undo fa-sm mr-1"></i> Reset Filters
+            </button>
+            <button className="btn btn-sm btn-outline-primary">
+              <i className="fas fa-download fa-sm mr-1"></i> Export
             </button>
           </div>
         </div>
+        
+        {/* Integrated Filters Section */}
+        <div className="card-body border-bottom bg-light py-2">
+          <div className="row align-items-end">
+            <div className="col-lg-2 col-md-3 mb-2">
+              <label htmlFor="type" className="text-xs font-weight-bold text-gray-700 mb-1">Type</label>
+              <select
+                id="type"
+                name="type"
+                value={filter.type}
+                onChange={handleFilterChange}
+                className={`form-control form-control-sm ${filter.categoryId !== "all" ? "border-info" : ""}`}
+              >
+                <option value="all">All</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </select>
+              {filter.categoryId !== "all" && (
+                <small className="form-text text-info" style={{ fontSize: "0.7rem", lineHeight: "1.2" }}>
+                  <i className="fas fa-info-circle mr-1"></i>
+                  Auto-selected
+                </small>
+              )}
+            </div>
+
+            <div className="col-lg-2 col-md-3 mb-2">
+              <label htmlFor="accountId" className="text-xs font-weight-bold text-gray-700 mb-1">Account</label>
+              <select
+                id="accountId"
+                name="accountId"
+                value={filter.accountId}
+                onChange={handleFilterChange}
+                className="form-control form-control-sm"
+              >
+                <option value="all">All</option>
+                {userData?.accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.account_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="col-lg-2 col-md-4 mb-2">
+              <label htmlFor="categoryId" className="text-xs font-weight-bold text-gray-700 mb-1">Category</label>
+              <select
+                id="categoryId"
+                name="categoryId"
+                value={filter.categoryId}
+                onChange={handleFilterChange}
+                className={`form-control form-control-sm ${filter.type !== "all" ? "border-info" : ""}`}
+              >
+                <option value="all">All</option>
+                {filter.type === 'all' && (
+                  <>
+                    <optgroup label="Income">
+                      {userData?.incomeCategories.map((cat) => (
+                        <option key={`income-${cat.id}`} value={cat.id}>
+                          {cat.category_name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Expense">
+                      {userData?.expenseCategories.map((cat) => (
+                        <option key={`expense-${cat.id}`} value={cat.id}>
+                          {cat.category_name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </>
+                )}
+                {filter.type === 'income' && (
+                  <optgroup label="Income">
+                    {userData?.incomeCategories.map((cat) => (
+                      <option key={`income-${cat.id}`} value={cat.id}>
+                        {cat.category_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {filter.type === 'expense' && (
+                  <optgroup label="Expense">
+                    {userData?.expenseCategories.map((cat) => (
+                      <option key={`expense-${cat.id}`} value={cat.id}>
+                        {cat.category_name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              {filter.type !== "all" && (
+                <small className="form-text text-info" style={{ fontSize: "0.7rem", lineHeight: "1.2" }}>
+                  <i className="fas fa-filter mr-1"></i>
+                  {filter.type} only
+                </small>
+              )}
+            </div>
+
+            <div className="col-lg-1 col-md-2 mb-2">
+              <label htmlFor="month" className="text-xs font-weight-bold text-gray-700 mb-1">Month</label>
+              <select
+                id="month"
+                name="month"
+                value={filter.month}
+                onChange={handleFilterChange}
+                className="form-control form-control-sm"
+              >
+                <option value="all">All</option>
+                <option value="0">Jan</option>
+                <option value="1">Feb</option>
+                <option value="2">Mar</option>
+                <option value="3">Apr</option>
+                <option value="4">May</option>
+                <option value="5">Jun</option>
+                <option value="6">Jul</option>
+                <option value="7">Aug</option>
+                <option value="8">Sep</option>
+                <option value="9">Oct</option>
+                <option value="10">Nov</option>
+                <option value="11">Dec</option>
+              </select>
+            </div>
+
+            <div className="col-lg-1 col-md-2 mb-2">
+              <label htmlFor="year" className="text-xs font-weight-bold text-gray-700 mb-1">Year</label>
+              <select
+                id="year"
+                name="year"
+                value={filter.year}
+                onChange={handleFilterChange}
+                className="form-control form-control-sm"
+              >
+                <option value="all">All</option>
+                {/* Generate options for the last 5 years */}
+                {Array.from({ length: 5 }, (_, i) => {
+                  const year = new Date().getFullYear() - i;
+                  return (
+                    <option key={year} value={year.toString()}>
+                      {year}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div className="col-lg-2 col-md-4 mb-2">
+              <label htmlFor="search" className="text-xs font-weight-bold text-gray-700 mb-1">Search</label>
+              <input
+                type="text"
+                id="search"
+                name="search"
+                value={filter.search}
+                onChange={handleFilterChange}
+                placeholder="Search notes..."
+                className="form-control form-control-sm"
+              />
+            </div>
+
+            <div className="col-lg-2 col-md-3 mb-2">
+              <label htmlFor="scope" className="text-xs font-weight-bold text-gray-700 mb-1">Scope</label>
+              <select
+                id="scope"
+                name="scope"
+                value={filter.scope}
+                onChange={handleFilterChange}
+                className="form-control form-control-sm"
+              >
+                <option value="all">All</option>
+                <option value="personal">Personal</option>
+                <option value="family">Family</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Table Section */}
         <div className="card-body">
           <div className="table-responsive">
             <table className="table table-bordered" width="100%" cellSpacing="0">

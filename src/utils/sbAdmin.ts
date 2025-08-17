@@ -53,46 +53,5 @@ $(document).ready(function () {
     }
   );
 
-  // Scroll to top button appear
-  $(document).on("scroll", function () {
-    const scrollDistance = $(this).scrollTop() || 0;
-    if (scrollDistance > 100) {
-      $(".scroll-to-top").fadeIn();
-    } else {
-      $(".scroll-to-top").fadeOut();
-    }
-  });
-
-  // Smooth scrolling using jQuery easing
-  $(document).on("click", "a.scroll-to-top", function (e: JQuery.ClickEvent) {
-    const $anchor = $(this);
-    $("html, body")
-      .stop()
-      .animate(
-        {
-          scrollTop: $($anchor.attr("href") || "").offset()?.top || 0,
-        },
-        1000,
-        "easeInOutExpo"
-      );
-    e.preventDefault();
-  });
 });
 
-// Add scroll to top link
-const addScrollToTop = (): void => {
-  const scrollToTop = document.createElement("a");
-  scrollToTop.className = "scroll-to-top rounded";
-  scrollToTop.href = "#page-top";
-
-  const icon = document.createElement("i");
-  icon.className = "fas fa-angle-up";
-
-  scrollToTop.appendChild(icon);
-  document.body.appendChild(scrollToTop);
-};
-
-// Run on load
-window.addEventListener("DOMContentLoaded", function () {
-  addScrollToTop();
-});

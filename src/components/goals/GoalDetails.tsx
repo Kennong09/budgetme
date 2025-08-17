@@ -222,7 +222,6 @@ const GoalDetails: FC = () => {
   };
 
   // Avoid dependency cycle with fetchGoalData and useEffect
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const memoizedFetchGoalData = React.useCallback(fetchGoalData, [id, user, navigate, showErrorToast]);
 
   // Initial data load and refresh when navigating back from contribution
