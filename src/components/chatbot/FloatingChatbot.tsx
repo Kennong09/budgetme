@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { chatbotService } from '../../utils/chatbotService.js';
 import { useAuth } from '../../utils/AuthContext';
-import { useLocation } from 'react-router-dom';
 import ChatWindow from './ChatWindow';
 import ChatTooltip from './ChatTooltip';
 import './chatbot.css';
@@ -17,13 +16,7 @@ interface ChatMessage {
 
 const FloatingChatbot: React.FC = () => {
   const { user } = useAuth();
-  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  
-  // Hide chatbot on admin routes
-  if (location.pathname.startsWith('/admin')) {
-    return null;
-  }
   const [isMinimized, setIsMinimized] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);

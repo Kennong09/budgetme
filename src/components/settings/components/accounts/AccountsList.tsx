@@ -31,8 +31,7 @@ const AccountsList: FC<AccountsListProps> = ({
           <tr>
             <th>Account Name</th>
             <th>Type</th>
-            <th>Balance</th>
-            <th>Currency</th>
+            <th>Balance (PHP)</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -61,10 +60,9 @@ const AccountsList: FC<AccountsListProps> = ({
                 </span>
               </td>
               <td>
-                {getCurrencySymbol(account.currency)}
+                {getCurrencySymbol('PHP')}
                 {account.balance.toFixed(2)}
               </td>
-              <td>{account.currency}</td>
               <td>
                 {account.is_default && (
                   <span className="badge badge-primary">Default</span>

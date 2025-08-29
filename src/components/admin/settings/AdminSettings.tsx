@@ -7,7 +7,7 @@ interface SystemSettings {
   appName: string;
   maintenanceMode: boolean;
   registrationEnabled: boolean;
-  defaultCurrency: string;
+  // defaultCurrency removed - always PHP
   logoUrl: string;
   contactEmail: string;
   maxUploadSize: number;
@@ -59,7 +59,7 @@ const AdminSettings: FC = () => {
     appName: "BudgetMe",
     maintenanceMode: false,
     registrationEnabled: true,
-    defaultCurrency: "PHP",
+    // defaultCurrency removed - always PHP
     logoUrl: "/images/logo.png",
     contactEmail: "support@budgetme.com",
     maxUploadSize: 5, // MB
@@ -407,24 +407,17 @@ const AdminSettings: FC = () => {
                     </div>
 
                     <div className="form-group row">
-                      <label className="col-sm-3 col-form-label">Default Currency</label>
+                      <label className="col-sm-3 col-form-label">System Currency</label>
                       <div className="col-sm-9">
-                        <select
-                          className="form-control"
-                          name="defaultCurrency"
-                          value={systemSettings.defaultCurrency}
-                          onChange={handleSystemChange}
-                        >
-                          <option value="PHP">PHP (₱)</option>
-                          <option value="USD">USD ($)</option>
-                          <option value="EUR">EUR (€)</option>
-                          <option value="GBP">GBP (£)</option>
-                          <option value="JPY">JPY (¥)</option>
-                          <option value="CAD">CAD ($)</option>
-                          <option value="AUD">AUD ($)</option>
-                        </select>
+                        <div className="form-control-static">
+                          <div className="d-flex align-items-center">
+                            <i className="fas fa-peso-sign text-success mr-2"></i>
+                            <span className="font-weight-bold">PHP - Philippine Peso (₱)</span>
+                            <span className="badge badge-primary ml-2">System Default</span>
+                          </div>
+                        </div>
                         <small className="form-text text-muted">
-                          Default currency for new accounts
+                          System currency is now standardized to Philippine Pesos for all users and families.
                         </small>
                       </div>
                     </div>

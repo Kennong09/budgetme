@@ -40,7 +40,7 @@ const Settings: FC = () => {
     name: "",
     email: "",
     profilePicture: "",
-    currency: "PHP",
+    // currency removed - always PHP
     language: "en",
     notifications: {
       email: true,
@@ -99,7 +99,7 @@ const Settings: FC = () => {
             account_name: "Primary Checking",
             account_type: "checking",
             balance: 5234.65,
-            currency: "PHP",
+            // currency removed - always PHP
             status: "active",
             is_default: true,
             color: "#4e73df",
@@ -111,7 +111,7 @@ const Settings: FC = () => {
             account_name: "Savings Account",
             account_type: "savings",
             balance: 12750.42,
-            currency: "PHP",
+            // currency removed - always PHP
             status: "active",
             is_default: false,
             color: "#1cc88a",
@@ -123,7 +123,7 @@ const Settings: FC = () => {
             account_name: "Credit Card",
             account_type: "credit",
             balance: -1250.3,
-            currency: "PHP",
+            // currency removed - always PHP
             status: "active",
             is_default: false,
             color: "#e74a3b",
@@ -146,7 +146,7 @@ const Settings: FC = () => {
             name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
             email: user.email || "user@example.com",
             profilePicture: user.user_metadata?.avatar_url || "../images/placeholder.png",
-            currency: "PHP", // Default values for the rest
+            // currency removed - always PHP
             language: "en",
             notifications: {
               email: true,
@@ -164,7 +164,7 @@ const Settings: FC = () => {
               name: mockUser.name || mockUser.full_name || "User",
               email: mockUser.email || "user@example.com",
               profilePicture: mockUser.profilePicture || mockUser.avatar || "../images/placeholder.png",
-              currency: "PHP", 
+              // currency removed - always PHP
               language: "en",
               notifications: {
                 email: true,
@@ -195,10 +195,8 @@ const Settings: FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
 
-    // If currency is changing, update the global context
-    if (name === 'currency') {
-      setGlobalCurrency(value);
-    }
+    // Currency change removed - always PHP
+    // Global currency context is now fixed to PHP
 
     setProfile(prev => ({ ...prev, [name]: value }));
   };

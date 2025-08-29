@@ -1,6 +1,6 @@
 import React, { FC } from 'react';
 import FormGroup from '../shared/FormGroup';
-import { Account, ACCOUNT_TYPE_OPTIONS, CURRENCY_OPTIONS } from '../../types';
+import { Account, ACCOUNT_TYPE_OPTIONS } from '../../types';
 import { getCurrencySymbol } from '../../utils/currencyHelpers';
 
 interface AccountFormProps {
@@ -64,7 +64,7 @@ const AccountForm: FC<AccountFormProps> = ({
             <div className="input-group">
               <div className="input-group-prepend">
                 <span className="input-group-text">
-                  {getCurrencySymbol(editingAccount.currency)}
+                  {getCurrencySymbol('PHP')}
                 </span>
               </div>
               <input
@@ -80,20 +80,19 @@ const AccountForm: FC<AccountFormProps> = ({
             </div>
           </FormGroup>
           
+          {/* Currency is now fixed to PHP - display only */}
           <FormGroup label="Currency" htmlFor="accountCurrency">
-            <select
-              className="form-control"
-              id="accountCurrency"
-              name="currency"
-              value={editingAccount.currency}
-              onChange={onChange}
-            >
-              {CURRENCY_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="form-control-static">
+              <div className="d-flex align-items-center">
+                <i className="fas fa-peso-sign text-success mr-2"></i>
+                <span className="font-weight-bold">PHP - Philippine Peso (₱)</span>
+                <span className="badge badge-primary ml-2">Fixed</span>
+              </div>
+            </div>
+            <small className="form-text text-muted">
+              <i className="fas fa-info-circle mr-1 text-gray-400"></i>
+              All accounts now use Philippine Pesos for consistency.
+            </small>
           </FormGroup>
           
           <FormGroup label="Account Color" htmlFor="accountColor">

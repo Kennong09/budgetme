@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  # FastAPI Prediction Service
+  prediction-api:
+    build:
+      context: ./prediction_api
+      dockerfile: Dockerfile
+    ports:
+      - \"8000:8000\"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=True
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=openai/gpt-oss-20b:free
+      - PROPHET_SEASONALITY_MODE=additive
+      - PROPHET_YEARLY_SEASONALITY=True
+      - PROPHET_WEEKLY_SEASONALITY=False
+      - PROPHET_DAILY_SEASONALITY=False
+      - MAX_PREDICTIONS_PER_MONTH=5
+      - PREDICTION_CACHE_TTL_HOURS=24
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./prediction_api:/app
+    networks:
+      - budgetme-network
+    restart: unless-stopped
+    healthcheck:
+      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:8000/health\"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # React Frontend (Development)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - \"3000:3000\"
+    environment:
+      - REACT_APP_SUPABASE_URL=${REACT_APP_SUPABASE_URL}
+      - REACT_APP_SUPABASE_ANON_KEY=${REACT_APP_SUPABASE_ANON_KEY}
+      - REACT_APP_PREDICTION_API_URL=http://localhost:8000
+      - REACT_APP_OPENROUTER_API_KEY=${REACT_APP_OPENROUTER_API_KEY}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - budgetme-network
+    depends_on:
+      - prediction-api
+    restart: unless-stopped
+
+  # PostgreSQL Database (Optional - for local development)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   ports:
+  #     - \"5432:5432\"
+  #   environment:
+  #     - POSTGRES_DB=budgetme
+  #     - POSTGRES_USER=budgetme
+  #     - POSTGRES_PASSWORD=budgetme_password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./sql:/docker-entrypoint-initdb.d
+  #   networks:
+  #     - budgetme-network
+  #   restart: unless-stopped
+
+  # Redis Cache (Optional - for prediction caching)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - \"6379:6379\"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - budgetme-network
+  #   restart: unless-stopped
+  #   command: redis-server --appendonly yes
+
+networks:
+  budgetme-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+
+# Development override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+---
+# docker-compose.dev.yml
+version: '3.8'
+
+services:
+  prediction-api:
+    environment:
+      - DEBUG=True
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./prediction_api:/app
+    command: [\"python\", \"-m\", \"uvicorn\", \"main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\", \"--reload\"]
+
+  frontend:
+    environment:
+      - FAST_REFRESH=true
+      - CHOKIDAR_USEPOLLING=true
+    command: [\"npm\", \"start\"]

@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Header from '../landing/Header';
 import Footer from '../landing/Footer';
 import '../../assets/css/landing.css';
+import './featureDetails.css';
 import { useNavigate } from 'react-router-dom';
 
 const FinancialGoalsDetails: React.FC = () => {
@@ -35,7 +36,7 @@ const FinancialGoalsDetails: React.FC = () => {
         <div className="feature-details-container">
           <div className="feature-details-hero-content">
             <div className="feature-badge">
-              <i className="bx bxs-flag-alt"></i>
+              <i className="fas fa-flag"></i>
               <span>Financial Goals</span>
             </div>
             <h1>Set, Track, and Achieve Financial Goals</h1>
@@ -49,7 +50,7 @@ const FinancialGoalsDetails: React.FC = () => {
           <div className="feature-overview">
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-target-lock"></i>
+                <i className="fas fa-bullseye"></i>
               </div>
               <div className="overview-text">
                 <h3>Personalized Goals</h3>
@@ -58,7 +59,7 @@ const FinancialGoalsDetails: React.FC = () => {
             </div>
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-trending-up"></i>
+                <i className="fas fa-trending-up"></i>
               </div>
               <div className="overview-text">
                 <h3>Visual Progress</h3>
@@ -67,7 +68,7 @@ const FinancialGoalsDetails: React.FC = () => {
             </div>
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-group"></i>
+                <i className="fas fa-users"></i>
               </div>
               <div className="overview-text">
                 <h3>Family Sharing</h3>
@@ -101,7 +102,7 @@ const FinancialGoalsDetails: React.FC = () => {
             <div className="feature-list-detailed">
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-bullseye"></i>
+                  <i className="fas fa-bullseye"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Customizable Goal Creation</h3>
@@ -114,7 +115,7 @@ const FinancialGoalsDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-bar-chart-alt-2"></i>
+                  <i className="fas fa-chart-bar"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Real-time Progress Tracking</h3>
@@ -127,7 +128,7 @@ const FinancialGoalsDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-calendar-check"></i>
+                  <i className="fas fa-calendar-check"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Monthly Saving Recommendations</h3>
@@ -140,7 +141,7 @@ const FinancialGoalsDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-transfer"></i>
+                  <i className="fas fa-exchange-alt"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Direct Goal Contributions</h3>
@@ -181,22 +182,22 @@ const FinancialGoalsDetails: React.FC = () => {
             </p>
             <div className="features-grid-small">
               <div className="feature-grid-item">
-                <i className="bx bx-share-alt"></i>
+                <i className="fas fa-share-alt"></i>
                 <h3>Goal Sharing</h3>
                 <p>Share specific goals with your family members</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-donate-heart"></i>
+                <i className="fas fa-heart"></i>
                 <h3>Multiple Contributors</h3>
                 <p>Allow any family member to contribute to shared goals</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-chart"></i>
+                <i className="fas fa-chart-pie"></i>
                 <h3>Contribution Tracking</h3>
                 <p>See exactly how much each person has contributed</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-badge-check"></i>
+                <i className="fas fa-check-circle"></i>
                 <h3>Shared Achievement</h3>
                 <p>Celebrate reaching goals together as a family</p>
               </div>
@@ -297,31 +298,19 @@ const FinancialGoalsDetails: React.FC = () => {
           </div>
           
           <div className="sidebar-widget">
-            <h3>Goal Types You Can Create</h3>
+            <h3>Features</h3>
             <ul className="sidebar-list">
               <li>
-                <i className="bx bxs-home"></i>
-                <span>Home Down Payment</span>
+                <i className="fas fa-bullseye"></i>
+                <span>Smart Goal Setting</span>
               </li>
               <li>
-                <i className="bx bxs-plane-take-off"></i>
-                <span>Vacation Fund</span>
+                <i className="fas fa-chart-line"></i>
+                <span>Progress Analytics</span>
               </li>
               <li>
-                <i className="bx bxs-graduation"></i>
-                <span>Education Savings</span>
-              </li>
-              <li>
-                <i className="bx bxs-car"></i>
-                <span>Vehicle Purchase</span>
-              </li>
-              <li>
-                <i className="bx bxs-shield-plus"></i>
-                <span>Emergency Fund</span>
-              </li>
-              <li>
-                <i className="bx bxs-credit-card"></i>
-                <span>Debt Repayment</span>
+                <i className="fas fa-users"></i>
+                <span>Family Goal Sharing</span>
               </li>
             </ul>
           </div>
@@ -331,19 +320,19 @@ const FinancialGoalsDetails: React.FC = () => {
             <ul className="related-features">
               <li>
                 <a href="/features/expense-tracking">
-                  <i className="bx bxs-wallet-alt"></i>
+                  <i className="fas fa-wallet"></i>
                   <span>Transaction Management</span>
                 </a>
               </li>
               <li>
                 <a href="/features/smart-budgeting">
-                  <i className="bx bxs-pie-chart-alt-2"></i>
+                  <i className="fas fa-chart-pie"></i>
                   <span>Smart Budgeting</span>
                 </a>
               </li>
               <li>
                 <a href="/features/family-sharing">
-                  <i className="bx bxs-user-account"></i>
+                  <i className="fas fa-users"></i>
                   <span>Family Finance</span>
                 </a>
               </li>
@@ -352,7 +341,7 @@ const FinancialGoalsDetails: React.FC = () => {
           
           <div className="sidebar-testimonial">
             <div className="testimonial-content">
-              <i className="bx bxs-quote-left"></i>
+              <i className="fas fa-quote-left"></i>
               <p>"BudgetMe's goal tracking helped me save for my house down payment. The monthly savings recommendations and visual progress tracking kept me motivated throughout the entire journey."</p>
             </div>
             <div className="testimonial-author">

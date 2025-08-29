@@ -1,6 +1,8 @@
 import React, { useState, useEffect, FC, useTransition } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../../utils/AuthContext";
+import { useUserData } from "../../layout/shared/hooks";
+import { AdminSearchBar } from "./shared/components";
 
 interface AdminHeaderProps {
   toggleSidebar: () => void;
@@ -9,20 +11,13 @@ interface AdminHeaderProps {
 const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [userName, setUserName] = useState<string>("");
-  const [userAvatar, setUserAvatar] = useState<string>("");
+  const userInfo = useUserData();
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
   const [isPending, startTransition] = useTransition();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   
   useEffect(() => {
-    // Set user info from auth context
-    if (user) {
-      startTransition(() => {
-        setUserName(user.user_metadata?.full_name || user.email?.split("@")[0] || "Admin");
-        setUserAvatar(user.user_metadata?.avatar_url || "../images/placeholder.png");
-      });
-    }
+    // Set user info from auth context is handled by useUserData hook
   }, [user, startTransition]);
 
   const handleLogout = async () => {
@@ -53,10 +48,6 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showDropdown]);
-
-  // Use default values for userName and userAvatar if not set yet
-  const displayName = userName || (user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Admin");
-  const displayAvatar = userAvatar || (user?.user_metadata?.avatar_url || "../images/placeholder.png");
 
   // Show loading state during transition
   if (isPending || isLoading) {
@@ -91,45 +82,19 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
       </div>
 
       {/* Topbar Search */}
-      <form 
-        className="d-none d-sm-inline-block form-inline mr-auto ml-md-3 my-2 my-md-0 mw-100 navbar-search"
-        onSubmit={(e) => {
-          e.preventDefault();
-          // Handle search functionality without page refresh
-        }}
-      >
-        <div className="input-group">
-          <input
-            type="text"
-            className="form-control bg-light border-0 small"
-            placeholder="Search for..."
-            aria-label="Search"
-            aria-describedby="basic-addon2"
-          />
-          <div className="input-group-append">
-            <button className="btn btn-danger" type="submit">
-              <i className="fas fa-search fa-sm"></i>
-            </button>
-          </div>
-        </div>
-      </form>
+      <AdminSearchBar
+        className="d-none d-sm-inline-block"
+        onSearch={(query) => console.log("Admin search query:", query)}
+      />
 
       {/* Topbar Navbar */}
       <ul className="navbar-nav ml-auto">
         {/* Nav Item - Search Dropdown (Visible Only XS) */}
         <li className="nav-item dropdown no-arrow d-sm-none">
-          <button
-            className="nav-link dropdown-toggle btn btn-link"
-            id="searchDropdown"
-            onClick={(e) => {
-              e.preventDefault();
-              // Mobile search functionality without page refresh
-            }}
-            aria-haspopup="true"
-            aria-expanded="false"
-          >
-            <i className="fas fa-search fa-fw"></i>
-          </button>
+          <AdminSearchBar
+            showMobileVersion={true}
+            onSearch={(query) => console.log("Admin mobile search query:", query)}
+          />
         </li>
 
         {/* Nav Item - Alerts */}
@@ -162,12 +127,13 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
             aria-expanded={showDropdown}
           >
             <span className="mr-2 d-none d-lg-inline text-gray-600 small">
-              {displayName}
+              {userInfo.name}
             </span>
             <img
               className="img-profile rounded-circle"
-              src={displayAvatar}
+              src={userInfo.profilePicture}
               alt="User avatar"
+              style={{ width: "32px", height: "32px" }}
             />
           </button>
           {/* Dropdown - User Information */}
@@ -203,4 +169,4 @@ const AdminHeader: FC<AdminHeaderProps> = ({ toggleSidebar }) => {
   );
 };
 
-export default AdminHeader; 
+export default AdminHeader;

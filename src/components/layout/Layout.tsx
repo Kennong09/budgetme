@@ -7,6 +7,8 @@ import Meta from "./Meta";
 import MobileNavigation from "./MobileNavigation";
 import "../../assets/css/responsive.css";
 import "./layout.css";
+import { useResize } from "./shared/hooks";
+import { Footer } from "./shared/components";
 
 interface LayoutProps {
   children: ReactNode;
@@ -15,30 +17,22 @@ interface LayoutProps {
 
 const Layout: FC<LayoutProps> = ({ children, title }) => {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const resizeState = useResize(768, 992);
+  const isMobile = resizeState.isMobile;
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
   
   // Update sidebar state on resize
   useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      
-      if (!mobile) {
-        // On desktop/tablet, sidebar visibility depends on previous state
-        setSidebarOpen(prevState => prevState);
-      } else {
-        // On mobile, always ensure sidebar is closed by default
-        setSidebarOpen(false);
-      }
-    };
-
-    window.addEventListener("resize", handleResize);
-    handleResize(); // Call immediately on mount
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    if (!resizeState.isMobile) {
+      // On desktop/tablet, sidebar visibility depends on previous state
+      setSidebarOpen(prevState => prevState);
+    } else {
+      // On mobile, always ensure sidebar is closed by default
+      setSidebarOpen(false);
+    }
+  }, [resizeState.isMobile]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -91,13 +85,7 @@ const Layout: FC<LayoutProps> = ({ children, title }) => {
           </div>
 
           {/* Footer */}
-          <footer className={`sticky-footer bg-white mt-auto ${isMobile ? "d-none" : ""}`}>
-            <div className="container my-auto">
-              <div className="copyright text-center my-auto">
-                <span>Copyright &copy; BudgetMe {new Date().getFullYear()}</span>
-              </div>
-            </div>
-          </footer>
+          <Footer />
         </div>
         
         {/* Mobile Navigation */}
@@ -107,4 +95,4 @@ const Layout: FC<LayoutProps> = ({ children, title }) => {
   );
 };
 
-export default Layout; 
+export default Layout;

@@ -139,12 +139,139 @@ export interface AuthState {
   error: string | null;
 }
 
-// Prediction types
+// Enhanced Prediction types for AI integration
 export interface Prediction {
   month: string;
   predictedIncome: number;
   predictedExpenses: number;
   confidence: number;
+}
+
+// Prophet Algorithm Types
+export interface ProphetPrediction {
+  date: Date;
+  predicted: number;
+  upper: number;
+  lower: number;
+  trend: number;
+  seasonal: number;
+  confidence: number;
+}
+
+export interface ProphetParameters {
+  changePointPriorScale: number;
+  seasonalityPriorScale: number;
+  holidaysPriorScale: number;
+  seasonalityMode: 'additive' | 'multiplicative';
+  mcmcSamples: number;
+}
+
+export interface SeasonalComponent {
+  name: string;
+  period: number;
+  fourierOrder: number;
+  priorScale: number;
+}
+
+// Financial Data Types
+export interface FinancialDataPoint {
+  date: Date;
+  income: number;
+  expenses: number;
+  balance: number;
+  category?: string;
+}
+
+export interface CategoryForecast {
+  category: string;
+  historicalAverage: number;
+  predicted: number;
+  confidence: number;
+  trend: 'increasing' | 'decreasing' | 'stable';
+}
+
+export interface SpendingPattern {
+  category: string;
+  averageAmount: number;
+  frequency: number;
+  seasonality: number;
+}
+
+export interface SeasonalPattern {
+  name: string;
+  period: number;
+  amplitude: number;
+  phase: number;
+}
+
+// User Financial Profile
+export interface UserFinancialProfile {
+  avgMonthlyIncome: number;
+  avgMonthlyExpenses: number;
+  savingsRate: number;
+  budgetCategories: string[];
+  financialGoals: Goal[];
+  spendingPatterns: SpendingPattern[];
+}
+
+// AI Insights Types
+export interface AIInsightRequest {
+  predictionData: ProphetPrediction[];
+  categoryForecasts: CategoryForecast[];
+  userContext: UserFinancialProfile;
+  timeframe: 'months_3' | 'months_6' | 'year_1';
+  customPrompt?: string;
+}
+
+export interface AIInsightResponse {
+  summary: string;
+  recommendations: string[];
+  riskAssessment: RiskAssessment;
+  opportunityAreas: string[];
+  confidenceLevel: number;
+  timestamp: Date;
+}
+
+export interface RiskAssessment {
+  level: 'low' | 'medium' | 'high';
+  factors: string[];
+  mitigationSuggestions: string[];
+}
+
+// Prediction Context
+export interface PredictionContext {
+  historicalData: FinancialDataPoint[];
+  userProfile: UserFinancialProfile;
+  categoryBreakdown: CategoryForecast[];
+  seasonalPatterns: SeasonalPattern[];
+}
+
+// Service Configuration
+export interface PredictionServiceConfig {
+  userId: string;
+  timeframe: 'months_3' | 'months_6' | 'year_1';
+  includeConfidenceIntervals: boolean;
+  seasonalityMode: 'additive' | 'multiplicative';
+}
+
+// Cache Types
+export interface PredictionCache {
+  data: any;
+  timestamp: number;
+  userId: string;
+}
+
+// Real-time Update Types
+export interface RealtimeUpdateCallback {
+  (update: DatabaseUpdate): void;
+}
+
+export interface DatabaseUpdate {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  table: string;
+  old: Record<string, any> | null;
+  new: Record<string, any> | null;
+  timestamp: Date;
 }
 
 // Component props types
@@ -196,6 +323,46 @@ export interface ExtendedTransaction extends Transaction {
   // No need to redefine account_id since Transaction now has it as string | number
 }
 
+// Prophet Algorithm Implementation Types
+export interface TrendComponent {
+  slope: number;
+  intercept: number;
+  changePoints: Date[];
+  changePointWeights: number[];
+}
+
+export interface ForecastAccuracy {
+  mape: number; // Mean Absolute Percentage Error
+  mae: number;  // Mean Absolute Error
+  rmse: number; // Root Mean Square Error
+  r2Score: number; // R-squared
+  coverageRate: number; // Confidence interval coverage
+}
+
+export interface ModelMetrics {
+  accuracy: ForecastAccuracy;
+  lastUpdated: Date;
+  trainingDataPoints: number;
+  predictionHorizon: number;
+}
+
+// Error Handling Types
+export interface PredictionError {
+  code: string;
+  message: string;
+  context: Record<string, any>;
+  recoverable: boolean;
+  timestamp: Date;
+}
+
+// Performance Monitoring Types
+export interface PerformanceMetrics {
+  apiResponseTime: number;
+  predictionGenerationTime: number;
+  cacheHitRate: number;
+  errorRate: number;
+}
+
 // Add other types here as needed
 
 // Types for goal contribution results
@@ -229,4 +396,21 @@ export interface BudgetGoalRelationship {
   totalSpentOnGoals: number;
   percentageBudgetToGoals: number;
   goalTransactionsCount: number;
+}
+
+// Extended types for enhanced predictions
+export interface EnhancedPredictionData {
+  historical: FinancialDataPoint[];
+  predictions: ProphetPrediction[];
+  categoryForecasts: CategoryForecast[];
+  aiInsights: AIInsightResponse;
+  modelMetrics: ModelMetrics;
+  lastUpdated: Date;
+}
+
+export interface PredictionComponentState {
+  loading: boolean;
+  error: PredictionError | null;
+  data: EnhancedPredictionData | null;
+  cacheStatus: 'hit' | 'miss' | 'expired';
 }

@@ -40,21 +40,26 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
     setResendError(null);
     toastShown.current = false;
     
+    console.log('Resending verification email to:', email);
+    
     try {
       const { error } = await resendVerificationEmail(email);
       if (error) {
+        console.error('Resend error:', error);
         // Show error in the modal instead of toast
         setResendError(error.message);
         showErrorToast(`Failed to resend: ${error.message}`);
       } else {
+        console.log('Resend successful');
         // Success toast is still fine
         if (!toastShown.current) {
-          showSuccessToast('Verification email resent successfully!');
+          showSuccessToast('Verification email resent successfully! Check your inbox and spam folder.');
           toastShown.current = true;
         }
         setCountdown(60); // Set a 60-second cooldown
       }
     } catch (err) {
+      console.error('Resend exception:', err);
       // Show error in the modal instead of toast
       if (err instanceof Error) {
         setResendError(err.message);
@@ -125,6 +130,7 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
           <div className="verification-instructions">
             <p><i className="bx bx-info-circle"></i> If you don't see the email, check your spam folder</p>
             <p><i className="bx bx-time"></i> The link will expire after 24 hours</p>
+            <p><i className="bx bx-help-circle"></i> Still not receiving emails? Try refreshing your page or contact support</p>
           </div>
           
           <div className="verification-actions">

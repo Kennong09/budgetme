@@ -3,18 +3,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../utils/AuthContext";
 import "animate.css";
 import { SidebarProps } from "../../types";
-import { getCurrentUserData } from "../../data/mockData";
-
-// Add CSS styles for consistent navigation item colors
-const navItemStyles = {
-  navLink: {
-    color: 'var(--light)',
-    transition: 'all 0.2s ease'
-  },
-  activeNavItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)'
-  }
-};
+import { useClickOutside, useUserData } from "./shared/hooks";
+import { UserProfile, NavigationMenu, QuickAccess } from "./shared/components";
 
 interface NavItem {
   id: number;
@@ -23,31 +13,14 @@ interface NavItem {
   icon: string;
 }
 
-interface UserInfo {
-  name: string;
-  email: string;
-  profilePicture?: string;
-}
-
 const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [activeItem, setActiveItem] = useState<number | null>(null);
   const [compactMode, setCompactMode] = useState<boolean>(false);
-  const [showTooltip, setShowTooltip] = useState<{show: boolean, id: number | null, label: string}>({
-    show: false,
-    id: null,
-    label: ""
-  });
-  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
-  const [userInfo, setUserInfo] = useState<UserInfo>({
-    name: "",
-    email: "",
-    profilePicture: ""
-  });
+  const userInfo = useUserData();
   const sidebarRef = useRef<HTMLUListElement>(null);
-  const navRefs = useRef<{[key: number]: HTMLLIElement | null}>({});
   
   // Force a consistent style override to the sidebar
   useEffect(() => {
@@ -71,9 +44,6 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
   }, [isOpen, activeItem]);
 
   useEffect(() => {
-    // Get user data from mock data service - load immediately
-    loadUserData();
-    
     // Set compact mode based on window size or sidebar state
     if (window.innerWidth < 992 && window.innerWidth >= 768) {
       setCompactMode(true);
@@ -88,80 +58,12 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
   }, [isOpen]);
   
   // Handle clicking outside of sidebar on mobile
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        isOpen &&
-        window.innerWidth < 768 && 
-        sidebarRef.current && 
-        !sidebarRef.current.contains(event.target as Node)
-      ) {
-        if (onToggleSidebar) onToggleSidebar();
-      }
-    };
-    
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, onToggleSidebar]);
-  
-  const loadUserData = () => {
-    // Check if user is authenticated first
-    if (!user) {
-      // If not authenticated, clear user info
-      setUserInfo({
-        name: "",
-        email: "",
-        profilePicture: "../images/placeholder.png"
-      });
-      return;
+  useClickOutside(sidebarRef, () => {
+    if (isOpen && window.innerWidth < 768 && onToggleSidebar) {
+      onToggleSidebar();
     }
-    
-    // Use auth user data if available
-    if (user) {
-      const userData = {
-        name: user.user_metadata?.full_name || user.email?.split('@')[0] || "User",
-        email: user.email || "user@example.com",
-        profilePicture: user.user_metadata?.avatar_url || "../images/placeholder.png"
-      };
-      setUserInfo(userData);
-      return;
-    }
-    
-    // Fallback to mock data only if authenticated but missing details
-    const userData = getCurrentUserData();
-    if (userData && userData.user) {
-      // Cast userData.user to any to avoid type errors with properties
-      const mockUser = userData.user as any;
-      setUserInfo({
-        name: mockUser.name || mockUser.full_name || mockUser.username || "User",
-        email: mockUser.email || "user@example.com",
-        profilePicture: mockUser.profilePicture || mockUser.avatar || "../images/placeholder.png"
-      });
-    }
-  };
+  }, isOpen && window.innerWidth < 768);
   
-  // Handle sidebar toggle button click
-  const handleToggleSidebar = () => {
-    if (onToggleSidebar) onToggleSidebar();
-  };
-  
-  // Handle tooltip display
-  const handleMouseEnter = (itemId: number, label: string, event: React.MouseEvent<HTMLLIElement>) => {
-    if (compactMode) {
-      const targetElement = event.currentTarget;
-      const rect = targetElement.getBoundingClientRect();
-      setTooltipPosition({ 
-        top: rect.top + window.scrollY,
-        left: rect.right + window.scrollX + 10
-      });
-      setShowTooltip({ show: true, id: itemId, label });
-    }
-  };
-  
-  const handleMouseLeave = () => {
-    setShowTooltip({ show: false, id: null, label: "" });
-  };
-
   // Define navigation items with FontAwesome icons - removed subItems
   const navItems = useMemo<NavItem[]>(
     () => [
@@ -250,6 +152,37 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
     }
   };
 
+  // Handle navigation item click
+  const handleNavigationItemClick = (item: NavItem) => {
+    setActiveItem(item.id);
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 768 && isOpen && onToggleSidebar) {
+      onToggleSidebar();
+    }
+  };
+
+  // Handle sidebar toggle button click
+  const handleToggleSidebar = () => {
+    if (onToggleSidebar) onToggleSidebar();
+  };
+
+  // Handle tooltip display
+  const handleMouseEnter = (itemId: number, label: string, event: React.MouseEvent<HTMLLIElement>) => {
+    // Tooltip is handled in NavigationMenu component
+  };
+  
+  const handleMouseLeave = () => {
+    // Tooltip is handled in NavigationMenu component
+  };
+
+  // Define quick access items
+  const quickAccessItems = [
+    { id: "add", path: "/transactions/add", label: "Add", icon: "fa-plus" },
+    { id: "analytics", path: "/dashboard/analytics", label: "Analytics", icon: "fa-chart-bar" },
+    { id: "goals", path: "/goals", label: "Goals", icon: "fa-flag" },
+    { id: "budget", path: "/budgets", label: "Budget", icon: "fa-balance-scale" }
+  ];
+
   return (
     <>
       <ul
@@ -261,93 +194,31 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
         ref={sidebarRef}
         style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
       >
-        {/* Sidebar - Brand */}
-        <Link
-          className="sidebar-brand d-flex align-items-center justify-content-center"
-          to="/"
-        >
-          <div className="sidebar-brand-icon rotate-n-15">
-            <i className="fas fa-wallet"></i>
-          </div>
-          <div className="sidebar-brand-text mx-3">
-            {compactMode ? "BM" : "BudgetMe"}
-          </div>
-        </Link>
-        
-        {/* User Profile Card */}
-        <div className={`user-profile-compact text-center my-2 
-          ${compactMode ? "compact-profile" : "animate__animated animate__fadeIn"}`}>
-          <img 
-            src={userInfo.profilePicture}
-            alt={userInfo.name}
-            className="img-profile rounded-circle mx-auto mb-2 border-2 shadow-sm"
-            style={{ 
-              width: compactMode ? "40px" : "65px", 
-              height: compactMode ? "40px" : "65px", 
-              border: "2px solid var(--primary-light, rgba(255,255,255,0.3))" 
-            }}
-          />
-          <div className="sidebar-user-details">
-            {!compactMode && (
-              <>
-                <div className="text-white font-weight-bold">{userInfo.name}</div>
-                <div className="text-white-50 small">{userInfo.email}</div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Divider */}
-        <hr className="sidebar-divider my-0" />
+        {/* User Profile Section */}
+        <UserProfile 
+          userInfo={userInfo}
+          compactMode={compactMode}
+          variant="user"
+        />
 
         {/* Scrollable content area */}
         <div className="sidebar-content" style={{ flex: '1', overflowY: 'auto', overflowX: 'hidden' }}>
-          {/* Nav Items */}
-          {navItems.map((item) => (
-            <li
-              key={item.id}
-              ref={el => navRefs.current[item.id] = el}
-              className={`nav-item ${activeItem === item.id ? "active" : ""}`}
-              onMouseEnter={(e) => handleMouseEnter(item.id, item.label, e)}
-              onMouseLeave={handleMouseLeave}
-              style={activeItem === item.id ? navItemStyles.activeNavItem : {}}
-            >
-              <Link
-                className="nav-link"
-                to={item.path}
-                onClick={() => {
-                  setActiveItem(item.id);
-                  // Close sidebar on mobile after navigation
-                  if (window.innerWidth < 768 && isOpen && onToggleSidebar) {
-                    onToggleSidebar();
-                  }
-                }}
-                style={{
-                  color: '#ffffff !important', // Force white color
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <i 
-                  className={`fas ${item.icon} fa-fw`} 
-                  style={{ color: '#ffffff !important' }} // Force white color for icon
-                ></i>
-                {!compactMode && <span style={{ color: '#ffffff' }}>{item.label}</span>}
-                {activeItem === item.id && (
-                  <span className="position-absolute right-0 mr-3 pulse-dot"></span>
-                )}
-              </Link>
-            </li>
-          ))}
+          {/* Navigation Menu */}
+          <NavigationMenu
+            items={navItems}
+            activeItemId={activeItem}
+            onItemClick={handleNavigationItemClick}
+            compactMode={compactMode}
+            onItemHover={handleMouseEnter}
+            onItemLeave={handleMouseLeave}
+            variant="user"
+          />
 
           {/* Divider */}
           <hr className="sidebar-divider" />
           
           {/* Logout */}
-          <li 
-            className="nav-item"
-            onMouseEnter={(e) => handleMouseEnter(102, "Logout", e)}
-            onMouseLeave={handleMouseLeave}
-          >
+          <li className="nav-item">
             <button 
               className="nav-link btn btn-link text-left w-100" 
               onClick={handleLogout}
@@ -380,41 +251,12 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
             </button>
           </div>
           
-          {/* Favorite Section - Quick Access */}
-          {!compactMode && (
-            <>
-              <hr className="sidebar-divider" />
-              <div className="sidebar-heading">Favorites</div>
-              <div className="sidebar-favorites px-3 py-2">
-                <div className="d-flex flex-wrap justify-content-around">
-                  <Link to="/transactions/add" className="favorite-item mb-2">
-                    <div className="circle-icon">
-                      <i className="fas fa-plus"></i>
-                    </div>
-                    <span>Add</span>
-                  </Link>
-                  <Link to="/dashboard/analytics" className="favorite-item mb-2">
-                    <div className="circle-icon">
-                      <i className="fas fa-chart-bar"></i>
-                    </div>
-                    <span>Analytics</span>
-                  </Link>
-                  <Link to="/goals" className="favorite-item mb-2">
-                    <div className="circle-icon">
-                      <i className="fas fa-flag"></i>
-                    </div>
-                    <span>Goals</span>
-                  </Link>
-                  <Link to="/budgets" className="favorite-item">
-                    <div className="circle-icon">
-                      <i className="fas fa-balance-scale"></i>
-                    </div>
-                    <span>Budget</span>
-                  </Link>
-                </div>
-              </div>
-            </>
-          )}
+          {/* Quick Access Section */}
+          <QuickAccess
+            items={quickAccessItems}
+            compactMode={compactMode}
+            variant="user"
+          />
         </div>
 
         {/* Fixed Footer */}
@@ -445,21 +287,6 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
         </div>
       </ul>
       
-      {/* Tooltip for compact mode */}
-      {showTooltip.show && compactMode && (
-        <div 
-          className="sidebar-tooltip" 
-          style={{ 
-            top: tooltipPosition.top, 
-            left: tooltipPosition.left,
-            background: 'var(--primary)',
-            color: 'var(--light)' 
-          }}
-        >
-          {showTooltip.label}
-        </div>
-      )}
-
       {/* CSS override to ensure consistent colors */}
       <style dangerouslySetInnerHTML={{ 
         __html: `
@@ -535,4 +362,4 @@ const Sidebar: FC<SidebarProps> = ({ isOpen, onToggleSidebar, isMobile }) => {
   );
 };
 
-export default Sidebar; 
+export default Sidebar;

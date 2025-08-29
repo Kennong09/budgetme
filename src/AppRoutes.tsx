@@ -12,6 +12,7 @@ const SmartBudgetingDetails = lazy(() => import("./components/featureDetails/Sma
 const FinancialGoalsDetails = lazy(() => import("./components/featureDetails/FinancialGoalsDetails"));
 const FinancialReportsDetails = lazy(() => import("./components/featureDetails/FinancialReportsDetails"));
 const FamilyFinanceDetails = lazy(() => import("./components/featureDetails/FamilyFinanceDetails"));
+const AIInsightsDetails = lazy(() => import("./components/featureDetails/AI-InsightsDetails"));
 
 // Lazy load components for better performance
 const Dashboard = lazy(() => import("./components/dashboard/Dashboard"));
@@ -98,6 +99,11 @@ const AppRoutes: React.FC = () => {
       <Route path="/features/family-sharing" element={
         <Suspense fallback={<LoadingFallback />}>
           <FamilyFinanceDetails />
+        </Suspense>
+      } />
+      <Route path="/features/ai-insights" element={
+        <Suspense fallback={<LoadingFallback />}>
+          <AIInsightsDetails />
         </Suspense>
       } />
 

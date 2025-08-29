@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Header from '../landing/Header';
 import Footer from '../landing/Footer';
 import '../../assets/css/landing.css';
+import './featureDetails.css';
 import { useNavigate } from 'react-router-dom';
 
 const FinancialReportsDetails: React.FC = () => {
@@ -35,7 +36,7 @@ const FinancialReportsDetails: React.FC = () => {
         <div className="feature-details-container">
           <div className="feature-details-hero-content">
             <div className="feature-badge">
-              <i className="bx bxs-report"></i>
+              <i className="fas fa-file-alt"></i>
               <span>Financial Reports</span>
             </div>
             <h1>Transform Financial Data Into Actionable Insights</h1>
@@ -48,30 +49,30 @@ const FinancialReportsDetails: React.FC = () => {
         <div className="feature-details-content">
           <div className="feature-overview">
             <div className="overview-card">
-              <div className="overview-icon">
-                <i className="bx bx-line-chart"></i>
+              <div className="overview-icon reports-icon">
+                <i className="fas fa-chart-line"></i>
               </div>
               <div className="overview-text">
-                <h3>Interactive Visualizations</h3>
-                <p>Dynamic charts and graphs with filtering, zooming, and detailed tooltips</p>
+                <h3>Interactive Visual Reports</h3>
+                <p>Dynamic charts and graphs with filtering, zooming, and detailed tooltips for comprehensive analysis</p>
               </div>
             </div>
             <div className="overview-card">
-              <div className="overview-icon">
-                <i className="bx bx-calendar"></i>
+              <div className="overview-icon reports-icon">
+                <i className="fas fa-download"></i>
               </div>
               <div className="overview-text">
-                <h3>Flexible Timeframes</h3>
-                <p>Analyze your finances by month, quarter, or year for different perspectives</p>
+                <h3>Multi-Format Export Options</h3>
+                <p>Save and share reports in PDF, CSV, and Excel formats for external use and collaboration</p>
               </div>
             </div>
             <div className="overview-card">
-              <div className="overview-icon">
-                <i className="bx bx-export"></i>
+              <div className="overview-icon reports-icon">
+                <i className="fas fa-calendar-alt"></i>
               </div>
               <div className="overview-text">
-                <h3>Multiple Export Options</h3>
-                <p>Save and share reports in PDF, CSV, and Excel formats for external use</p>
+                <h3>Flexible Timeframe Analysis</h3>
+                <p>Analyze your finances by day, month, quarter, or year for different perspectives</p>
               </div>
             </div>
           </div>
@@ -99,7 +100,7 @@ const FinancialReportsDetails: React.FC = () => {
             <div className="feature-list-detailed">
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-pie-chart"></i>
+                  <i className="fas fa-chart-pie"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Spending Analysis</h3>
@@ -111,7 +112,7 @@ const FinancialReportsDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-trending-up"></i>
+                  <i className="fas fa-trending-up"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Income vs. Expenses Tracking</h3>
@@ -123,7 +124,7 @@ const FinancialReportsDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-line-chart-down"></i>
+                  <i className="fas fa-chart-line"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Financial Trends Analysis</h3>
@@ -135,7 +136,7 @@ const FinancialReportsDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-target-lock"></i>
+                  <i className="fas fa-bullseye"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Goal Progress Reporting</h3>
@@ -174,22 +175,22 @@ const FinancialReportsDetails: React.FC = () => {
             </p>
             <div className="features-grid-small">
               <div className="feature-grid-item">
-                <i className="bx bx-slider-alt"></i>
+                <i className="fas fa-sliders-h"></i>
                 <h3>Report Type Selection</h3>
                 <p>Choose from six different report types to analyze different aspects of your finances</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-calendar-alt"></i>
+                <i className="fas fa-calendar-alt"></i>
                 <h3>Timeframe Control</h3>
                 <p>Switch between monthly, quarterly, and yearly views with a single click</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-bar-chart-alt-2"></i>
+                <i className="fas fa-chart-bar"></i>
                 <h3>Chart Type Options</h3>
                 <p>Select from pie, column, bar, line, and area charts based on your data</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-table"></i>
+                <i className="fas fa-table"></i>
                 <h3>Table View Option</h3>
                 <p>Toggle between visual charts and detailed data tables for in-depth analysis</p>
               </div>
@@ -275,38 +276,50 @@ const FinancialReportsDetails: React.FC = () => {
           </div>
           
           <div className="sidebar-widget">
-            <h3>Available Report Types</h3>
+            <h3>Features</h3>
+            <ul className="sidebar-list">
+              <li>
+                <i className="fas fa-chart-bar"></i>
+                <span>Interactive Visual Reports</span>
+              </li>
+              <li>
+                <i className="fas fa-download"></i>
+                <span>Multi-Format Export Options</span>
+              </li>
+              <li>
+                <i className="fas fa-calendar-alt"></i>
+                <span>Flexible Timeframe Analysis</span>
+              </li>
+            </ul>
+          </div>
+          
+          <div className="sidebar-widget">
+            <h3>Related Features</h3>
             <ul className="related-features">
               <li>
-                <i className="bx bxs-pie-chart-alt-2"></i>
-                <span>Spending by Category</span>
+                <a href="/features/expense-tracking">
+                  <i className="fas fa-wallet"></i>
+                  <span>Transaction Management</span>
+                </a>
               </li>
               <li>
-                <i className="bx bxs-bar-chart-alt-2"></i>
-                <span>Income vs. Expenses</span>
+                <a href="/features/smart-budgeting">
+                  <i className="fas fa-chart-pie"></i>
+                  <span>Smart Budgeting</span>
+                </a>
               </li>
               <li>
-                <i className="bx bxs-bank"></i>
-                <span>Savings Rate Analysis</span>
-              </li>
-              <li>
-                <i className="bx bxs-chart"></i>
-                <span>Financial Trends</span>
-              </li>
-              <li>
-                <i className="bx bxs-bullseye"></i>
-                <span>Goal Allocations</span>
-              </li>
-              <li>
-                <i className="bx bxs-brain"></i>
-                <span>Financial Predictions</span>
+                <a href="/features/financial-goals">
+                  <i className="fas fa-flag"></i>
+                  <span>Financial Goals</span>
+                </a>
               </li>
             </ul>
           </div>
           
           <div className="sidebar-testimonial">
             <div className="testimonial-content">
-              <i className="bx bxs-quote-left"></i>
+              <i className="fas fa-quote-left"></i>
               <p>"The interactive charts helped me identify where my money was going each month. Being able to export reports for my tax preparer saved me hours of work!"</p>
             </div>
             <div className="testimonial-author">

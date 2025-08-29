@@ -1,8 +1,8 @@
 import React, { useState, FC, ChangeEvent, FormEvent, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { familyService } from "../../services/database/familyService";
 import { refreshFamilyMembershipsView } from "../../utils/helpers";
 
 // Import SB Admin CSS
@@ -16,8 +16,8 @@ interface RouteParams {
 interface FamilyFormData {
   family_name: string;
   description: string;
-  currency_pref: "USD" | "EUR" | "GBP" | "JPY" | "PHP";
   is_public: boolean;
+  // currency_pref removed - always PHP
 }
 
 interface FamilyData {
@@ -47,8 +47,8 @@ const EditFamily: FC = () => {
   const initialFormState: FamilyFormData = {
     family_name: "",
     description: "",
-    currency_pref: "USD",
     is_public: false,
+    // currency_pref removed - always PHP
   };
 
   const [familyData, setFamilyData] = useState<FamilyFormData>(initialFormState);
@@ -70,42 +70,31 @@ const EditFamily: FC = () => {
 
       setLoading(true);
       try {
-        // Fetch family details
-        const { data, error } = await supabase
-          .from('families')
-          .select('*')
-          .eq('id', id)
-          .single();
-
-        if (error) {
-          console.error("Error fetching family:", error);
-          showErrorToast(`Error loading family: ${error.message}`);
-          navigate("/family");
-          return;
-        }
-
-        if (!data) {
+        // Fetch family details using service
+        const family = await familyService.getFamilyById(id);
+        
+        if (!family) {
           showErrorToast("Family not found.");
           navigate("/family");
           return;
         }
 
         // Check if user is the creator
-        if (data.created_by !== user.id) {
+        if (family.created_by !== user.id) {
           showErrorToast("Only the family creator can edit family details.");
           navigate("/family");
           return;
         }
 
         // Set original family data
-        setOriginalFamily(data);
+        setOriginalFamily(family);
         
         // Set form data
         setFamilyData({
-          family_name: data.family_name || "",
-          description: data.description || "",
-          currency_pref: data.currency_pref as any || "USD",
-          is_public: data.is_public || false,
+          family_name: family.family_name || "",
+          description: family.description || "",
+          is_public: family.is_public || false,
+          // currency_pref removed - always PHP
         });
         
         setLoading(false);
@@ -163,22 +152,16 @@ const EditFamily: FC = () => {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from('families')
-        .update({
+      await familyService.updateFamily(
+        originalFamily.id,
+        {
           family_name: familyData.family_name,
           description: familyData.description,
-          currency_pref: familyData.currency_pref,
+          currency_pref: 'PHP', // Always force PHP
           is_public: familyData.is_public,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', id)
-        .eq('created_by', user.id); // Extra safety check
-      
-      if (error) {
-        console.error("Family update error:", error);
-        throw new Error(`Error updating family: ${error.message}`);
-      }
+        },
+        user.id
+      );
 
       // Try to refresh the materialized view
       try {
@@ -196,8 +179,18 @@ const EditFamily: FC = () => {
     } catch (err) {
       console.error('Error updating family:', err);
       const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
-      showErrorToast(`Failed to update family: ${errorMessage}`);
-      setError(errorMessage);
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+        showErrorToast('A family with this name already exists. Please choose a different name.');
+        setError('A family with this name already exists. Please choose a different name.');
+      } else if (errorMessage.includes('permission') || errorMessage.includes('not authorized')) {
+        showErrorToast('You do not have permission to update this family.');
+        setError('You do not have permission to update this family.');
+      } else {
+        showErrorToast(`Failed to update family: ${errorMessage}`);
+        setError(errorMessage);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -292,7 +285,7 @@ const EditFamily: FC = () => {
                             <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
                               Currency
                             </div>
-                            <div className="h5 mb-0 font-weight-bold text-gray-800">{familyData.currency_pref}</div>
+                            <div className="h5 mb-0 font-weight-bold text-gray-800">PHP (₱)</div>
                           </div>
                           <div className="col-auto">
                             <i className="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -437,31 +430,21 @@ const EditFamily: FC = () => {
                   </small>
                 </div>
 
+                {/* Currency is now fixed to PHP - display only */}
                 <div className="form-group">
-                  <label htmlFor="currency_pref" className="font-weight-bold text-gray-800">
-                    Currency Preference <span className="text-danger">*</span>
+                  <label className="font-weight-bold text-gray-800">
+                    Currency
                   </label>
-                  <select
-                    id="currency_pref"
-                    name="currency_pref"
-                    value={familyData.currency_pref}
-                    onChange={handleChange}
-                    className="form-control"
-                    required
-                  >
-                    <option value="USD">USD - US Dollar</option>
-                    <option value="EUR">EUR - Euro</option>
-                    <option value="GBP">GBP - British Pound</option>
-                    <option value="JPY">JPY - Japanese Yen</option>
-                    <option value="PHP">PHP - Philippine Peso</option>
-                  </select>
+                  <div className="form-control-static">
+                    <div className="d-flex align-items-center">
+                      <i className="fas fa-peso-sign text-success mr-2"></i>
+                      <span className="font-weight-bold">PHP - Philippine Peso (₱)</span>
+                      <span className="badge badge-primary ml-2">Default</span>
+                    </div>
+                  </div>
                   <small className="form-text text-muted">
-                    <i 
-                      className="fas fa-info-circle mr-1 text-gray-400"
-                      style={{ cursor: 'pointer' }}
-                      onClick={(e) => toggleTip('currency-selection', e)}
-                    ></i>
-                    Select the currency your family will primarily use.
+                    <i className="fas fa-info-circle mr-1 text-gray-400"></i>
+                    The application now uses Philippine Pesos for all financial calculations.
                   </small>
                 </div>
 
@@ -550,11 +533,11 @@ const EditFamily: FC = () => {
               <div className="mb-3">
                 <div className="d-flex align-items-center mb-2">
                   <div className="rounded-circle p-1 mr-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(28, 200, 138, 0.2)", width: "32px", height: "32px" }}>
-                    <i className="fas fa-dollar-sign text-success"></i>
+                    <i className="fas fa-peso-sign text-success"></i>
                   </div>
-                  <p className="font-weight-bold mb-0">Currency Settings</p>
+                  <p className="font-weight-bold mb-0">Currency (PHP Only)</p>
                 </div>
-                <p className="text-sm ml-5 mb-0">Set your preferred currency for all family finances</p>
+                <p className="text-sm ml-5 mb-0">All family finances now use Philippine Pesos</p>
               </div>
 
               <div className="mb-0">

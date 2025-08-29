@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Header from '../landing/Header';
 import Footer from '../landing/Footer';
 import '../../assets/css/landing.css';
+import './featureDetails.css';
 import { useNavigate } from 'react-router-dom';
 
 const ExpenseTrackingDetails: React.FC = () => {
@@ -35,7 +36,7 @@ const ExpenseTrackingDetails: React.FC = () => {
         <div className="feature-details-container">
           <div className="feature-details-hero-content">
             <div className="feature-badge">
-              <i className="bx bxs-wallet-alt"></i>
+              <i className="fas fa-wallet"></i>
               <span>Transaction Management</span>
             </div>
             <h1>Track Income and Expenses with Precision</h1>
@@ -49,7 +50,7 @@ const ExpenseTrackingDetails: React.FC = () => {
           <div className="feature-overview">
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-chart"></i>
+                <i className="fas fa-chart-bar"></i>
               </div>
               <div className="overview-text">
                 <h3>Complete Financial Visibility</h3>
@@ -58,7 +59,7 @@ const ExpenseTrackingDetails: React.FC = () => {
             </div>
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-category-alt"></i>
+                <i className="fas fa-tags"></i>
               </div>
               <div className="overview-text">
                 <h3>Smart Categorization</h3>
@@ -67,7 +68,7 @@ const ExpenseTrackingDetails: React.FC = () => {
             </div>
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-time"></i>
+                <i className="fas fa-bullseye"></i>
               </div>
               <div className="overview-text">
                 <h3>Goal Integration</h3>
@@ -101,7 +102,7 @@ const ExpenseTrackingDetails: React.FC = () => {
             <div className="feature-list-detailed">
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-plus-circle"></i>
+                  <i className="fas fa-plus-circle"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Quick and Easy Entry</h3>
@@ -113,7 +114,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-edit"></i>
+                  <i className="fas fa-edit"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Full Editing Capabilities</h3>
@@ -125,7 +126,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-search-alt"></i>
+                  <i className="fas fa-search"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Detailed Transaction Views</h3>
@@ -137,7 +138,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-trash"></i>
+                  <i className="fas fa-trash"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Safe Transaction Deletion</h3>
@@ -155,7 +156,7 @@ const ExpenseTrackingDetails: React.FC = () => {
             <div className="feature-list-detailed">
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-trending-up"></i>
+                  <i className="fas fa-trending-up"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Income & Expense Analysis</h3>
@@ -167,7 +168,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-pie-chart"></i>
+                  <i className="fas fa-chart-pie"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Category Distribution</h3>
@@ -179,7 +180,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-calendar"></i>
+                  <i className="fas fa-calendar"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Time-Based Analysis</h3>
@@ -191,7 +192,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-pulse"></i>
+                  <i className="fas fa-heartbeat"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Financial Health Indicators</h3>
@@ -209,7 +210,7 @@ const ExpenseTrackingDetails: React.FC = () => {
             <div className="feature-list-detailed">
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-filter-alt"></i>
+                  <i className="fas fa-filter"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Advanced Filtering and Sorting</h3>
@@ -221,7 +222,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-line-chart"></i>
+                  <i className="fas fa-chart-line"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Visual Analytics</h3>
@@ -233,7 +234,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-tag"></i>
+                  <i className="fas fa-tags"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Multi-Account Management</h3>
@@ -245,7 +246,7 @@ const ExpenseTrackingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-flag"></i>
+                  <i className="fas fa-flag"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Goal Contribution Tracking</h3>
@@ -330,23 +331,42 @@ const ExpenseTrackingDetails: React.FC = () => {
           </div>
           
           <div className="sidebar-widget">
+            <h3>Features</h3>
+            <ul className="sidebar-list">
+              <li>
+                <i className="fas fa-plus-circle"></i>
+                <span>Income & Expense Tracking</span>
+              </li>
+              <li>
+                <i className="fas fa-chart-pie"></i>
+                <span>Category Analytics</span>
+              </li>
+              <li>
+                <i className="fas fa-university"></i>
+                <span>Multi-Account Management</span>
+              </li>
+            </ul>
+          </div>
+
+          
+          <div className="sidebar-widget">
             <h3>Related Features</h3>
             <ul className="related-features">
               <li>
                 <a href="/features/smart-budgeting">
-                  <i className="bx bxs-pie-chart-alt-2"></i>
+                  <i className="fas fa-chart-pie"></i>
                   <span>Smart Budgeting</span>
                 </a>
               </li>
               <li>
                 <a href="/features/financial-goals">
-                  <i className="bx bxs-flag-alt"></i>
+                  <i className="fas fa-flag"></i>
                   <span>Financial Goals</span>
                 </a>
               </li>
               <li>
                 <a href="/features/financial-reports">
-                  <i className="bx bxs-report"></i>
+                  <i className="fas fa-file-alt"></i>
                   <span>Financial Reports</span>
                 </a>
               </li>
@@ -355,7 +375,7 @@ const ExpenseTrackingDetails: React.FC = () => {
           
           <div className="sidebar-testimonial">
             <div className="testimonial-content">
-              <i className="bx bxs-quote-left"></i>
+              <i className="fas fa-quote-left"></i>
               <p>"BudgetMe's expense tracking changed how I manage money. I finally know where every dollar goes and can link my spending to my financial goals!"</p>
             </div>
             <div className="testimonial-author">

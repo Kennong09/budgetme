@@ -1,6 +1,9 @@
-import React, { useState, FC, ChangeEvent, FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { users, family, familyInvitations } from "../../data/mockData";
+import React, { useState, FC, ChangeEvent, FormEvent, useEffect } from "react";
+import { useNavigate, Link, useParams } from "react-router-dom";
+import { useAuth } from "../../utils/AuthContext";
+import { useToast } from "../../utils/ToastContext";
+import { invitationService } from "../../services/database/invitationService";
+import { familyService } from "../../services/database/familyService";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -12,13 +15,22 @@ interface InviteFormData {
   message: string;
 }
 
+interface RouteParams {
+  id: string;
+}
+
 const InviteFamilyMember: FC = () => {
+  const { id: familyId } = useParams<keyof RouteParams>() as RouteParams;
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { showSuccessToast, showErrorToast } = useToast();
   const [viewMode, setViewMode] = useState<"form" | "review">("form");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTip, setActiveTip] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [userFamily, setUserFamily] = useState<any>(null);
 
   const initialFormState: InviteFormData = {
     email: "",
@@ -27,6 +39,59 @@ const InviteFamilyMember: FC = () => {
   };
 
   const [invite, setInvite] = useState<InviteFormData>(initialFormState);
+
+  // Check user's family membership and permissions
+  useEffect(() => {
+    const checkUserFamily = async () => {
+      if (!user) {
+        showErrorToast("You must be logged in to invite family members.");
+        navigate("/login");
+        return;
+      }
+
+      if (!familyId) {
+        showErrorToast("No family ID provided.");
+        navigate("/family");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        // Get the specific family by ID
+        const family = await familyService.getFamilyById(familyId);
+        if (!family) {
+          showErrorToast("Family not found.");
+          navigate("/family");
+          return;
+        }
+
+        // Check if user is a member of this family
+        const membership = await familyService.checkSpecificFamilyMembership(user.id, familyId);
+        if (!membership.is_member) {
+          showErrorToast("You are not a member of this family.");
+          navigate("/family");
+          return;
+        }
+
+        // Check if user has admin permissions
+        if (membership.role !== 'admin') {
+          showErrorToast("Only family admins can invite new members.");
+          navigate("/family");
+          return;
+        }
+
+        setUserFamily(family);
+      } catch (err) {
+        console.error("Error checking family membership:", err);
+        showErrorToast("Failed to verify family membership.");
+        navigate("/family");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUserFamily();
+  }, [user, familyId, navigate, showErrorToast]);
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -48,44 +113,70 @@ const InviteFamilyMember: FC = () => {
       return;
     }
 
-    // Check if user exists
-    const userExists = users.find(u => u.email === invite.email);
-    if (!userExists) {
-      setError("No user found with this email address.");
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(invite.email)) {
+      setError("Please enter a valid email address.");
       return;
     }
-    
-    // Check if user is already in a family
-    // This is a simplified check. In a real app, you'd check if they are in *this* family.
-    const userInFamily = family.find(f => f.owner_user_id === userExists.id);
-    if (userInFamily) {
-        setError("This user is already part of a family.");
-        return;
+
+    // Check if trying to invite themselves
+    if (user && invite.email === user.email) {
+      setError("You cannot invite yourself.");
+      return;
     }
+
+    // Additional validation could be added here to check if the email
+    // already belongs to a family member, but this will be handled by the backend
 
     setViewMode("review");
     window.scrollTo(0, 0);
   };
 
-  const handleSubmit = (): void => {
-    setIsSubmitting(true);
-    
-    const newInvitation = {
-        id: familyInvitations.length + 1,
-        family_id: 1, // Hardcoded for demo
-        invited_user_email: invite.email,
-        inviter_user_id: 1, // Hardcoded for demo
-        role: invite.role,
-        status: "pending" as const,
-        created_at: new Date().toISOString(),
-    };
+  const handleSubmit = async (): Promise<void> => {
+    if (!user || !userFamily) {
+      showErrorToast("You must be logged in and part of a family to send invitations.");
+      return;
+    }
 
-    setTimeout(() => {
-      familyInvitations.push(newInvitation);
-      console.log("Submitting invitation:", newInvitation);
-      alert("Invitation sent successfully!");
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await invitationService.sendInvitation(
+        {
+          family_id: userFamily.id,
+          invited_email: invite.email,
+          role: invite.role,
+          message: invite.message
+        },
+        user.id
+      );
+
+      showSuccessToast('Invitation sent successfully!');
       navigate("/family");
-    }, 1000);
+    } catch (err) {
+      console.error('Error sending invitation:', err);
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
+      
+      // Provide more specific error messages
+      if (errorMessage.includes('already invited') || errorMessage.includes('duplicate')) {
+        setError('This user has already been invited to your family.');
+        showErrorToast('This user has already been invited to your family.');
+      } else if (errorMessage.includes('not found') || errorMessage.includes('invalid email')) {
+        setError('User not found. Please ensure the email address is correct and the user has an account.');
+        showErrorToast('User not found. Please ensure the email address is correct and the user has an account.');
+      } else if (errorMessage.includes('permission') || errorMessage.includes('not authorized')) {
+        setError('You do not have permission to invite members to this family.');
+        showErrorToast('You do not have permission to invite members to this family.');
+      } else {
+        setError(errorMessage);
+        showErrorToast(`Failed to send invitation: ${errorMessage}`);
+      }
+      setViewMode("form");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   const toggleTip = (tipId: string, event?: React.MouseEvent) => {
@@ -112,6 +203,19 @@ const InviteFamilyMember: FC = () => {
       description: 'Learn best practices for inviting family members, assigning roles, and managing your family group in BudgetMe.'
     }
   };
+
+  if (loading) {
+    return (
+      <div className="container-fluid">
+        <div className="text-center my-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="sr-only">Loading...</span>
+          </div>
+          <p className="mt-3 text-gray-700">Checking permissions...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (viewMode === "review") {
     return (
@@ -165,6 +269,15 @@ const InviteFamilyMember: FC = () => {
                       </div>
                     </div>
                   </div>
+                </div>
+
+                <div className="card bg-light mb-4">
+                    <div className="card-body">
+                      <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                        Family
+                      </div>
+                      <p className="mb-0">{userFamily?.family_name || "Your Family"}</p>
+                    </div>
                 </div>
 
                 <div className="card bg-light mb-4">
@@ -269,7 +382,7 @@ const InviteFamilyMember: FC = () => {
                     required
                   />
                   <small className="form-text text-muted">
-                    The user must have an existing BudgetMe account.
+                    Enter the email address of the person you want to invite to your family.
                   </small>
                 </div>
 
@@ -343,7 +456,7 @@ const InviteFamilyMember: FC = () => {
                   </div>
                   <p className="font-weight-bold mb-0">Send Invitations</p>
                 </div>
-                <p className="text-sm ml-5 mb-0">The user will receive a notification on their dashboard</p>
+                <p className="text-sm ml-5 mb-0">Invitations are sent via email and tracked in the system</p>
               </div>
 
               <div className="mb-3">
@@ -353,7 +466,7 @@ const InviteFamilyMember: FC = () => {
                   </div>
                   <p className="font-weight-bold mb-0">Simple Acceptance</p>
                 </div>
-                <p className="text-sm ml-5 mb-0">Users can easily join with a single click</p>
+                <p className="text-sm ml-5 mb-0">Users can accept or decline invitations from their dashboard</p>
               </div>
 
               <div className="mb-0">

@@ -6,6 +6,7 @@ import AdminSidebar from "./AdminSidebar";
 import Meta from "../../layout/Meta";
 import { isUserAdmin } from "../../../utils/adminHelpers";
 import "../admin.css";
+import { useResize } from "../../layout/shared/hooks";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -25,7 +26,8 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children, title, hideNav = false })
       return window.innerWidth >= 768; // Default to open on desktop
     }
   });
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const resizeState = useResize(768, 992);
+  const isMobile = resizeState.isMobile;
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -99,28 +101,16 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children, title, hideNav = false })
   
   // Update sidebar state on resize and save to localStorage
   useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      
-      if (!mobile) {
-        // On desktop/tablet, don't auto-change sidebar state on resize
-        // This helps maintain state during navigation
-      } else {
-        // On mobile, always ensure sidebar is closed by default
-        setSidebarOpen(false);
-        try {
-          localStorage.setItem('adminSidebarOpen', 'false');
-        } catch (e) {
-          console.error("Error writing to localStorage:", e);
-        }
+    if (resizeState.isMobile) {
+      // On mobile, always ensure sidebar is closed by default
+      setSidebarOpen(false);
+      try {
+        localStorage.setItem('adminSidebarOpen', 'false');
+      } catch (e) {
+        console.error("Error writing to localStorage:", e);
       }
-    };
-
-    window.addEventListener("resize", handleResize);
-    handleResize(); // Call immediately on mount
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    }
+  }, [resizeState.isMobile]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -215,4 +205,4 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children, title, hideNav = false })
   );
 };
 
-export default AdminLayout; 
+export default AdminLayout;

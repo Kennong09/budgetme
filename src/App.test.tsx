@@ -3,6 +3,6 @@ import App from "./App";
 
 test("renders BudgetMe app", () => {
   render(<App />);
-  const loadingText = screen.getByText(/BudgetMe/i);
-  expect(loadingText).toBeInTheDocument();
+  const logoText = screen.getByText("BudgetMe", { selector: ".logo-text-hero" });
+  expect(logoText).toBeInTheDocument();
 });

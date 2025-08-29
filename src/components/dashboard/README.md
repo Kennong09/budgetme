@@ -196,6 +196,6 @@ The dashboard components are designed to work together with a clear data flow:
 4. User interactions (clicks, hovers) trigger appropriate callbacks
 5. The dashboard maintains the overall state and coordinates updates
 
-Data for the dashboard is currently sourced from mock data but is designed to easily connect to backend APIs, with functions like `getCurrentUserData()`, `getTotalIncome()`, and `getCategorySpendingData()` serving as the interface between the UI and data layer.
+Data for the dashboard is currently sourced from Supabase database via the `useDashboardData` hook. Data is fetched on component mount and can be manually refreshed using the refresh button in the dashboard header.
 
-For real-time data updates, the dashboard uses React's useEffect hook to fetch fresh data when needed and applies animations to smooth the transition between data states. 
+**Note**: Real-time subscriptions have been removed to reduce API usage. Users can manually refresh data when needed using the refresh button. 

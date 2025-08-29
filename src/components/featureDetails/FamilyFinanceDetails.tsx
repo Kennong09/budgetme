@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Header from '../landing/Header';
 import Footer from '../landing/Footer';
 import '../../assets/css/landing.css';
+import './featureDetails.css';
 import { useNavigate } from 'react-router-dom';
 
 const FamilyFinanceDetails: React.FC = () => {
@@ -35,7 +36,7 @@ const FamilyFinanceDetails: React.FC = () => {
         <div className="feature-details-container">
           <div className="feature-details-hero-content">
             <div className="feature-badge">
-              <i className="bx bxs-user-account"></i>
+              <i className="fas fa-users"></i>
               <span>Family Finance</span>
             </div>
             <h1>Manage Family Finances Together</h1>
@@ -49,7 +50,7 @@ const FamilyFinanceDetails: React.FC = () => {
           <div className="feature-overview">
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-group"></i>
+                <i className="fas fa-users"></i>
               </div>
               <div className="overview-text">
                 <h3>Collaborative Budgeting</h3>
@@ -58,7 +59,7 @@ const FamilyFinanceDetails: React.FC = () => {
             </div>
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-shield"></i>
+                <i className="fas fa-shield-alt"></i>
               </div>
               <div className="overview-text">
                 <h3>Privacy Controls</h3>
@@ -67,7 +68,7 @@ const FamilyFinanceDetails: React.FC = () => {
             </div>
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-task"></i>
+                <i className="fas fa-taskss"></i>
               </div>
               <div className="overview-text">
                 <h3>Shared Responsibilities</h3>
@@ -100,7 +101,7 @@ const FamilyFinanceDetails: React.FC = () => {
             <div className="feature-list-detailed">
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-wallet"></i>
+                  <i className="fas fa-wallet"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Family Group Creation</h3>
@@ -113,7 +114,7 @@ const FamilyFinanceDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-user-plus"></i>
+                  <i className="fas fa-user-plus"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Member Management</h3>
@@ -126,7 +127,7 @@ const FamilyFinanceDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-line-chart"></i>
+                  <i className="fas fa-line-chart"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Unified Financial Dashboard</h3>
@@ -139,7 +140,7 @@ const FamilyFinanceDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-target-lock"></i>
+                  <i className="fas fa-bullseye"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Shared Financial Goals</h3>
@@ -179,22 +180,22 @@ const FamilyFinanceDetails: React.FC = () => {
             </p>
             <div className="features-grid-small">
               <div className="feature-grid-item">
-                <i className="bx bx-bar-chart"></i>
+                <i className="fas fa-chart-bar"></i>
                 <h3>Contribution Charts</h3>
                 <p>Visualize each member's contributions with interactive charts</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-donate-heart"></i>
+                <i className="fas fa-heart"></i>
                 <h3>Easy Contributions</h3>
                 <p>Add funds to family goals with just a few clicks</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-trophy"></i>
+                <i className="fas fa-trophy"></i>
                 <h3>Progress Tracking</h3>
                 <p>See real-time progress toward your shared financial goals</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-history"></i>
+                <i className="fas fa-history"></i>
                 <h3>Contribution History</h3>
                 <p>Review a complete history of all goal contributions</p>
               </div>
@@ -210,22 +211,22 @@ const FamilyFinanceDetails: React.FC = () => {
             </p>
             <div className="features-grid-small">
               <div className="feature-grid-item">
-                <i className="bx bx-crown"></i>
+                <i className="fas fa-crown"></i>
                 <h3>Admin Privileges</h3>
                 <p>Full control over family settings, invitations, and membership</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-user-check"></i>
+                <i className="fas fa-user-check"></i>
                 <h3>Member Access</h3>
                 <p>Customizable access levels for different family members</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-user-plus"></i>
+                <i className="fas fa-user-plus"></i>
                 <h3>Join Requests</h3>
                 <p>Approve or deny requests to join your family group</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-exit"></i>
+                <i className="fas fa-sign-out-alt"></i>
                 <h3>Flexible Membership</h3>
                 <p>Members can leave the family group when needed</p>
               </div>
@@ -310,23 +311,42 @@ const FamilyFinanceDetails: React.FC = () => {
           </div>
           
           <div className="sidebar-widget">
+            <h3>Features</h3>
+            <ul className="sidebar-list">
+              <li>
+                <i className="fas fa-users"></i>
+                <span>Collaborative Family Groups</span>
+              </li>
+              <li>
+                <i className="fas fa-bullseye"></i>
+                <span>Shared Financial Goals</span>
+              </li>
+              <li>
+                <i className="fas fa-shield-alt"></i>
+                <span>Privacy & Permission Controls</span>
+              </li>
+            </ul>
+          </div>
+
+          
+          <div className="sidebar-widget">
             <h3>Related Features</h3>
             <ul className="related-features">
               <li>
                 <a href="/features/smart-budgeting">
-                  <i className="bx bxs-pie-chart-alt-2"></i>
+                  <i className="fas fa-pie-chart-alt-2"></i>
                   <span>Smart Budgeting</span>
                 </a>
               </li>
               <li>
                 <a href="/features/financial-goals">
-                  <i className="bx bxs-flag-alt"></i>
+                  <i className="fas fa-flag-alt"></i>
                   <span>Financial Goals</span>
                 </a>
               </li>
               <li>
                 <a href="/features/expense-tracking">
-                  <i className="bx bxs-wallet-alt"></i>
+                  <i className="fas fa-wallet-alt"></i>
                   <span>Expense Tracking</span>
                 </a>
               </li>
@@ -335,7 +355,7 @@ const FamilyFinanceDetails: React.FC = () => {
           
           <div className="sidebar-testimonial">
             <div className="testimonial-content">
-              <i className="bx bxs-quote-left"></i>
+              <i className="fas fa-quote-left"></i>
               <p>"Creating a family group in BudgetMe has revolutionized how we track our household finances. Being able to see our combined income and expenses, plus contribute to shared goals together has made saving for our future home much easier."</p>
             </div>
             <div className="testimonial-author">

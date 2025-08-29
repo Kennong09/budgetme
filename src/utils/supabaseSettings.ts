@@ -31,7 +31,7 @@ export const createOrUpdateUserProfile = async (userId: string, profile: Partial
       .update({
         name: profile.name,
         profile_picture: profile.profilePicture,
-        currency: profile.currency,
+        // currency removed - always PHP
         language: profile.language,
         notification_email: profile.notifications?.email,
         notification_push: profile.notifications?.push,
@@ -49,7 +49,7 @@ export const createOrUpdateUserProfile = async (userId: string, profile: Partial
         user_id: userId,
         name: profile.name,
         profile_picture: profile.profilePicture,
-        currency: profile.currency,
+        // currency removed - always PHP
         language: profile.language,
         notification_email: profile.notifications?.email,
         notification_push: profile.notifications?.push,
@@ -85,7 +85,7 @@ export const createAccount = async (account: Omit<Account, 'id' | 'created_at' |
       account_name: account.account_name,
       account_type: account.account_type,
       balance: account.balance,
-      currency: account.currency,
+      // currency removed - always PHP
       status: account.status,
       is_default: account.is_default,
       color: account.color,
@@ -103,7 +103,7 @@ export const updateAccount = async (accountId: string, updates: Partial<Account>
       account_name: updates.account_name,
       account_type: updates.account_type,
       balance: updates.balance,
-      currency: updates.currency,
+      // currency removed - always PHP
       status: updates.status,
       is_default: updates.is_default,
       color: updates.color,
@@ -130,7 +130,7 @@ export const transformUserProfile = (dbProfile: any, accounts: Account[]): UserP
     name: dbProfile?.name || '',
     email: dbProfile?.email || '',
     profilePicture: dbProfile?.profile_picture || '',
-    currency: dbProfile?.currency || 'PHP',
+    // currency removed - always PHP
     language: dbProfile?.language || 'en',
     notifications: {
       email: dbProfile?.notification_email ?? true,

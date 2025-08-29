@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Header from '../landing/Header';
 import Footer from '../landing/Footer';
 import '../../assets/css/landing.css';
+import './featureDetails.css';
 import { useNavigate } from 'react-router-dom';
 
 const SmartBudgetingDetails: React.FC = () => {
@@ -35,7 +36,7 @@ const SmartBudgetingDetails: React.FC = () => {
         <div className="feature-details-container">
           <div className="feature-details-hero-content">
             <div className="feature-badge">
-              <i className="bx bxs-pie-chart-alt-2"></i>
+              <i className="fas fa-chart-pie"></i>
               <span>Smart Budgeting</span>
             </div>
             <h1>Manage Your Money with Precision</h1>
@@ -49,7 +50,7 @@ const SmartBudgetingDetails: React.FC = () => {
           <div className="feature-overview">
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-calendar"></i>
+                <i className="fas fa-calculator"></i>
               </div>
               <div className="overview-text">
                 <h3>Flexible Budget Periods</h3>
@@ -58,7 +59,7 @@ const SmartBudgetingDetails: React.FC = () => {
             </div>
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-bar-chart-alt-2"></i>
+                <i className="fas fa-chart-line"></i>
               </div>
               <div className="overview-text">
                 <h3>Visual Progress Tracking</h3>
@@ -67,7 +68,7 @@ const SmartBudgetingDetails: React.FC = () => {
             </div>
             <div className="overview-card">
               <div className="overview-icon">
-                <i className="bx bx-category"></i>
+                <i className="fas fa-bell"></i>
               </div>
               <div className="overview-text">
                 <h3>Category-Based Budgeting</h3>
@@ -101,7 +102,7 @@ const SmartBudgetingDetails: React.FC = () => {
             <div className="feature-list-detailed">
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-calendar-alt"></i>
+                  <i className="fas fa-plus"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Flexible Budget Periods</h3>
@@ -114,7 +115,7 @@ const SmartBudgetingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-line-chart"></i>
+                  <i className="fas fa-edit"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Real-time Progress Tracking</h3>
@@ -127,7 +128,7 @@ const SmartBudgetingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-pie-chart"></i>
+                  <i className="fas fa-trash"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Interactive Visualizations</h3>
@@ -140,7 +141,7 @@ const SmartBudgetingDetails: React.FC = () => {
               </div>
               <div className="feature-item">
                 <div className="feature-item-icon">
-                  <i className="bx bx-detail"></i>
+                  <i className="fas fa-chart-bar"></i>
                 </div>
                 <div className="feature-item-content">
                   <h3>Transaction Integration</h3>
@@ -182,22 +183,22 @@ const SmartBudgetingDetails: React.FC = () => {
             </p>
             <div className="features-grid-small">
               <div className="feature-grid-item">
-                <i className="bx bx-check-circle"></i>
+                <i className="fas fa-check-circle"></i>
                 <h3>On Track</h3>
                 <p>Less than 75% of your budget has been used, indicating healthy spending</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-error"></i>
+                <i className="fas fa-exclamation-triangle"></i>
                 <h3>Caution</h3>
                 <p>Between 75-90% of your budget has been used, suggesting closer monitoring</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-x-circle"></i>
+                <i className="fas fa-times-circle"></i>
                 <h3>Attention</h3>
                 <p>Over 90% of your budget has been used, indicating potential overspending</p>
               </div>
               <div className="feature-grid-item">
-                <i className="bx bx-bar-chart-alt"></i>
+                <i className="fas fa-chart-bar"></i>
                 <h3>Overall Health</h3>
                 <p>Composite score showing your overall budget management effectiveness</p>
               </div>
@@ -265,49 +266,42 @@ const SmartBudgetingDetails: React.FC = () => {
           </div>
           
           <div className="sidebar-widget">
-            <h3>Budget Features</h3>
+            <h3>Features</h3>
             <ul className="sidebar-list">
               <li>
-                <i className="bx bxs-calendar"></i>
-                <span>Monthly, Quarterly & Yearly Budgets</span>
+                <i className="fas fa-calculator"></i>
+                <span>Smart Budget Creation</span>
               </li>
               <li>
-                <i className="bx bxs-bar-chart-alt-2"></i>
-                <span>Interactive Progress Tracking</span>
+                <i className="fas fa-chart-bar"></i>
+                <span>Real-Time Progress Tracking</span>
               </li>
               <li>
-                <i className="bx bxs-category"></i>
-                <span>Category-Based Organization</span>
-              </li>
-              <li>
-                <i className="bx bxs-pie-chart"></i>
-                <span>Visual Budget Distribution</span>
-              </li>
-              <li>
-                <i className="bx bxs-receipt"></i>
-                <span>Transaction Integration</span>
+                <i className="fas fa-bell"></i>
+                <span>Overspending Alerts</span>
               </li>
             </ul>
           </div>
+
           
           <div className="sidebar-widget">
             <h3>Related Features</h3>
             <ul className="related-features">
               <li>
                 <a href="/features/expense-tracking">
-                  <i className="bx bxs-wallet-alt"></i>
+                  <i className="fas fa-wallet"></i>
                   <span>Expense Tracking</span>
                 </a>
               </li>
               <li>
                 <a href="/features/financial-goals">
-                  <i className="bx bxs-flag-alt"></i>
+                  <i className="fas fa-flag"></i>
                   <span>Financial Goals</span>
                 </a>
               </li>
               <li>
                 <a href="/features/financial-reports">
-                  <i className="bx bxs-report"></i>
+                  <i className="fas fa-file-alt"></i>
                   <span>Financial Reports</span>
                 </a>
               </li>
@@ -316,7 +310,7 @@ const SmartBudgetingDetails: React.FC = () => {
           
           <div className="sidebar-testimonial">
             <div className="testimonial-content">
-              <i className="bx bxs-quote-left"></i>
+              <i className="fas fa-quote-left"></i>
               <p>"BudgetMe's budgeting tools helped me identify where my money was going and take control of my spending. I've saved over $300 per month!"</p>
             </div>
             <div className="testimonial-author">

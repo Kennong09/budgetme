@@ -1799,18 +1799,35 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
             {/* Feature Card 6 - AI Insights with enhanced premium styling */}
             <div 
               className={`feature-card premium ${hoveredFeature && hoveredFeature !== 'ai' ? 'feature-dimmed' : ''} ${activeFeature === 'ai' ? 'feature-active' : ''} ${animatedSections.features ? 'animate__animated animate__fadeInUp animation-delay-600' : ''}`}
-              onClick={() => handleFeatureClick('ai', "/ai-insights")}
+              onClick={() => handleFeatureClick('ai', "/features/ai-insights")}
               onMouseEnter={() => handleFeatureHover('ai')}
               onMouseLeave={handleFeatureLeave}
             >
-              <div className="feature-premium-badge">
-                <i className="bx bxs-crown"></i> Premium
+              <div className="feature-badge" style={{
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                color: 'white',
+                padding: '4px 12px',
+                borderRadius: '12px',
+                fontSize: '12px',
+                fontWeight: '600',
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                display: 'flex',
+                alignItems: 'center',
+              }}>
+                <i className="bx bx-brain" style={{
+                  animation: 'none',
+                  transform: 'none',
+                  transition: 'none',
+                  marginRight: '4px'
+                }}></i>Limited
               </div>
               <div className="feature-icon-wrapper teal">
                 <i className="bx bx-brain"></i>
               </div>
-              <h3>AI Insights</h3>
-              <p>Let our AI analyze your spending patterns and provide personalized financial advice.</p>
+              <h3>AI Financial Insights</h3>
+              <p>Harness the power of artificial intelligence to analyze your spending patterns.</p>
               <div className="feature-progress">
                 <div className="progress-bar premium-bar">
                   <div className="progress-fill" style={{ width: `${progressValues.ai}%` }}></div>
@@ -1818,12 +1835,16 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                 <span className="progress-label">Smart predictions</span>
               </div>
               <ul className="feature-list">
-                <li><i className="bx bx-check"></i> Spending forecasts</li>
-                <li><i className="bx bx-check"></i> Savings suggestions</li>
-                <li><i className="bx bx-check"></i> Financial planning</li>
+                <li><i className="bx bx-check"></i> Predictive spending forecasts</li>
+                <li><i className="bx bx-check"></i> Personalized savings suggestions</li>
+                <li><i className="bx bx-check"></i> Pattern recognition alerts</li>
               </ul>
-              <div className="feature-cta premium-cta">
-                <span>Try Premium</span>
+              <div 
+                className="feature-cta premium-cta"
+                onClick={() => navigate("/features/ai-insights")}
+                style={{ cursor: "pointer" }}
+              >
+                <span>Explore AI Features</span>
                 <i className="bx bx-right-arrow-alt"></i>
               </div>
               <div className="feature-hover-indicator"></div>
@@ -1975,8 +1996,11 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                   <li><i className="bx bx-check"></i> Smart suggestions</li>
                 </ul>
                 <div className="process-action">
-                  <button className="btn-process premium-process">
-                    Try Premium <i className="bx bx-crown"></i>
+                  <button 
+                    className="btn-process premium-process"
+                    onClick={() => navigate("/features/ai-insights")}
+                  >
+                    Get Started <i className="bx bx-crown"></i>
                   </button>
                 </div>
               </div>
@@ -2652,7 +2676,7 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
               className={`module-app ${animatedSections.modules ? 'animate__animated animate__fadeInUp animation-delay-600' : ''}`}
               onMouseEnter={() => setHoveredModule('ai')}
               onMouseLeave={() => setHoveredModule(null)}
-              onClick={() => navigate('/ai-predictions')}
+              onClick={() => navigate('/features/ai-insights')}
               style={{ cursor: 'pointer' }}
             >
               <div className="module-header">
@@ -2733,7 +2757,7 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                   className="module-cta"
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate('/ai-predictions');
+                    navigate('/features/ai-insights');
                   }}
                 >
                   <span>Upgrade</span>

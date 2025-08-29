@@ -11,6 +11,18 @@ import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
 
+// Import modular components
+import { BudgetItem, FilterState } from "./types";
+import LoadingSpinner from "./components/shared/LoadingSpinner";
+import ErrorMessage from "./components/shared/ErrorMessage";
+import StatCard from "./components/shared/StatCard";
+import InfoTooltip from "./components/shared/InfoTooltip";
+import DeleteModal from "./components/shared/DeleteModal";
+import BudgetCard from "./components/budget/BudgetCard";
+import FilterControls from "./components/budget/FilterControls";
+import ChartContainer from "./components/charts/ChartContainer";
+import BudgetChart from "./components/charts/BudgetChart";
+
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
 
@@ -18,31 +30,6 @@ import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
 import "animate.css";
 
 // Component interfaces
-
-interface BudgetItem {
-  id: string;
-  category_name: string;  // Changed from category to match budget_details view
-  amount: number;         // Changed from budget to match budget_details view
-  spent: number;
-  remaining: number;
-  percentage: number;
-  status: "success" | "warning" | "danger";
-  start_date: string;     // Changed from period_start to match budget_details view
-  month: string;
-  year: number;           // Changed from string to match budget_details view
-  period: string;         // Added to match budget_details view
-  end_date: string;       // Added to match budget_details view
-  category_id: string;    // Added to match budget_details view
-}
-
-interface FilterState {
-  categoryId: string;
-  status: "all" | "success" | "warning" | "danger";
-  search: string;
-  month: string;
-  year: string;
-  scope: "all" | "personal" | "family"; // Filter for personal or family budgets
-}
 
 
 interface BarChartConfig {
@@ -1417,19 +1404,7 @@ const Budgets: FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="container-fluid">
-        <div className="text-center my-5 py-5 animate__animated animate__fadeIn">
-          <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
-            <span className="sr-only">Loading...</span>
-          </div>
-          <h5 className="mt-4 text-gray-600 font-weight-light">
-            Loading Budgets
-          </h5>
-          <p className="text-gray-500">Please wait while we fetch your budget data...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Please wait while we fetch your budget data..." />;
   }
 
   // Calculate totals based on filtered budgets
@@ -1456,140 +1431,81 @@ const Budgets: FC = () => {
 
       {/* Monthly Budget Overview */}
       <div className="row">
-        <div className="col-xl-4 col-md-6 mb-4">
-          <div className="card border-left-primary shadow h-100 py-2 animate__animated animate__fadeIn">
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-primary text-uppercase mb-1 d-flex align-items-center">
-                    Total Budget
-                    <div className="ml-2 position-relative">
-                      <i 
-                        className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                        onClick={(e) => toggleTip('totalBudget', e)}
-                        aria-label="Total budget information"
-                      ></i>
-                    </div>
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {formatCurrency(totalBudget)}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-solid fa-peso-sign fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          title="Total Budget"
+          value={formatCurrency(totalBudget)}
+          icon="solid fa-peso-sign"
+          borderColor="primary"
+          showTooltip={true}
+          tooltipId="totalBudget"
+          onClick={(e) => toggleTip('totalBudget', e)}
+          animationDelay="0s"
+        />
 
-        <div className="col-xl-4 col-md-6 mb-4">
-          <div className="card border-left-danger shadow h-100 py-2 animate__animated animate__fadeIn" style={{ animationDelay: "0.1s" }}>
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-danger text-uppercase mb-1 d-flex align-items-center">
-                    Total Spent
-                    <div className="ml-2 position-relative">
-                      <i 
-                        className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                        onClick={(e) => toggleTip('totalSpent', e)}
-                        aria-label="Total spent information"
-                      ></i>
-                    </div>
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {formatCurrency(totalSpent)}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-credit-card fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          title="Total Spent"
+          value={formatCurrency(totalSpent)}
+          icon="credit-card"
+          borderColor="danger"
+          showTooltip={true}
+          tooltipId="totalSpent"
+          onClick={(e) => toggleTip('totalSpent', e)}
+          animationDelay="0.1s"
+        />
 
-        <div className="col-xl-4 col-md-6 mb-4">
-          <div className="card border-left-success shadow h-100 py-2 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-success text-uppercase mb-1 d-flex align-items-center">
-                    Remaining Budget
-                    <div className="ml-2 position-relative">
-                      <i 
-                        className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                        onClick={(e) => toggleTip('remaining', e)}
-                        aria-label="Remaining budget information"
-                      ></i>
-                    </div>
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {formatCurrency(totalRemaining)}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-piggy-bank fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          title="Remaining Budget"
+          value={formatCurrency(totalRemaining)}
+          icon="piggy-bank"
+          borderColor="success"
+          showTooltip={true}
+          tooltipId="remaining"
+          onClick={(e) => toggleTip('remaining', e)}
+          animationDelay="0.2s"
+        />
       </div>
 
       <div className="row">
         {/* Budget vs Spending Chart */}
         <div className="col-xl-8 col-lg-7">
-          <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.3s" }}>
-            <div className="card-header py-3">
-              <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
-                Budget vs Spending - {getPeriodTitle()}
-                <div className="ml-2 position-relative">
-                  <i 
-                    className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                    onClick={(e) => toggleTip('barChart', e)}
-                    aria-label="Bar chart information"
-                  ></i>
-                </div>
-              </h6>
-            </div>
-            <div className="card-body">
-              {barChartOptions && filteredBudgets.length > 0 ? (
-                <>
-                <HighchartsReact
-                  highcharts={Highcharts}
+          <ChartContainer
+            title={`Budget vs Spending - ${getPeriodTitle()}`}
+            showInfo={true}
+            onInfoClick={(e) => toggleTip('barChart', e)}
+            animationDelay="0.3s"
+          >
+            {barChartOptions && filteredBudgets.length > 0 ? (
+              <>
+                <BudgetChart
                   options={barChartOptions}
-                  callback={barChartCallback}
-                  ref={barChartRef}
+                  chartRef={barChartRef}
                 />
-              <div className="mt-3 text-xs text-gray-500">
-                <i className="fas fa-lightbulb text-warning mr-1"></i>
-                <strong>Tip:</strong> Hover over each bar to see exact budget and spending amounts. Compare blue (budget) with red (spent) to identify overspending.
-              </div>
-                </>
-              ) : (
-                <div className="text-center my-5">
-                  <div className="mb-3">
-                    <i className="fas fa-wallet fa-4x text-gray-300"></i>
-                  </div>
-                  <p className="text-gray-500">
-                    {isFiltering
-                      ? "No budgets match your filters"
-                      : showingFamilyBudgets
-                      ? "No family budgets found for this period"
-                      : "No budgets found for this period"}
-                  </p>
-                  <Link
-                    to="/budgets/create"
-                    className="btn btn-primary btn-sm"
-                  >
-                    <i className="fas fa-plus-circle fa-sm mr-1"></i> Create New Budget
-                  </Link>
+                <div className="mt-3 text-xs text-gray-500">
+                  <i className="fas fa-lightbulb text-warning mr-1"></i>
+                  <strong>Tip:</strong> Hover over each bar to see exact budget and spending amounts. Compare blue (budget) with red (spent) to identify overspending.
                 </div>
-              )}
-            </div>
-          </div>
+              </>
+            ) : (
+              <div className="text-center my-5">
+                <div className="mb-3">
+                  <i className="fas fa-wallet fa-4x text-gray-300"></i>
+                </div>
+                <p className="text-gray-500">
+                  {isFiltering
+                    ? "No budgets match your filters"
+                    : showingFamilyBudgets
+                    ? "No family budgets found for this period"
+                    : "No budgets found for this period"}
+                </p>
+                <Link
+                  to="/budgets/create"
+                  className="btn btn-primary btn-sm"
+                >
+                  <i className="fas fa-plus-circle fa-sm mr-1"></i> Create New Budget
+                </Link>
+              </div>
+            )}
+          </ChartContainer>
 
           {/* Overall Budget Progress */}
           <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.4s" }}>
@@ -1606,85 +1522,85 @@ const Budgets: FC = () => {
                   </div>
                 </div>
                 {filteredBudgets.length > 0 && (
-                <div className={`badge badge-${
-                  overallPercentage >= 90 ? "danger" : 
-                  overallPercentage >= 75 ? "warning" : 
-                  "success"
-                } ml-2`}>
-                  {overallPercentage >= 90 ? "At Risk" : overallPercentage >= 75 ? "Caution" : "Healthy"}
-                </div>
+                  <div className={`badge badge-${
+                    overallPercentage >= 90 ? "danger" : 
+                    overallPercentage >= 75 ? "warning" : 
+                    "success"
+                  } ml-2`}>
+                    {overallPercentage >= 90 ? "At Risk" : overallPercentage >= 75 ? "Caution" : "Healthy"}
+                  </div>
                 )}
               </h6>
             </div>
             <div className="card-body">
               {filteredBudgets.length > 0 ? (
                 <>
-              <div className="mb-2 d-flex justify-content-between">
-                <span>Overall Progress</span>
-                <span className={`font-weight-bold ${
-                  overallPercentage >= 90 ? "text-danger" : 
-                  overallPercentage >= 75 ? "text-warning" : 
-                  "text-success"
-                }`}>{formatPercentage(overallPercentage)}</span>
-              </div>
-              <div className="progress mb-4">
-                <div
-                  className={`progress-bar ${
-                    overallPercentage >= 90 
-                      ? "bg-danger" 
-                      : overallPercentage >= 75 
-                      ? "bg-warning" 
-                      : "bg-success"
-                  }`}
-                  role="progressbar"
-                  style={{
-                    width: `${overallPercentage}%`,
-                  }}
-                  aria-valuenow={overallPercentage}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  title={formatPercentage(overallPercentage)}
-                >
-                </div>
-              </div>
-              
-              <div className="mt-4 text-xs font-weight-bold text-gray-500 text-uppercase mb-1">Budget Status</div>
-              <div className="row">
-                <div className="col-md-4 mb-4">
-                  <div className="card bg-success text-white shadow">
-                    <div className="card-body py-3">
-                      On Track
-                      <div className="text-white-50 small">Under budget</div>
+                  <div className="mb-2 d-flex justify-content-between">
+                    <span>Overall Progress</span>
+                    <span className={`font-weight-bold ${
+                      overallPercentage >= 90 ? "text-danger" : 
+                      overallPercentage >= 75 ? "text-warning" : 
+                      "text-success"
+                    }`}>{formatPercentage(overallPercentage)}</span>
+                  </div>
+                  <div className="progress mb-4">
+                    <div
+                      className={`progress-bar ${
+                        overallPercentage >= 90 
+                          ? "bg-danger" 
+                          : overallPercentage >= 75 
+                          ? "bg-warning" 
+                          : "bg-success"
+                      }`}
+                      role="progressbar"
+                      style={{
+                        width: `${overallPercentage}%`,
+                      }}
+                      aria-valuenow={overallPercentage}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      title={formatPercentage(overallPercentage)}
+                    >
                     </div>
                   </div>
-                </div>
-                <div className="col-md-4 mb-4">
-                  <div className="card bg-warning text-white shadow">
-                    <div className="card-body py-3">
-                      Caution
-                      <div className="text-white-50 small">Near limit</div>
+                  
+                  <div className="mt-4 text-xs font-weight-bold text-gray-500 text-uppercase mb-1">Budget Status</div>
+                  <div className="row">
+                    <div className="col-md-4 mb-4">
+                      <div className="card bg-success text-white shadow">
+                        <div className="card-body py-3">
+                          On Track
+                          <div className="text-white-50 small">Under budget</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4 mb-4">
+                      <div className="card bg-warning text-white shadow">
+                        <div className="card-body py-3">
+                          Caution
+                          <div className="text-white-50 small">Near limit</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-4 mb-4">
+                      <div className="card bg-danger text-white shadow">
+                        <div className="card-body py-3">
+                          Attention
+                          <div className="text-white-50 small">Over budget</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="col-md-4 mb-4">
-                  <div className="card bg-danger text-white shadow">
-                    <div className="card-body py-3">
-                      Attention
-                      <div className="text-white-50 small">Over budget</div>
-                    </div>
+                  <div className="mt-3 text-xs text-gray-500">
+                    <i className="fas fa-lightbulb text-warning mr-1"></i>
+                    <strong>Tip:</strong> The color of the progress bar indicates your budget health: green is good, yellow means caution, and red indicates potential overspending.
                   </div>
-                </div>
-              </div>
-              <div className="mt-3 text-xs text-gray-500">
-                <i className="fas fa-lightbulb text-warning mr-1"></i>
-                <strong>Tip:</strong> The color of the progress bar indicates your budget health: green is good, yellow means caution, and red indicates potential overspending.
-              </div>
                 </>
               ) : (
                 <div className="text-center p-4">
                   <div className="mb-3">
                     <i className="fas fa-tasks fa-3x text-gray-300"></i>
-            </div>
+                  </div>
                   <h5 className="text-gray-500 font-weight-light">No budget progress to display</h5>
                   <p className="text-gray-500 mb-0 small">Add budgets to track your spending progress.</p>
                 </div>

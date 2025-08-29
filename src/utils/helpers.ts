@@ -4,28 +4,15 @@ import { Transaction, Goal } from "../types";
 import { currencySymbols } from "./CurrencyContext";
 import { supabase } from "./supabaseClient";
 
-// Format currency based on user preference
-export const formatCurrency = (amount: number, currency = 'PHP'): string => {
-  // Get currency code from preferences or use PHP as default
-  const savedCurrency = localStorage.getItem('preferredCurrency') || currency;
-  
-  // Define currency formatting options based on currency code
-  const options: Intl.NumberFormatOptions = {
-    style: "currency",
-    currency: savedCurrency,
+// Format currency - FORCED TO PHP ONLY
+// All currencies are now displayed as Philippine Pesos (₱)
+export const formatCurrency = (amount: number): string => {
+  // Always format as PHP - no other currency options allowed
+  return '₱' + new Intl.NumberFormat("en-US", {
+    style: "decimal",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  };
-
-  // Special case for PHP to ensure we use ₱ symbol instead of the default PHP
-  if (savedCurrency === 'PHP') {
-    return '₱' + new Intl.NumberFormat("en-US", {
-      ...options,
-      style: "decimal", // Use decimal to prevent "PHP" prefix
-    }).format(amount);
-  }
-
-  return new Intl.NumberFormat("en-US", options).format(amount);
+  }).format(amount);
 };
 
 // Format date to display in a more readable format

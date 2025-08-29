@@ -26,14 +26,25 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 };
 
 export const signUpWithEmail = async (email: string, password: string, metadata: { full_name: string }): Promise<AuthResponse> => {
+  // Get site URL from environment or fallback to current origin
+  const siteUrl = process.env.REACT_APP_SITE_URL || window.location.origin;
+  
+  console.log('Signing up user:', { email, siteUrl });
+  
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: metadata,
-      emailRedirectTo: `${window.location.origin}/auth/callback`,
+      emailRedirectTo: `${siteUrl}/auth/callback`,
     },
   });
+  
+  if (error) {
+    console.error('Sign up error:', error);
+  } else {
+    console.log('Sign up success:', { user: data?.user?.id, emailConfirmed: data?.user?.email_confirmed_at });
+  }
   
   return {
     user: data?.user || null,
@@ -74,13 +85,24 @@ export const resetPassword = async (email: string): Promise<{ error: AuthError |
 
 // Resend verification email
 export const resendVerificationEmail = async (email: string): Promise<{ error: AuthError | null }> => {
+  // Get site URL from environment or fallback to current origin
+  const siteUrl = process.env.REACT_APP_SITE_URL || window.location.origin;
+  
+  console.log('Resending verification email:', { email, siteUrl });
+  
   const { error } = await supabase.auth.resend({
     type: 'signup',
     email,
     options: {
-      emailRedirectTo: `${window.location.origin}/auth/callback`,
+      emailRedirectTo: `${siteUrl}/auth/callback`,
     },
   });
+  
+  if (error) {
+    console.error('Resend verification email error:', error);
+  } else {
+    console.log('Resend verification email success');
+  }
   
   return {
     error: error ? { message: error.message } : null,

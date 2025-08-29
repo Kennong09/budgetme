@@ -120,8 +120,8 @@
   position: fixed;
   bottom: calc(var(--chat-spacing-xl) + 80px);
   right: var(--chat-spacing-xl);
-  width: 380px;
-  height: 520px;
+  width: 320px;
+  height: 450px;
   background: var(--chat-secondary-color);
   border-radius: var(--chat-border-radius-xl);
   box-shadow: var(--chat-shadow-2xl);
@@ -137,7 +137,7 @@
 
 .chat-window.minimized {
   height: 60px;
-  width: 280px;
+  width: 240px;
   animation: minimize 0.3s ease-out;
 }
 
@@ -1083,7 +1083,7 @@
 
 @keyframes minimize {
   from {
-    height: 520px;
+    height: 450px;
   }
   to {
     height: 60px;
@@ -1308,8 +1308,8 @@
 /* Ultra-wide screen support */
 @media (min-width: 1200px) {
   .chat-window {
-    width: 400px;
-    height: 600px;
+    width: 340px;
+    height: 480px;
   }
 
   .floating-chat-button, .floating-close-button {

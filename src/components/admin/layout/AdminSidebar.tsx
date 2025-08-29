@@ -3,18 +3,14 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../utils/AuthContext";
 import "animate.css";
 import { isUserAdmin } from "../../../utils/adminHelpers";
+import { useClickOutside, useUserData } from "../../layout/shared/hooks";
+import { UserProfile, NavigationMenu, QuickAccess } from "../../layout/shared/components";
 
 interface NavItem {
   id: number;
   path: string;
   label: string;
   icon: string;
-}
-
-interface UserInfo {
-  name: string;
-  email: string;
-  profilePicture?: string;
 }
 
 interface AdminSidebarProps {
@@ -29,22 +25,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
   const { logout, user, loading: authLoading } = useAuth();
   const [activeItem, setActiveItem] = useState<number | null>(null);
   const [compactMode, setCompactMode] = useState<boolean>(false);
-  const [showTooltip, setShowTooltip] = useState<{show: boolean, id: number | null, label: string}>({
-    show: false,
-    id: null,
-    label: ""
-  });
-  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
-  const [userInfo, setUserInfo] = useState<UserInfo>({
-    name: "",
-    email: "",
-    profilePicture: ""
-  });
+  const userInfo = useUserData();
   const [isPending, startTransition] = useTransition();
   const [isCheckingAdmin, setIsCheckingAdmin] = useState(false);
   const [adminCheckComplete, setAdminCheckComplete] = useState(false);
   const sidebarRef = useRef<HTMLUListElement>(null);
-  const navRefs = useRef<{[key: number]: HTMLLIElement | null}>({});
   
   // Use a single loading state for better UX
   const isLoading = authLoading || isCheckingAdmin || isPending;
@@ -65,9 +50,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
     } catch (e) {
       console.error("Error accessing localStorage:", e);
     }
-    
-    // Load user data immediately without waiting for admin check
-    loadUserData();
   }, []); // Empty dependency array ensures this runs only once on mount
   
   // Check admin status only once on initial mount or when user changes
@@ -151,50 +133,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
   }, [isOpen]);
   
   // Handle clicking outside of sidebar on mobile
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        isOpen &&
-        window.innerWidth < 768 && 
-        sidebarRef.current && 
-        !sidebarRef.current.contains(event.target as Node)
-      ) {
-        if (onToggleSidebar) onToggleSidebar();
-      }
-    };
-    
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen, onToggleSidebar]);
-  
-  // Load user data from auth context
-  const loadUserData = () => {
-    // Check if user is authenticated first
-    if (!user) {
-      // If not authenticated, clear user info
-      startTransition(() => {
-        setUserInfo({
-          name: "",
-          email: "",
-          profilePicture: "../images/placeholder.png"
-        });
-      });
-      return;
+  useClickOutside(sidebarRef, () => {
+    if (isOpen && window.innerWidth < 768 && onToggleSidebar) {
+      onToggleSidebar();
     }
-    
-    // Use auth user data if available
-    if (user) {
-      const userData = {
-        name: user.user_metadata?.full_name || user.email?.split('@')[0] || "Admin",
-        email: user.email || "admin@example.com",
-        profilePicture: user.user_metadata?.avatar_url || "../images/placeholder.png"
-      };
-      startTransition(() => {
-        setUserInfo(userData);
-      });
-      return;
-    }
-  };
+  }, isOpen && window.innerWidth < 768);
   
   // Handle sidebar toggle button click
   const handleToggleSidebar = () => {
@@ -203,19 +146,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
   
   // Handle tooltip display
   const handleMouseEnter = (itemId: number, label: string, event: React.MouseEvent<HTMLLIElement>) => {
-    if (compactMode) {
-      const targetElement = event.currentTarget;
-      const rect = targetElement.getBoundingClientRect();
-      setTooltipPosition({ 
-        top: rect.top + window.scrollY,
-        left: rect.right + window.scrollX + 10
-      });
-      setShowTooltip({ show: true, id: itemId, label });
-    }
+    // Tooltip is handled in NavigationMenu component
   };
   
   const handleMouseLeave = () => {
-    setShowTooltip({ show: false, id: null, label: "" });
+    // Tooltip is handled in NavigationMenu component
   };
 
   // Define navigation items for admin panel
@@ -325,6 +260,23 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
     }
   };
 
+  // Handle navigation item click
+  const handleNavigationItemClick = (item: NavItem) => {
+    setActiveItem(item.id);
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 768 && isOpen && onToggleSidebar) {
+      onToggleSidebar();
+    }
+  };
+
+  // Define quick access items
+  const quickAccessItems = [
+    { id: "add-user", path: "/admin/users/add", label: "Add User", icon: "fa-user-plus" },
+    { id: "analytics", path: "/admin/dashboard", label: "Analytics", icon: "fa-chart-bar" },
+    { id: "settings", path: "/admin/settings", label: "Settings", icon: "fa-cog" },
+    { id: "reports", path: "/admin/reports", label: "Reports", icon: "fa-file-alt" }
+  ];
+
   // Show loading state while checking admin status
   if (isLoading) {
     return (
@@ -343,88 +295,31 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
         ref={sidebarRef}
         style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
       >
-        {/* Sidebar - Brand */}
-        <Link
-          className="sidebar-brand d-flex align-items-center justify-content-center"
-          to="/admin/dashboard"
-        >
-          <div className="sidebar-brand-icon rotate-n-15">
-            <i className="fas fa-shield-alt"></i>
-          </div>
-          <div className="sidebar-brand-text mx-3">
-            {compactMode ? "BM-A" : "BudgetMe Admin"}
-          </div>
-        </Link>
-        
-        {/* User Profile Card */}
-        <div className={`user-profile-compact text-center my-2 
-          ${compactMode ? "compact-profile" : ""}`}>
-          <img 
-            src={userInfo.profilePicture}
-            alt={userInfo.name}
-            className="img-profile rounded-circle mx-auto mb-2 border-2 shadow-sm"
-            style={{ 
-              width: compactMode ? "40px" : "65px", 
-              height: compactMode ? "40px" : "65px", 
-              border: "2px solid rgba(255,255,255,0.3)" 
-            }}
-          />
-          <div className="sidebar-user-details">
-            {!compactMode && (
-              <>
-                <div className="text-white font-weight-bold">{userInfo.name}</div>
-                <div className="text-white-50 small">{userInfo.email}</div>
-                <div className="mt-1">
-                  <span className="badge badge-light">Administrator</span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Divider */}
-        <hr className="sidebar-divider my-0" />
+        {/* User Profile Section */}
+        <UserProfile 
+          userInfo={userInfo}
+          compactMode={compactMode}
+          variant="admin"
+        />
 
         {/* Scrollable content area */}
         <div className="sidebar-content" style={{ flex: '1', overflowY: 'auto', overflowX: 'hidden' }}>
-          {/* Nav Items */}
-          {navItems.map((item) => (
-            <li
-              key={item.id}
-              ref={el => navRefs.current[item.id] = el}
-              className={`nav-item ${activeItem === item.id ? "active" : ""}`}
-              onMouseEnter={(e) => handleMouseEnter(item.id, item.label, e)}
-              onMouseLeave={handleMouseLeave}
-            >
-              <Link
-                className="nav-link"
-                to={item.path}
-                onClick={() => {
-                  setActiveItem(item.id);
-                  // Close sidebar on mobile after navigation
-                  if (window.innerWidth < 768 && isOpen && onToggleSidebar) {
-                    onToggleSidebar();
-                  }
-                }}
-              >
-                <i className={`fas ${item.icon} fa-fw`}></i>
-                {!compactMode && <span>{item.label}</span>}
-                {activeItem === item.id && !compactMode && (
-                  <span className="position-absolute right-0 mr-3 pulse-border"></span>
-                )}
-              </Link>
-            </li>
-          ))}
+          {/* Navigation Menu */}
+          <NavigationMenu
+            items={navItems}
+            activeItemId={activeItem}
+            onItemClick={handleNavigationItemClick}
+            compactMode={compactMode}
+            onItemHover={handleMouseEnter}
+            onItemLeave={handleMouseLeave}
+            variant="admin"
+          />
 
           {/* Divider */}
           <hr className="sidebar-divider" />
           
           {/* Back to user dashboard */}
-          <li 
-            className="nav-item"
-            onMouseEnter={(e) => handleMouseEnter(101, "User Dashboard", e)}
-            onMouseLeave={handleMouseLeave}
-          >
+          <li className="nav-item">
             <button 
               className="nav-link btn btn-link text-left w-100" 
               onClick={returnToUserView}
@@ -435,11 +330,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
           </li>
           
           {/* Logout */}
-          <li 
-            className="nav-item"
-            onMouseEnter={(e) => handleMouseEnter(102, "Logout", e)}
-            onMouseLeave={handleMouseLeave}
-          >
+          <li className="nav-item">
             <button 
               className="nav-link btn btn-link text-left w-100" 
               onClick={handleLogout}
@@ -464,41 +355,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
             </button>
           </div>
           
-          {/* Admin Quick Access */}
-          {!compactMode && (
-            <>
-              <hr className="sidebar-divider" />
-              <div className="sidebar-heading">Quick Access</div>
-              <div className="sidebar-favorites px-3 py-2">
-                <div className="d-flex flex-wrap justify-content-around">
-                  <Link to="/admin/users/add" className="favorite-item mb-2">
-                    <div className="circle-icon">
-                      <i className="fas fa-user-plus"></i>
-                    </div>
-                    <span>Add User</span>
-                  </Link>
-                  <Link to="/admin/dashboard" className="favorite-item mb-2">
-                    <div className="circle-icon">
-                      <i className="fas fa-chart-bar"></i>
-                    </div>
-                    <span>Analytics</span>
-                  </Link>
-                  <Link to="/admin/settings" className="favorite-item mb-2">
-                    <div className="circle-icon">
-                      <i className="fas fa-cog"></i>
-                    </div>
-                    <span>Settings</span>
-                  </Link>
-                  <Link to="/admin/reports" className="favorite-item">
-                    <div className="circle-icon">
-                      <i className="fas fa-file-alt"></i>
-                    </div>
-                    <span>Reports</span>
-                  </Link>
-                </div>
-              </div>
-            </>
-          )}
+          {/* Quick Access Section */}
+          <QuickAccess
+            items={quickAccessItems}
+            compactMode={compactMode}
+            heading="Quick Access"
+            variant="admin"
+          />
         </div>
         
         {/* Fixed Footer */}
@@ -528,19 +391,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
           </div>
         </div>
       </ul>
-      
-      {/* Tooltip for compact mode */}
-      {showTooltip.show && compactMode && (
-        <div 
-          className="sidebar-tooltip" 
-          style={{ 
-            top: tooltipPosition.top, 
-            left: tooltipPosition.left 
-          }}
-        >
-          {showTooltip.label}
-        </div>
-      )}
       
       {/* CSS override to ensure consistent colors */}
       <style dangerouslySetInnerHTML={{ 
@@ -617,4 +467,4 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen, onToggleSidebar, is
   );
 };
 
-export default AdminSidebar; 
+export default AdminSidebar;

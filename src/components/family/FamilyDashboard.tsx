@@ -7,12 +7,16 @@ import { useToast } from '../../utils/ToastContext';
 import HighchartsReact from 'highcharts-react-official';
 import { refreshFamilyMembershipsView } from '../../utils/helpers';
 import { useFamilyData, useFamilyMembers, useFamilyGoals, useJoinRequests } from './hooks';
+import { familyService } from '../../services/database/familyService';
+import { invitationService } from '../../services/database/invitationService';
+import { joinRequestService } from '../../services/database/joinRequestService';
 
 // Import tab components
 import OverviewTab from './tabs/OverviewTab';
 import MembersTab from './tabs/MembersTab';
 import ActivityTab from './tabs/ActivityTab';
 import GoalsTab from './tabs/GoalsTab';
+import NoFamilyHandler from './NoFamilyHandler';
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -395,377 +399,77 @@ const FamilyDashboard: React.FC = () => {
     // Prevent multiple simultaneous requests
     if (isLoadingFamily) return;
     
-    // Rate limiting is handled by the hook
-    // Loading state is now handled by the hook
-    
     try {
       // Enforce a maximum retry count to prevent infinite loops
       if (retryCount >= maxRetries) {
         showErrorToast("Could not load family data. Please refresh the page.");
-        // Loading state is handled by the hook
         return;
       }
       
-      // First try to query the family_members directly to bypass materialized view issues
-      const { data: directMemberQuery, error: directMemberError } = await supabase
-        .from('family_members')
-        .select(`
-          id,
-          family_id,
-          user_id,
-          role,
-          status,
-          created_at,
-          updated_at
-        `)
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .limit(1);
+      // Use the family service to get user's family
+      const family = await familyService.getUserFamily(user.id);
       
-      // If direct query succeeds and returns a family membership
-      if (!directMemberError && directMemberQuery && directMemberQuery.length > 0) {
-        // Fetch the family details using the family_id we got from members table
-        const familyId = directMemberQuery[0].family_id;
-        const { data: familyData, error: familyError } = await supabase
-          .from('families')
-          .select('*')
-          .eq('id', familyId)
-          .single();
-        
-        if (familyError) {
-          console.error("Error fetching family data from direct query:", familyError);
-          // Continue to fallback methods
-        } else if (familyData) {
-          setFamilyData(familyData);
-          setIsCreator(user.id === familyData.created_by);
-          
-          // Now get all members of this family
-          const { data: allMembers, error: allMembersError } = await supabase
-            .from('family_members')
-            .select(`
-              id,
-              family_id,
-              user_id,
-              role,
-              status,
-              created_at,
-              updated_at
-            `)
-            .eq('family_id', familyData.id)
-            .eq('status', 'active');
-            
-          if (allMembersError) {
-            console.error("Error fetching all family members:", allMembersError);
-            // Continue with limited data rather than failing
-          }
-          
-          // Process members just like we do below
-          let processedMembers: FamilyMember[] = [];
-          if (allMembers && allMembers.length > 0) {
-            const memberUserIds = allMembers.map(member => member.user_id);
-            
-            // Get user profiles with minimal fields to avoid policy issues
-            const { data: userProfiles, error: profilesError } = await supabase
-              .from('profiles')
-              .select(`
-                id,
-                email,
-                created_at,
-                updated_at,
-                last_sign_in_at,
-                user_metadata
-              `)
-              .in('id', memberUserIds);
-              
-            if (profilesError) {
-              console.error("Error fetching user profiles:", profilesError);
-              // Continue with limited data rather than failing
-            }
-            
-            // Match profiles with members explicitly
-            processedMembers = allMembers.map((member: any) => ({
-              ...member,
-              user: userProfiles?.find(profile => profile.id === member.user_id),
-              id: member.user_id || member.id,
-              email: userProfiles?.find(profile => profile.id === member.user_id)?.email || '',
-              full_name: userProfiles?.find(profile => profile.id === member.user_id)?.user_metadata?.full_name || 
-                        userProfiles?.find(profile => profile.id === member.user_id)?.user_metadata?.username || 
-                        userProfiles?.find(profile => profile.id === member.user_id)?.email?.split('@')[0] || 
-                        'Unknown',
-              avatar_url: userProfiles?.find(profile => profile.id === member.user_id)?.user_metadata?.avatar_url || '',
-              created_at: member.created_at || '',
-              joined_at: member.created_at || member.joined_at || ''
-            }));
-            
-            setMembers(processedMembers);
-
-            // Now that we have member IDs, fetch all relevant data
-            if (processedMembers.length > 0) {
-              // Use our callback functions to fetch and set all related data
-              await Promise.all([
-                updateTransactionData(processedMembers.map(member => member.user_id)),
-                fetchGoals(familyData.id),
-                updateRecentActivity(familyId, processedMembers.map(member => member.user_id))
-              ]);
-            }
-          } else {
-            // No members - set empty state
-            setMembers([]);
-            setTransactions([]);
-            setFamilyGoals([]);
-            setRecentActivity([]);
-            setSummaryData({
-              totalBudget: 0,
-              totalSpent: 0,
-              remainingBudget: 0,
-              savingsRate: 0,
-              upcomingBills: 0,
-              familyGoalsProgress: 0,
-            });
-            setSharedGoalPerformanceChartData(null);
-            setSharedGoalBreakdownChartData(null);
-          }
-          
-          return; // We successfully loaded data, no need to continue to other methods
+      if (!family) {
+        // If we've just created a family, try a few times before giving up
+        if (retryCount < maxRetries - 1) {
+          setTimeout(() => {
+            fetchFamilyDataInternal(retryCount + 1, maxRetries);
+          }, 1500);
+          return;
         }
+        
+        setFamilyData(null);
+        return;
       }
       
-      // Fallback 1: Try materialized view using the check_user_family function
-      const { data: checkResult, error: checkError } = await supabase.rpc(
-        'check_user_family',
-        { p_user_id: user.id }
-      );
-
-      if (checkError) {
-        console.error("Error checking family membership:", checkError);
-        
-        // Fallback 2: Try the newer direct function
-        const { data: directResult, error: directError } = await supabase.rpc(
-          'get_family_membership',
-          { p_user_id: user.id }
-        );
-        
-        if (directError) {
-          console.error("Error using direct membership check:", directError);
-          
-          // If we've already tried and we're still getting errors,
-          // it might be that the materialized view hasn't refreshed yet after creating the family
-          if (retryCount < maxRetries - 1) {
-            setTimeout(() => {
-              fetchFamilyDataInternal(retryCount + 1, maxRetries);
-            }, 1500);
-            return;
-          }
-           
-          // After max retries
-          showErrorToast(`Error checking family status: ${checkError.message}`);
-          return;
+      setFamilyData(family);
+      setIsCreator(user.id === family.created_by);
+      
+      // Get family members using the service
+      const members = await familyService.getFamilyMembers(family.id);
+      setMembers(members);
+      
+      // Now that we have member IDs, fetch all relevant data
+      if (members.length > 0) {
+        try {
+          // Use our callback functions to fetch and set all related data
+          await Promise.all([
+            updateTransactionData(members.map(member => member.user_id)),
+            fetchGoals(family.id),
+            updateRecentActivity(family.id, members.map(member => member.user_id))
+          ]);
+        } catch (err) {
+          console.error("Error fetching related data:", err);
+          // Continue with limited data
         }
-        
-        // Use the direct result if available
-        if (directResult && directResult.is_member) {
-          // Fetch family details directly since we have them already
-          const familyFromDirect = {
-            id: directResult.family_id,
-            family_name: directResult.family_name,
-            description: directResult.description || "",
-            currency_pref: directResult.currency_pref || "",
-            created_by: "", // We don't have this info in the direct query
-            created_at: "",  // We don't have this info in the direct query
-            updated_at: ""  // Added to satisfy Family type
-          };
-          
-          setFamilyData(familyFromDirect);
-          
-          // Fetch the rest of the family details including created_by if needed
-          const { data: fullFamilyDetails, error: fullFamilyError } = await supabase
-            .from('families')
-            .select(`
-              id,
-              family_name,
-              description,
-              currency_pref,
-              created_by,
-              created_at,
-              updated_at
-            `)
-            .eq('id', directResult.family_id)
-            .single();
-            
-          if (!fullFamilyError && fullFamilyDetails) {
-            setFamilyData(fullFamilyDetails);
-            setIsCreator(user.id === fullFamilyDetails.created_by);
-          }
-          
-          // Fall through to the rest of the data loading code - no early return
-        } else {
-          // If we've just created a family, try a few times before giving up
-          if (retryCount < maxRetries - 1) {
-            setTimeout(() => {
-              fetchFamilyDataInternal(retryCount + 1, maxRetries);
-            }, 1500);
-            return;
-          }
-           
-          // After max retries
-          setFamilyData(null);
-          return;
-        }
-      } else if (checkResult) {
-        // Now checkResult could be either a JSON object (old format) or a row from the table function (new format)
-        
-        // Handle both the old JSON format and the new table format
-        let isMember = false;
-        let familyId = null;
-        
-        if (Array.isArray(checkResult) && checkResult.length > 0) {
-          // New table structure format (array of rows)
-          isMember = checkResult[0].is_member;
-          familyId = checkResult[0].family_id;
-        } else if (checkResult.is_member !== undefined) {
-          // Old JSON format
-          isMember = checkResult.is_member;
-          familyId = checkResult.family_id;
-        }
-        
-        if (!isMember || !familyId) {
-          // If we've just created a family, try a few times before giving up
-          if (retryCount < maxRetries - 1) {
-            setTimeout(() => {
-              fetchFamilyDataInternal(retryCount + 1, maxRetries);
-            }, 1500);
-            return;
-          }
-           
-          // After max retries
-          setFamilyData(null);
-          return;
-        }
-        
-        // Fetch full family data using the family ID
-        const { data, error } = await supabase
-          .from("families")
-          .select(`
-            id,
-            family_name,
-            description,
-            currency_pref,
-            created_by,
-            created_at,
-            updated_at
-          `)
-          .eq("id", familyId)
-          .single();
-
-        if (error) {
-          console.error("Error fetching family data:", error);
-          showErrorToast("Failed to load family data");
-          // Navigate handled elsewhere
-          return;
-        }
-
-        setFamilyData(data);
-        
-        // Check if current user is the creator of the family
-
-        setIsCreator(user.id === data.created_by);
-        
-        // 2. Get family members using a more direct approach
-        const { data: members, error: membersError } = await supabase
-          .from('family_members')
-          .select(`
-            id,
-            family_id,
-            user_id,
-            role,
-            status,
-            created_at,
-            updated_at
-          `)
-          .eq('family_id', data.id)
-          .eq('status', 'active');
-
-        if (membersError) {
-          console.error(`Error fetching family members: ${membersError.message}`);
-          // Don't throw error, continue with limited data
-        }
-
-        // Fetch user profiles separately to avoid recursion issues
-        let processedMembers: FamilyMember[] = [];
-        if (members && members.length > 0) {
-          const memberUserIds = members.map((member: any) => member.user_id);
-          
-          // Get user profiles with minimal fields to avoid policy issues
-          const { data: userProfiles, error: profilesError } = await supabase
-            .from('profiles')
-            .select(`
-              id,
-              email,
-              created_at,
-              updated_at,
-              last_sign_in_at,
-              user_metadata
-            `)
-            .in('id', memberUserIds);
-            
-          if (profilesError) {
-            console.error("Error fetching user profiles:", profilesError);
-            // Continue with limited data rather than failing
-          }
-          
-          // Match profiles with members explicitly
-          processedMembers = members.map((member: any) => ({
-            ...member,
-            user: userProfiles?.find(profile => profile.id === member.user_id),
-            id: member.user_id || member.id,
-            email: userProfiles?.find(profile => profile.id === member.user_id)?.email || '',
-            full_name: userProfiles?.find(profile => profile.id === member.user_id)?.user_metadata?.full_name || 
-                      userProfiles?.find(profile => profile.id === member.user_id)?.user_metadata?.username || 
-                      userProfiles?.find(profile => profile.id === member.user_id)?.email?.split('@')[0] || 
-                      'Unknown',
-            avatar_url: userProfiles?.find(profile => profile.id === member.user_id)?.user_metadata?.avatar_url || '',
-            created_at: member.created_at || '',
-            joined_at: member.created_at || member.joined_at || ''
-          }));
-          
-          setMembers(processedMembers);
-
-          // 3. Now that we have member IDs, fetch all relevant data
-          if (processedMembers.length > 0) {
-            try {
-                          // Use our callback functions to fetch and set all related data
-            await Promise.all([
-              updateTransactionData(processedMembers.map(member => member.user_id)),
-              fetchGoals(data.id),
-              updateRecentActivity(data.id, processedMembers.map(member => member.user_id))
-            ]);
-            } catch (err) {
-              console.error("Error fetching related data:", err);
-              // Continue with limited data
-            }
-          }
-        } else {
-          // No members - set empty state
-          setMembers([]);
-          setTransactions([]);
-          setFamilyGoals([]);
-          setRecentActivity([]);
-          setSummaryData({
-            income: 0,
-            expenses: 0,
-            balance: 0,
-            savingsRate: 0,
-          });
-          setSharedGoalPerformanceChartData(null);
-          setSharedGoalBreakdownChartData(null);
-        }
+      } else {
+        // No members - set empty state
+        setMembers([]);
+        setTransactions([]);
+        setFamilyGoals([]);
+        setRecentActivity([]);
+        setSummaryData({
+          income: 0,
+          expenses: 0,
+          balance: 0,
+          savingsRate: 0,
+        });
+        setSharedGoalPerformanceChartData(null);
+        setSharedGoalBreakdownChartData(null);
       }
     } catch (err) {
       console.error("Error in fetchFamilyData:", err);
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+      
+      // If we've just created a family, try a few times before giving up
+      if (retryCount < maxRetries - 1) {
+        setTimeout(() => {
+          fetchFamilyDataInternal(retryCount + 1, maxRetries);
+        }, 1500);
+        return;
+      }
+      
       showErrorToast(`Error loading family data: ${errorMessage}`);
-    } finally {
-      // Loading state is now handled by the hook
     }
   }, [user, isLoadingFamily, fetchGoals, setFamilyData, setFamilyGoals, setMembers, setSharedGoalBreakdownChartData, setSharedGoalPerformanceChartData, showErrorToast, updateRecentActivity, updateTransactionData]);
 
@@ -1321,12 +1025,38 @@ const FamilyDashboard: React.FC = () => {
   // Edit family function
   const navigateToEdit = () => {
     if (!familyData) return;
-    navigate(`/family/edit/${familyData.id}`);
+    navigate(`/family/${familyData.id}/edit`);
   };
+
+  // Handle successful family join
+  const handleJoinSuccess = useCallback(async () => {
+    // Refresh family data after successful join
+    if (user) {
+      // Add a small delay to allow the backend to process the join
+      setTimeout(() => {
+        fetchFamilyDataInternal(0, 3);
+      }, 1000);
+    }
+  }, [user, fetchFamilyDataInternal]);
 
 
   return (
     <div className="container-fluid">
+      {/* Show loading state while fetching family data */}
+      {isLoadingFamily ? (
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary mb-3" role="status">
+            <span className="sr-only">Loading...</span>
+          </div>
+          <h5 className="text-gray-600">Loading family information...</h5>
+        </div>
+      ) : (
+        <>
+          {/* Render no family state when user doesn't belong to any family */}
+          {!familyData ? (
+            <NoFamilyHandler onJoinSuccess={handleJoinSuccess} />
+          ) : (
+            <>
       {/* Delete/Leave Modal */}
       {showDeleteModal && (
         <div className="modal" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
@@ -1540,7 +1270,7 @@ const FamilyDashboard: React.FC = () => {
                   <i className="fas fa-sign-out-alt mr-2"></i> Leave Family
                 </button>
               )}
-              <Link to="/family/invite" className="btn btn-success shadow-sm" style={{ minWidth: "145px", padding: "10px 20px", fontSize: "16px" }}>
+              <Link to={`/family/${familyData.id}/invite`} className="btn btn-success shadow-sm" style={{ minWidth: "145px", padding: "10px 20px", fontSize: "16px" }}>
                 <i className="fas fa-user-plus mr-2"></i> Invite Member
               </Link>
             </>
@@ -1662,7 +1392,7 @@ const FamilyDashboard: React.FC = () => {
       </div>
       
       {/* Tooltip */}
-      {activeTip && tooltipPosition && (
+      {activeTip && tooltipPosition && tooltipContent[activeTip as keyof typeof tooltipContent] && (
         <div 
           className="tip-box light" 
           style={{ 
@@ -1679,12 +1409,8 @@ const FamilyDashboard: React.FC = () => {
             border: "1px solid rgba(0, 0, 0, 0.05)"
           }}
         >
-          {activeTip && (
-            <>
-              <div className="font-weight-bold mb-2">{tooltipContent[activeTip as keyof typeof tooltipContent].title}</div>
-              <p className="mb-0">{tooltipContent[activeTip as keyof typeof tooltipContent].description}</p>
-            </>
-          )}
+          <div className="font-weight-bold mb-2">{tooltipContent[activeTip as keyof typeof tooltipContent].title}</div>
+          <p className="mb-0">{tooltipContent[activeTip as keyof typeof tooltipContent].description}</p>
         </div>
       )}
       
@@ -1739,6 +1465,7 @@ const FamilyDashboard: React.FC = () => {
               familyData={familyData}
               members={members}
               getMemberRoleBadge={getMemberRoleBadge}
+              familyId={familyData?.id}
             />
           )}
 
@@ -1768,6 +1495,10 @@ const FamilyDashboard: React.FC = () => {
         </div>
       </div>
 
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 };

@@ -4,42 +4,24 @@ import { formatCurrency, formatDate, formatPercentage } from "../../utils/helper
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
 import "animate.css";
-import { Budget } from "../../types";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
 
-// Interface for budget details from Supabase view
-interface BudgetItem {
-  id: string;
-  user_id: string;
-  category_id: string;
-  category_name: string;
-  amount: number;
-  spent: number;
-  remaining: number;
-  percentage: number;
-  status: "success" | "warning" | "danger";
-  month: string;
-  year: number;
-  period: string;
-  start_date: string;
-  end_date: string;
-  created_at: string;
-}
+// Import refactored components
+import LoadingSpinner from "./components/shared/LoadingSpinner";
+import ErrorMessage from "./components/shared/ErrorMessage";
+import StatCard from "./components/shared/StatCard";
+import InfoTooltip from "./components/shared/InfoTooltip";
+import DeleteModal from "./components/shared/DeleteModal";
+import ProgressBar from "./components/shared/ProgressBar";
+import ChartContainer from "./components/charts/ChartContainer";
+import BudgetChart from "./components/charts/BudgetChart";
+import BudgetStatsCards from "./components/budget/BudgetStatsCards";
+import TransactionTable from "./components/budget/TransactionTable";
 
-// Interface for transaction data
-interface Transaction {
-  id: string;
-  user_id: string;
-  account_id: string;
-  category_id: string;
-  type: "income" | "expense";
-  amount: number;
-  date: string;
-  notes: string;
-  created_at: string;
-}
+// Import types
+import { BudgetItem, Transaction, TooltipPosition } from "./types";
 
 const BudgetDetails: FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -57,7 +39,7 @@ const BudgetDetails: FC = () => {
   
   // Tooltip state
   const [activeTip, setActiveTip] = useState<string | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition | null>(null);
   
   // Chart refs
   const allocationChartRef = useRef<any>(null);
@@ -507,34 +489,18 @@ const BudgetDetails: FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="container-fluid">
-        <div className="text-center my-5">
-          <div className="spinner-border text-primary" role="status">
-            <span className="sr-only">Loading...</span>
-          </div>
-          <p className="mt-3 text-gray-700">Loading budget details...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading budget details..." />;
   }
 
   if (error || !budget) {
     return (
-      <div className="container-fluid">
-        <div className="text-center my-5 animate__animated animate__fadeIn">
-          <div className="error-icon mb-4">
-            <i className="fas fa-exclamation-triangle fa-4x text-warning"></i>
-          </div>
-          <h1 className="h3 mb-3 font-weight-bold text-gray-800">Budget not found</h1>
-          <p className="mb-4">
-            {error || "The budget you're looking for does not exist or has been deleted."}
-          </p>
-          <Link to="/budgets" className="btn btn-primary">
-            <i className="fas fa-arrow-left mr-2"></i> Back to Budgets
-          </Link>
-        </div>
-      </div>
+      <ErrorMessage
+        title="Budget not found"
+        message={error || "The budget you're looking for does not exist or has been deleted."}
+        showBackButton={true}
+        backTo="/budgets"
+        backLabel="Back to Budgets"
+      />
     );
   }
 
@@ -568,89 +534,35 @@ const BudgetDetails: FC = () => {
 
       {/* Budget Overview Row */}
       <div className="row">
-        {/* Budget Amount Card */}
-        <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.1s" }}>
-          <div className="card border-left-primary shadow h-100 py-2">
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-primary text-uppercase mb-1 d-flex align-items-center">
-                    Budget Amount
-                    <div className="ml-2 position-relative">
-                      <i 
-                        className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                        onClick={(e) => toggleTip('budgetAmount', e)}
-                        aria-label="Budget amount information"
-                      ></i>
-                    </div>
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {formatCurrency(budget.amount)}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-coins fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Month/Period Card */}
-        <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
-          <div className="card border-left-info shadow h-100 py-2">
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-info text-uppercase mb-1 d-flex align-items-center">
-                    Month
-                    <div className="ml-2 position-relative">
-                      <i 
-                        className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                        onClick={(e) => toggleTip('budgetMonth', e)}
-                        aria-label="Budget month information"
-                      ></i>
-                    </div>
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {budget.month} {budget.year}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-calendar fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Category Card */}
-        <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.3s" }}>
-          <div className="card border-left-success shadow h-100 py-2">
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-success text-uppercase mb-1 d-flex align-items-center">
-                    Category
-                    <div className="ml-2 position-relative">
-                      <i 
-                        className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                        onClick={(e) => toggleTip('budgetCategory', e)}
-                        aria-label="Budget category information"
-                      ></i>
-                    </div>
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {budget.category_name}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-tag fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          title="Budget Amount"
+          value={formatCurrency(budget.amount)}
+          icon="coins"
+          borderColor="primary"
+          animationDelay="0.1s"
+          showTooltip={true}
+          onClick={(e) => toggleTip('budgetAmount', e)}
+        />
+        
+        <StatCard
+          title="Month"
+          value={`${budget.month} ${budget.year}`}
+          icon="calendar"
+          borderColor="info"
+          animationDelay="0.2s"
+          showTooltip={true}
+          onClick={(e) => toggleTip('budgetMonth', e)}
+        />
+        
+        <StatCard
+          title="Category"
+          value={budget.category_name}
+          icon="tag"
+          borderColor="success"
+          animationDelay="0.3s"
+          showTooltip={true}
+          onClick={(e) => toggleTip('budgetCategory', e)}
+        />
       </div>
 
       <div className="row">
@@ -673,190 +585,45 @@ const BudgetDetails: FC = () => {
             <div className="card-body">
               {/* Budget Progress Section */}
               <div className="mb-4">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <h4 className="small font-weight-bold mb-0">Budget Utilization</h4>
-                  <span className={`font-weight-bold text-${colorClass}`}>{formatPercentage(budget.percentage)}</span>
-                </div>
-                <div className="progress mb-4 position-relative">
-                  <div
-                    className={`progress-bar bg-${colorClass}`}
-                    role="progressbar"
-                    style={{ width: `${budget.percentage}%` }}
-                    aria-valuenow={budget.percentage}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    data-toggle="tooltip"
-                    data-placement="top"
-                    title={formatPercentage(budget.percentage)}
-                  ></div>
-                  <div className="progress-tooltip">
-                    {formatPercentage(budget.percentage)}
-                  </div>
-                </div>
+                <ProgressBar
+                  percentage={budget.percentage}
+                  status={budget.status}
+                  label="Budget Utilization"
+                  showTooltip={true}
+                />
                 
                 {/* Budget stats summary */}
-                <div className="row mb-4">
-                  <div className="col-md-4">
-                    <div className="card bg-light border-0 h-100">
-                      <div className="card-body text-center">
-                        <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                          Budget Amount
-                        </div>
-                        <div className="h5 mb-0 font-weight-bold text-gray-800">
-                          {formatCurrency(budget.amount)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="col-md-4">
-                    <div className="card bg-light border-0 h-100">
-                      <div className="card-body text-center">
-                        <div className="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                          Current Spending
-                        </div>
-                        <div className="h5 mb-0 font-weight-bold text-gray-800">
-                          {formatCurrency(budget.spent)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="col-md-4">
-                    <div className="card bg-light border-0 h-100">
-                      <div className="card-body text-center">
-                        <div className="text-xs font-weight-bold text-success text-uppercase mb-1">
-                          Remaining
-                        </div>
-                        <div className="h5 mb-0 font-weight-bold text-gray-800">
-                          {formatCurrency(budget.remaining)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <BudgetStatsCards budget={budget} />
               </div>
 
               {/* Budget Category Distribution */}
-              <div className="mt-4">
-                <h6 className="font-weight-bold text-primary mb-3 d-flex align-items-center">
-                  Budget Category Distribution
-                  <div className="ml-2 position-relative">
-                    <i 
-                      className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                      onClick={(e) => toggleTip('categoryDistribution', e)}
-                      aria-label="Category distribution information"
-                    ></i>
-                  </div>
-                </h6>
-                <p className="small text-gray-600 mb-3">
-                  How {budget.category_name} budget amount compares to other budget categories
-                </p>
-                {highchartsLoaded && categoryDistributionOptions && (
-                  <div className="chart-area">
-                    <HighchartsReact
-                      highcharts={Highcharts}
-                      options={categoryDistributionOptions}
-                      ref={categoryDistributionRef}
-                    />
-                  </div>
-                )}
-              </div>
+              <ChartContainer
+                title="Budget Category Distribution"
+                subtitle={`How ${budget.category_name} budget amount compares to other budget categories`}
+                showInfo={true}
+                onInfoClick={(e) => toggleTip('categoryDistribution', e)}
+                animationDelay="0.2s"
+              >
+                <BudgetChart
+                  options={categoryDistributionOptions}
+                  chartRef={categoryDistributionRef}
+                />
+              </ChartContainer>
               
               {/* Related Transactions Section */}
-              <div className="mt-4">
-                <h6 className="font-weight-bold text-primary mb-3 d-flex align-items-center">
-                  Budget Expenses
-                  <div className="ml-2 position-relative">
-                    <i 
-                      className="fas fa-info-circle text-gray-400 cursor-pointer" 
-                      onClick={(e) => toggleTip('budgetExpenses', e)}
-                      aria-label="Budget expenses information"
-                    ></i>
-                  </div>
-                </h6>
-                <p className="small text-gray-600 mb-3">
-                  Transactions related to this budget category during {budget.month} {budget.year}
-                </p>
-                {relatedTransactions.length > 0 ? (
-                  <div className="table-responsive">
-                    <table className="table table-bordered table-hover" id="dataTable" width="100%" cellSpacing="0">
-                      <thead className="bg-light">
-                        <tr>
-                          <th>Date</th>
-                          <th>Amount</th>
-                          <th>Description</th>
-                          <th>% of Budget</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {relatedTransactions.map((tx) => {
-                          // Calculate what percentage of the budget this transaction represents
-                          const percentOfBudget = (tx.amount / budget.amount) * 100;
-                          
-                          return (
-                            <tr key={tx.id}>
-                              <td>{formatDate(tx.date)}</td>
-                              <td className="text-danger">
-                                {formatCurrency(tx.amount)}
-                              </td>
-                              <td>{tx.notes}</td>
-                              <td>
-                                <div style={{ width: "100%", height: "15px", backgroundColor: "#e9ecef", borderRadius: "0.25rem", position: "relative" }}
-                                  data-toggle="tooltip"
-                                  data-placement="top"
-                                  title={formatPercentage(percentOfBudget)}
-                                >
-                                  <div
-                                    style={{ 
-                                      width: `${percentOfBudget}%`, 
-                                      height: "15px", 
-                                      borderRadius: "0.25rem",
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      backgroundColor: percentOfBudget > 50 ? "#e74a3b" : percentOfBudget > 25 ? "#f6c23e" : "#1cc88a"
-                                    }}
-                                  >
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr className="font-weight-bold bg-light">
-                          <td colSpan={1}>Total</td>
-                          <td className="text-danger">
-                            {formatCurrency(relatedTransactions.reduce((sum, tx) => sum + tx.amount, 0))}
-                          </td>
-                          <td colSpan={2}>{formatPercentage(relatedTransactions.reduce((sum, tx) => sum + tx.amount, 0) / budget.amount * 100)} of budget</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="alert alert-info">
-                    <div className="d-flex align-items-center justify-content-between">
-                      <div>
-                        <i className="fas fa-info-circle mr-2"></i>
-                        No transactions found for this budget category during {budget.month} {budget.year}.
-                      </div>
-                      <button 
-                        className="btn btn-sm btn-outline-primary" 
-                        onClick={() => window.location.reload()}
-                      >
-                        <i className="fas fa-sync-alt mr-1"></i> Refresh
-                      </button>
-                    </div>
-                    <div className="mt-2 small text-muted">
-                      Budget period: {formatDate(budget.start_date)} - {formatDate(budget.end_date)}<br/>
-                      Category: {budget.category_name} (ID: {budget.id})
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ChartContainer
+                title="Budget Expenses"
+                subtitle={`Transactions related to this budget category during ${budget.month} ${budget.year}`}
+                showInfo={true}
+                onInfoClick={(e) => toggleTip('budgetExpenses', e)}
+                animationDelay="0.3s"
+              >
+                <TransactionTable
+                  transactions={relatedTransactions}
+                  budget={budget}
+                  onRefresh={() => window.location.reload()}
+                />
+              </ChartContainer>
               
               {/* Related Budgets Section */}
               <div className="mt-4">
@@ -936,22 +703,10 @@ const BudgetDetails: FC = () => {
               </h6>
             </div>
             <div className="card-body">
-              {highchartsLoaded && allocationChartOptions ? (
-                <div className="chart-pie">
-                  <HighchartsReact
-                    highcharts={Highcharts}
-                    options={allocationChartOptions}
-                    ref={allocationChartRef}
-                  />
-                </div>
-              ) : (
-                <div className="text-center py-4">
-                  <div className="mb-3">
-                    <i className="fas fa-chart-pie fa-3x text-gray-300"></i>
-                  </div>
-                  <p className="text-gray-600 mb-0">No budget data available</p>
-                </div>
-              )}
+              <BudgetChart
+                options={allocationChartOptions}
+                chartRef={allocationChartRef}
+              />
               <div className="mt-3">
                 <p className="small text-gray-500 text-center mb-0">
                   This chart shows how your {budget.category_name} budget compares to other categories
@@ -1012,145 +767,80 @@ const BudgetDetails: FC = () => {
         </div>
       </div>
       
-      {/* Global tooltip that appears based on activeTip state */}
-      {activeTip && tooltipPosition && (
-        <div 
-          className="tip-box light" 
-          style={{ 
-            top: `${tooltipPosition.top}px`, 
-            left: `${tooltipPosition.left}px`,
-            position: 'absolute',
-            zIndex: 1000,
-            maxWidth: '300px',
-            padding: '15px',
-            background: 'white',
-            borderRadius: '5px',
-            boxShadow: '0 0.25rem 0.75rem rgba(0, 0, 0, 0.1)',
-            transform: 'translateX(-50%)'
-          }}
-        >
-          {activeTip === 'budgetAmount' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Budget Amount</div>
-              <p className="tip-description mb-0">
-                The total amount of money allocated for this category during the selected time period. This is your spending limit for this category.
-              </p>
-            </>
-          )}
-          {activeTip === 'budgetMonth' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Budget Period</div>
-              <p className="tip-description mb-0">
-                The month and year this budget applies to. Budget tracking is done on a monthly basis to help you manage your finances more effectively.
-              </p>
-            </>
-          )}
-          {activeTip === 'budgetCategory' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Budget Category</div>
-              <p className="tip-description mb-0">
-                The spending category this budget applies to. Categories help you organize your expenses and track spending patterns in specific areas.
-              </p>
-            </>
-          )}
-          {activeTip === 'budgetDetails' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Budget Details</div>
-              <p className="tip-description mb-0">
-                Detailed information about this budget, including its utilization rate and related transactions. This section helps you understand how your money is being spent within this category.
-              </p>
-            </>
-          )}
-          {activeTip === 'budgetAllocation' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Budget Allocation</div>
-              <p className="tip-description mb-0">
-                This chart shows how this budget compares to other category budgets in the same period. It helps you visualize your financial priorities based on how you allocate your money.
-              </p>
-            </>
-          )}
-          {activeTip === 'budgetInfo' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Budget Information</div>
-              <p className="tip-description mb-0">
-                Technical details about this budget including its unique ID, status, and date range. This information is useful for reference and identification purposes.
-              </p>
-            </>
-          )}
-          {activeTip === 'budgetExpenses' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Budget Expenses</div>
-              <p className="tip-description mb-0">
-                All transactions related to this budget category during the specified period. This section shows exactly where your money went and how each expense contributes to your overall category spending.
-              </p>
-            </>
-          )}
-          {activeTip === 'relatedBudgets' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Related Budgets</div>
-              <p className="tip-description mb-0">
-                Other budgets for the same category from different time periods. This helps you track how your budget and spending patterns in this category change over time.
-              </p>
-            </>
-          )}
-          {activeTip === 'categoryDistribution' && (
-            <>
-              <div className="tip-title font-weight-bold mb-2">Budget Category Distribution</div>
-              <p className="tip-description mb-0">
-                This chart shows how budget allocations are distributed across all categories. It helps visualize spending priorities and identify which categories receive the largest and smallest portions of your total budget.
-              </p>
-            </>
-          )}
-        </div>
-      )}
+      {/* Global tooltips */}
+      <InfoTooltip
+        isActive={activeTip === 'budgetAmount'}
+        position={tooltipPosition}
+        title="Budget Amount"
+        content="The total amount of money allocated for this category during the selected time period. This is your spending limit for this category."
+        onClose={() => setActiveTip(null)}
+      />
+      <InfoTooltip
+        isActive={activeTip === 'budgetMonth'}
+        position={tooltipPosition}
+        title="Budget Period"
+        content="The month and year this budget applies to. Budget tracking is done on a monthly basis to help you manage your finances more effectively."
+        onClose={() => setActiveTip(null)}
+      />
+      <InfoTooltip
+        isActive={activeTip === 'budgetCategory'}
+        position={tooltipPosition}
+        title="Budget Category"
+        content="The spending category this budget applies to. Categories help you organize your expenses and track spending patterns in specific areas."
+        onClose={() => setActiveTip(null)}
+      />
+      <InfoTooltip
+        isActive={activeTip === 'budgetDetails'}
+        position={tooltipPosition}
+        title="Budget Details"
+        content="Detailed information about this budget, including its utilization rate and related transactions. This section helps you understand how your money is being spent within this category."
+        onClose={() => setActiveTip(null)}
+      />
+      <InfoTooltip
+        isActive={activeTip === 'budgetAllocation'}
+        position={tooltipPosition}
+        title="Budget Allocation"
+        content="This chart shows how this budget compares to other category budgets in the same period. It helps you visualize your financial priorities based on how you allocate your money."
+        onClose={() => setActiveTip(null)}
+      />
+      <InfoTooltip
+        isActive={activeTip === 'budgetInfo'}
+        position={tooltipPosition}
+        title="Budget Information"
+        content="Technical details about this budget including its unique ID, status, and date range. This information is useful for reference and identification purposes."
+        onClose={() => setActiveTip(null)}
+      />
+      <InfoTooltip
+        isActive={activeTip === 'budgetExpenses'}
+        position={tooltipPosition}
+        title="Budget Expenses"
+        content="All transactions related to this budget category during the specified period. This section shows exactly where your money went and how each expense contributes to your overall category spending."
+        onClose={() => setActiveTip(null)}
+      />
+      <InfoTooltip
+        isActive={activeTip === 'relatedBudgets'}
+        position={tooltipPosition}
+        title="Related Budgets"
+        content="Other budgets for the same category from different time periods. This helps you track how your budget and spending patterns in this category change over time."
+        onClose={() => setActiveTip(null)}
+      />
+      <InfoTooltip
+        isActive={activeTip === 'categoryDistribution'}
+        position={tooltipPosition}
+        title="Budget Category Distribution"
+        content="This chart shows how budget allocations are distributed across all categories. It helps visualize spending priorities and identify which categories receive the largest and smallest portions of your total budget."
+        onClose={() => setActiveTip(null)}
+      />
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="modal" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Confirm Deletion</h5>
-                <button type="button" className="close" onClick={closeDeleteModal} disabled={isDeleting}>
-                  <span aria-hidden="true">&times;</span>
-                </button>
-              </div>
-              <div className="modal-body text-center">
-                <div className="mb-4">
-                  <div className="rounded-circle mx-auto d-flex align-items-center justify-content-center" 
-                    style={{ width: "80px", height: "80px", backgroundColor: "rgba(246, 194, 62, 0.2)" }}>
-                    <i className="fas fa-exclamation-triangle fa-3x text-warning"></i>
-                  </div>
-                </div>
-                <p>Are you sure you want to delete this budget? This action cannot be undone.</p>
-              </div>
-              <div className="modal-footer d-flex justify-content-center">
-                <button 
-                  type="button" 
-                  className="btn btn-outline-secondary" 
-                  onClick={closeDeleteModal}
-                  disabled={isDeleting}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-danger" 
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-                      Delete
-                    </>
-                  ) : "Delete"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteModal
+        isOpen={showDeleteModal}
+        isDeleting={isDeleting}
+        title="Confirm Budget Deletion"
+        message="Are you sure you want to delete this budget? This action cannot be undone."
+        onConfirm={handleDelete}
+        onCancel={closeDeleteModal}
+      />
     </div>
   );
 };

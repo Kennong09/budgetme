@@ -1,11 +1,11 @@
-// Account Types
+// Account Types (currency forced to PHP)
 export interface Account {
   id: string;
   user_id: string;
   account_name: string;
   account_type: 'checking' | 'savings' | 'credit' | 'investment' | 'other';
   balance: number;
-  currency: string;
+  // currency removed - always PHP
   status: 'active' | 'inactive';
   is_default: boolean;
   color?: string;
@@ -13,12 +13,12 @@ export interface Account {
   updated_at?: string;
 }
 
-// User Profile Types (without appearance settings)
+// User Profile Types (currency forced to PHP)
 export interface UserProfile {
   name: string;
   email: string;
   profilePicture: string;
-  currency: string;
+  // currency removed - always PHP
   language: string;
   notifications: {
     email: boolean;
@@ -34,16 +34,9 @@ export interface SettingsTab {
   icon: string;
 }
 
-// Currency Options
-export const CURRENCY_OPTIONS = [
-  { value: 'PHP', label: 'PHP (₱)', symbol: '₱' },
-  { value: 'USD', label: 'USD ($)', symbol: '$' },
-  { value: 'EUR', label: 'EUR (€)', symbol: '€' },
-  { value: 'GBP', label: 'GBP (£)', symbol: '£' },
-  { value: 'JPY', label: 'JPY (¥)', symbol: '¥' },
-  { value: 'CAD', label: 'CAD ($)', symbol: '$' },
-  { value: 'AUD', label: 'AUD ($)', symbol: '$' },
-];
+// CURRENCY FORCED TO PHP ONLY - Options removed
+// All currency selection has been disabled
+// Only PHP is supported in the application now
 
 // Language Options
 export const LANGUAGE_OPTIONS = [

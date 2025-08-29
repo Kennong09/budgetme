@@ -80,6 +80,11 @@ const AdminDashboard: FC = () => {
     const channels: RealtimeChannel[] = [];
     
     try {
+      if (!supabaseAdmin) {
+        console.error('Admin client not available');
+        return;
+      }
+      
       // Subscribe to users table changes
       const usersSubscription = supabaseAdmin
         .channel('admin-dashboard-users-changes')
@@ -150,7 +155,7 @@ const AdminDashboard: FC = () => {
       // Clean up any partial subscriptions on error
       for (const channel of channels) {
         try {
-          if (channel) supabaseAdmin.removeChannel(channel);
+          if (channel && supabaseAdmin) supabaseAdmin.removeChannel(channel);
         } catch (cleanupError) {
           console.error("Error cleaning up channel:", cleanupError);
         }
@@ -161,7 +166,7 @@ const AdminDashboard: FC = () => {
     return () => {
       for (const channel of channels) {
         try {
-          if (channel) supabaseAdmin.removeChannel(channel);
+          if (channel && supabaseAdmin) supabaseAdmin.removeChannel(channel);
         } catch (error) {
           console.error("Error removing channel:", error);
         }
@@ -175,7 +180,7 @@ const AdminDashboard: FC = () => {
       // Clean up any active subscriptions when component unmounts
       activeSubscriptions.forEach(sub => {
         try {
-          if (sub) supabaseAdmin.removeChannel(sub);
+          if (sub && supabaseAdmin) supabaseAdmin.removeChannel(sub);
         } catch (error) {
           console.error("Error removing channel on unmount:", error);
         }
@@ -186,6 +191,11 @@ const AdminDashboard: FC = () => {
   // Fetch summary statistics
   const fetchStats = async () => {
     try {
+      if (!supabaseAdmin) {
+        console.error('Admin client not available');
+        return;
+      }
+      
       // Direct query for user count instead of RPC
       const { count: userCount, error: userCountError } = await supabaseAdmin
         .from('profiles')
@@ -391,6 +401,10 @@ const AdminDashboard: FC = () => {
       
       // Try to get user registrations
       try {
+        if (!supabaseAdmin) {
+          throw new Error('Admin client not available');
+        }
+        
         const { data: userRegistrations, error: userError } = await supabaseAdmin
           .from('profiles')
           .select('created_at')
@@ -508,6 +522,11 @@ const AdminDashboard: FC = () => {
   // Fetch recent users
   const fetchRecentUsers = async () => {
     try {
+      if (!supabaseAdmin) {
+        console.error('Admin client not available');
+        return;
+      }
+      
       // Use the admin API to get users like UserManagement.tsx does
       const { data, error } = await supabaseAdmin.auth.admin.listUsers({
         page: 1,

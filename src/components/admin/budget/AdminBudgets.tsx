@@ -98,6 +98,11 @@ const AdminBudgets: FC = () => {
     
     try {
       // Set up the subscription
+      if (!supabaseAdmin) {
+        console.error('Admin client not available');
+        return;
+      }
+      
       channel = supabaseAdmin.channel('admin-budgets-channel');
       
       channel
@@ -118,7 +123,7 @@ const AdminBudgets: FC = () => {
     
     // Cleanup function
     return () => {
-      if (channel) {
+      if (channel && supabaseAdmin) {
         try {
           supabaseAdmin.removeChannel(channel);
         } catch (cleanupError) {
@@ -131,7 +136,7 @@ const AdminBudgets: FC = () => {
   // Clean up any explicit subscriptions when component unmounts
   useEffect(() => {
     return () => {
-      if (subscription) {
+      if (subscription && supabaseAdmin) {
         try {
           supabaseAdmin.removeChannel(subscription);
         } catch (error) {
@@ -144,6 +149,10 @@ const AdminBudgets: FC = () => {
   // Fetch categories from Supabase
   const fetchCategories = async () => {
     try {
+      if (!supabaseAdmin) {
+        throw new Error('Admin client not available');
+      }
+      
       const { data: categoryData, error: categoryError } = await supabaseAdmin
         .from('expense_categories')
         .select('id, category_name, user_id')
@@ -163,6 +172,10 @@ const AdminBudgets: FC = () => {
   const fetchBudgets = async () => {
     try {
       setLoading(true);
+      
+      if (!supabaseAdmin) {
+        throw new Error('Admin client not available');
+      }
       
       // Fetch all user profiles for displaying names
       const { data: profilesData, error: profilesError } = await supabaseAdmin
@@ -495,6 +508,10 @@ const AdminBudgets: FC = () => {
   const changeBudgetStatus = async (budget: Budget, newStatus: "active" | "completed" | "archived") => {
     try {
       setLoading(true);
+      
+      if (!supabaseAdmin) {
+        throw new Error('Admin client not available');
+      }
       
       // Update budget status in Supabase
       const { error } = await supabaseAdmin

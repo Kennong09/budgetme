@@ -31,7 +31,7 @@ const AccountsSettings: FC<AccountsSettingsProps> = ({
       account_name: "",
       account_type: "checking",
       balance: 0,
-      currency: profile.currency,
+      // currency removed - always PHP
       status: "active",
       is_default: profile.accounts.length === 0,
       color: "#4e73df"
@@ -154,7 +154,7 @@ const AccountsSettings: FC<AccountsSettingsProps> = ({
             account_name: editingAccount.account_name,
             account_type: editingAccount.account_type,
             balance: editingAccount.balance,
-            currency: editingAccount.currency,
+            // currency removed - always PHP
             is_default: editingAccount.is_default,
             color: editingAccount.color,
             updated_at: new Date().toISOString()
@@ -183,7 +183,7 @@ const AccountsSettings: FC<AccountsSettingsProps> = ({
           account_name: editingAccount.account_name,
           account_type: editingAccount.account_type, 
           balance: editingAccount.balance,
-          currency: editingAccount.currency,
+          // currency removed - always PHP
           status: 'active' as const,
           is_default: editingAccount.is_default,
           color: editingAccount.color,

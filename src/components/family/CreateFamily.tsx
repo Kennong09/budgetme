@@ -1,8 +1,8 @@
 import React, { useState, FC, ChangeEvent, FormEvent, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { familyService } from "../../services/database/familyService";
 import { refreshFamilyMembershipsView } from "../../utils/helpers";
 
 // Import SB Admin CSS
@@ -12,14 +12,14 @@ import "animate.css";
 interface FamilyFormData {
   family_name: string;
   description: string;
-  currency_pref: "USD" | "EUR" | "GBP" | "JPY" | "PHP";
   is_public: boolean;
+  // currency_pref removed - always PHP
 }
 
 interface FamilyData {
   id: string;
   family_name: string;
-  description: string;
+  description?: string;
   currency_pref: string;
   created_by: string;
   created_at: string;
@@ -42,8 +42,8 @@ const CreateFamily: FC = () => {
   const initialFormState: FamilyFormData = {
     family_name: "",
     description: "Our shared family finances",
-    currency_pref: "USD",
     is_public: false,
+    // currency_pref removed - always PHP
   };
 
   const [familyData, setFamilyData] = useState<FamilyFormData>(initialFormState);
@@ -59,107 +59,21 @@ const CreateFamily: FC = () => {
 
       setLoading(true);
       try {
-        // Multiple checks to ensure we correctly identify if user already has a family
-        let isMember = false;
-        let familyData = null;
+        const membership = await familyService.checkFamilyMembership(user.id);
         
-        // Method 1: Try the check_user_family RPC function
-        const { data: checkResult, error: checkError } = await supabase.rpc(
-          'check_user_family',
-          { p_user_id: user.id }
-        );
-
-        if (!checkError && checkResult) {
-          // Handle different possible response formats
-          if (Array.isArray(checkResult) && checkResult.length > 0) {
-            isMember = checkResult[0].is_member === true;
-            if (isMember && checkResult[0].family_id) {
-              familyData = {
-                id: checkResult[0].family_id,
-                family_name: checkResult[0].family_name || "Family",
-                description: checkResult[0].description || "",
-                currency_pref: checkResult[0].currency_pref || "USD",
-                created_by: checkResult[0].created_by || "",
-                created_at: checkResult[0].created_at || "",
-                is_public: checkResult[0].is_public || false
-              };
-            }
-          } else if (typeof checkResult === 'object' && checkResult.is_member === true) {
-            isMember = true;
-            if (checkResult.family_id) {
-              familyData = {
-                id: checkResult.family_id,
-                family_name: checkResult.family_name || "Family",
-                description: checkResult.description || "",
-                currency_pref: checkResult.currency_pref || "USD",
-                created_by: checkResult.created_by || "",
-                created_at: checkResult.created_at || "",
-                is_public: checkResult.is_public || false
-              };
-            }
-          }
-        }
-        
-        // Method 2: If first check failed or didn't confirm membership, try direct function
-        if (!isMember || checkError) {
-          const { data: directResult, error: directError } = await supabase.rpc(
-            'get_family_membership',
-            { p_user_id: user.id }
-          );
-          
-          if (!directError && directResult) {
-            if (typeof directResult === 'object' && directResult.is_member === true) {
-              isMember = true;
-              familyData = {
-                id: directResult.family_id,
-                family_name: directResult.family_name || "Family",
-                description: directResult.description || "",
-                currency_pref: directResult.currency_pref || "USD",
-                created_by: directResult.created_by || "",
-                created_at: directResult.created_at || "",
-                is_public: directResult.is_public || false
-              };
-            }
-          }
-        }
-        
-        // Method 3: Final fallback - direct query to family_members table
-        if (!isMember) {
-          const { data: memberCheck, error: memberError } = await supabase
-            .from('family_members')
-            .select('family_id, status, role')
-            .eq('user_id', user.id)
-            .eq('status', 'active')
-            .limit(1);
-            
-          if (!memberError && memberCheck && memberCheck.length > 0) {
-            isMember = true;
-            
-            // Get family details
-            const { data: familyDetails, error: familyError } = await supabase
-              .from('families')
-              .select('*')
-              .eq('id', memberCheck[0].family_id)
-              .single();
-              
-            if (!familyError && familyDetails) {
-              familyData = familyDetails;
-            }
-          }
-        }
-        
-        // If any check found membership, set existing family
-        if (isMember) {
+        if (membership.is_member) {
           setExistingFamily(true);
-          if (familyData) {
-            setExistingFamilyData(familyData);
+          if (membership.family_id) {
+            const family = await familyService.getFamilyById(membership.family_id);
+            if (family) {
+              setExistingFamilyData(family);
+            }
           }
           
           showErrorToast("You are already part of a family. You can only belong to one family at a time.");
           setTimeout(() => navigate("/family"), 1000);
           return;
         }
-
       } catch (err) {
         console.error("Error checking existing family:", err);
         showErrorToast(`Failed to check family status: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -210,141 +124,25 @@ const CreateFamily: FC = () => {
     setError(null);
 
     try {
-      // Double-check that the user doesn't already have a family using multiple methods
-      let isAlreadyMember = false;
-      
-      // Method 1: Check using RPC function
-      const { data: checkResult, error: checkError } = await supabase.rpc(
-        'check_user_family',
-        { p_user_id: user.id }
-      );
-
-      if (!checkError && checkResult) {
-        // Handle different response formats
-        if (Array.isArray(checkResult) && checkResult.length > 0 && checkResult[0].is_member === true) {
-          isAlreadyMember = true;
-        } else if (typeof checkResult === 'object' && checkResult.is_member === true) {
-          isAlreadyMember = true;
-        }
-      }
-      
-      // Method 2: If first check failed or ambiguous, try direct function
-      if (!isAlreadyMember && (checkError || !checkResult)) {
-        const { data: directResult, error: directError } = await supabase.rpc(
-          'get_family_membership',
-          { p_user_id: user.id }
-        );
-        
-        if (!directError && directResult && 
-            typeof directResult === 'object' && 
-            directResult.is_member === true) {
-          isAlreadyMember = true;
-        }
-      }
-      
-      // Method 3: Final fallback - direct query to family_members table
-      if (!isAlreadyMember) {
-        const { data: memberData, error: memberError } = await supabase
-          .from('family_members')
-          .select('id, family_id')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .limit(1);
-          
-        if (!memberError && memberData && memberData.length > 0) {
-          isAlreadyMember = true;
-        }
-      }
-      
-      // If any check confirmed membership, prevent creation
-      if (isAlreadyMember) {
+      // Double-check that user doesn't already have a family
+      const membership = await familyService.checkFamilyMembership(user.id);
+      if (membership.is_member) {
         setExistingFamily(true);
         throw new Error("You are already part of a family. You can only belong to one family at a time.");
       }
 
-      // Get form data for clarity
-      const formValues = {
-        family_name: familyData.family_name,
-        description: familyData.description,
-        currency_pref: familyData.currency_pref,
-        is_public: familyData.is_public,
-      };
+      // Create family using the service
+      const newFamily = await familyService.createFamily(
+        {
+          family_name: familyData.family_name,
+          description: familyData.description,
+          currency_pref: 'PHP', // Always force PHP
+          is_public: familyData.is_public,
+        },
+        user.id
+      );
 
-      console.log("Creating family with data:", { ...formValues, created_by: user.id });
-
-      // Use our new transaction-safe function
-      try {
-        const { data: result, error: createError } = await supabase.rpc(
-          'create_family_with_member',
-          {
-            p_family_name: formValues.family_name,
-            p_description: formValues.description,
-            p_currency_pref: formValues.currency_pref,
-            p_is_public: formValues.is_public,
-            p_user_id: user.id
-          }
-        );
-        
-        if (createError) {
-          console.error("Error creating family with RPC function:", createError);
-          throw new Error(`Error creating family: ${createError.message}`);
-        }
-        
-        console.log("Successfully created family with ID:", result);
-        
-        showSuccessToast('Family created successfully!');
-        setTimeout(() => navigate('/family?created=true'), 800);
-        return;
-      } catch (rpcError) {
-        console.error("RPC function failed:", rpcError);
-        // Continue to legacy approach if RPC fails (for backwards compatibility)
-      }
-      
-      // Legacy approach as fallback
-      let familyId: string | null = null;
-      
-      // Insert family record
-      const { data: newFamily, error: familyError } = await supabase
-        .from('families')
-        .insert({
-          family_name: formValues.family_name,
-          description: formValues.description,
-          currency_pref: formValues.currency_pref,
-          is_public: formValues.is_public,
-          created_by: user.id
-        })
-        .select()
-        .single();
-      
-      if (familyError) {
-        console.error("Error creating family record:", familyError);
-        throw new Error(`Error creating family: ${familyError.message}`);
-      }
-      
-      if (!newFamily) {
-        throw new Error('Failed to create family. No data returned from server.');
-      }
-      
-      familyId = newFamily.id;
-      console.log("Successfully created family record:", newFamily);
-      
-      // Insert family member record for the creator (as admin)
-      const { data: memberData, error: memberError } = await supabase
-        .from('family_members')
-        .insert({
-          family_id: familyId,
-          user_id: user.id,
-          role: 'admin',
-          status: 'active'
-        })
-        .select();
-      
-      if (memberError) {
-        console.error("Error creating family member record:", memberError);
-        throw new Error(`Error creating family member: ${memberError.message}`);
-      }
-      
-      console.log("Created family member:", memberData);
+      console.log("Successfully created family:", newFamily);
       
       // Try to refresh the materialized view - make multiple attempts
       let refreshSuccessful = false;
@@ -363,9 +161,6 @@ const CreateFamily: FC = () => {
         }
       }
       
-      // Even if we couldn't refresh the view, we'll continue
-      // Our improved FamilyDashboard component will handle this case
-
       showSuccessToast('Family created successfully!');
       
       // Short delay to ensure the database has propagated the changes
@@ -389,6 +184,8 @@ const CreateFamily: FC = () => {
       setError(errorMessage);
       showErrorToast(`Failed to create family: ${errorMessage}`);
       setViewMode("form");
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -504,7 +301,7 @@ const CreateFamily: FC = () => {
                             <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
                               Currency
                             </div>
-                            <div className="h5 mb-0 font-weight-bold text-gray-800">{familyData.currency_pref}</div>
+                            <div className="h5 mb-0 font-weight-bold text-gray-800">PHP (₱)</div>
                           </div>
                           <div className="col-auto">
                             <i className="fas fa-dollar-sign fa-2x text-gray-300"></i>
@@ -643,30 +440,19 @@ const CreateFamily: FC = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="currency_pref" className="font-weight-bold text-gray-800">
-                    Currency Preference <span className="text-danger">*</span>
+                  <label className="font-weight-bold text-gray-800">
+                    Currency
                   </label>
-                  <select
-                    id="currency_pref"
-                    name="currency_pref"
-                    value={familyData.currency_pref}
-                    onChange={handleChange}
-                    className="form-control"
-                    required
-                  >
-                    <option value="USD">USD - US Dollar</option>
-                    <option value="EUR">EUR - Euro</option>
-                    <option value="GBP">GBP - British Pound</option>
-                    <option value="JPY">JPY - Japanese Yen</option>
-                    <option value="PHP">PHP - Philippine Peso</option>
-                  </select>
+                  <div className="form-control-static">
+                    <div className="d-flex align-items-center">
+                      <i className="fas fa-peso-sign text-success mr-2"></i>
+                      <span className="font-weight-bold">PHP - Philippine Peso (₱)</span>
+                      <span className="badge badge-primary ml-2">Default</span>
+                    </div>
+                  </div>
                   <small className="form-text text-muted">
-                    <i 
-                      className="fas fa-info-circle mr-1 text-gray-400"
-                      style={{ cursor: 'pointer' }}
-                      onClick={(e) => toggleTip('currency-selection', e)}
-                    ></i>
-                    Select the currency your family will primarily use.
+                    <i className="fas fa-info-circle mr-1 text-gray-400"></i>
+                    The application now uses Philippine Pesos for all financial calculations.
                   </small>
                 </div>
 

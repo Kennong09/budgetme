@@ -1,12 +1,6 @@
+// CURRENCY FORCED TO PHP ONLY
+// This function now always returns PHP symbol regardless of input
 export const getCurrencySymbol = (currency: string): string => {
-  const symbols: Record<string, string> = {
-    PHP: '₱',
-    USD: '$',
-    EUR: '€',
-    GBP: '£',
-    JPY: '¥',
-    CAD: '$',
-    AUD: '$',
-  };
-  return symbols[currency] || '$';
+  // Always return PHP symbol - all other currencies disabled
+  return '₱';
 };

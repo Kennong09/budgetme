@@ -1,5 +1,23 @@
 /* Custom styles for BudgetMe app */
 
+/* Consistent icon-circle sizing for budgeting tips */
+.icon-circle {
+  width: 3rem !important;
+  height: 3rem !important;
+  min-width: 3rem !important;
+  min-height: 3rem !important;
+  max-width: 3rem !important;
+  max-height: 3rem !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 1.25rem !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  box-sizing: border-box !important;
+}
+
 /* Ensure circular buttons are properly rounded */
 .btn-circle {
   border-radius: 100% !important;
