@@ -36,17 +36,20 @@ The Budgets component serves as the main interface for viewing all budgets and p
 
 - **Budget List**: Displays all budgets with their progress indicators
 - **Filtering**: Allows filtering by category, status, search term, month, and year
-- **Visualizations**: Includes bar and pie charts for budget distribution
+- **Visualizations**: Includes bar and pie charts for budget distribution with enhanced no-data handling
 - **Sorting**: Sorts budgets by various criteria (e.g., most overspent, alphabetical)
 - **Status Indicators**: Visual indicators for budget health (success, warning, danger)
+- **Smart Empty States**: Context-aware no-data handling that differentiates between no budgets and no spending
+- **Data Source Notifications**: Transparent fallback notifications for system degraded states (removed for normal operation)
 
 ### Key Functions
 
 - `applyFilters()`: Filters budget items based on user-selected criteria
-- `updateVisualizations()`: Updates charts when filters change
+- `updateVisualizations()`: Updates charts when filters change, with intelligent data validation
 - `getPeriodTitle()`: Generates title for the current period
 - `toggleTip()`: Manages tooltip visibility for providing additional information
 - `resetFilters()`: Resets all filters to default values
+- Enhanced chart rendering logic that detects meaningful spending data vs empty states
 
 ### State Management
 

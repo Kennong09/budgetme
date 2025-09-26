@@ -17,8 +17,8 @@ export interface Transaction {
   date: string;
   amount: number;
   notes: string;
-  type: "income" | "expense";
-  category_id?: number;
+  type: "income" | "expense" | "transfer" | "contribution";
+  category_id?: number | string;
   category?: string;
   description?: string;
   account_id: number | string;
@@ -65,7 +65,7 @@ export interface Goal {
   family_id?: string | number;
   percentage?: number;
   remaining?: number;
-  is_shared?: boolean;
+  is_family_goal?: boolean;
   shared_by?: string | number;
   shared_by_name?: string;
   is_overdue?: boolean;
@@ -73,13 +73,15 @@ export interface Goal {
 
 // Account related types
 export interface Account {
-  id: number;
+  id?: number; // Optional for new accounts, required for existing ones
   account_name: string;
   account_type: string;
   balance: number;
   user_id: string | number;
   created_at?: string;
   status?: string;
+  color?: string; // Color field for UI customization
+  is_default?: boolean;
 }
 
 // Category related types
@@ -99,10 +101,13 @@ export interface Family {
 
 export interface FamilyMember {
   id: string;
-  family_id: string | number;
-  member_user_id: string | number;
-  role: "admin" | "viewer";
-  join_date: string;
+  family_id: string;
+  user_id: string;
+  role: "admin" | "member" | "viewer";
+  status: "active" | "pending" | "inactive" | "removed";
+  joined_at: string;
+  created_at: string;
+  updated_at: string;
   user?: User;
 }
 

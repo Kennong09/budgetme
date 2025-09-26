@@ -61,9 +61,9 @@ export const applyGoalFilters = (goals: Goal[], filter: FilterState): Goal[] => 
   // Filter by scope (personal vs family)
   if (filter.scope !== "all") {
     if (filter.scope === "personal") {
-      result = result.filter(goal => !goal.is_shared);
+      result = result.filter(goal => !goal.is_family_goal);
     } else if (filter.scope === "family") {
-      result = result.filter(goal => goal.is_shared);
+      result = result.filter(goal => goal.is_family_goal);
     }
   }
 

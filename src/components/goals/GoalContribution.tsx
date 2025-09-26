@@ -10,6 +10,10 @@ import { Goal as GoalType, Transaction, Account, GoalContributionResult } from "
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { useGoalContributionPermissions } from "../../hooks/useFamilyPermissions";
+import PermissionErrorModal from "../common/PermissionErrorModal";
+import { goalsDataService } from "./services/goalsDataService";
+import GoalErrorBoundary from "../common/GoalErrorBoundary";
 
 // Import SB Admin CSS (already imported at the app level)
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -24,6 +28,7 @@ const GoalContribution: FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showSuccessToast, showErrorToast } = useToast();
+  const goalContributionPermissions = useGoalContributionPermissions();
   const [goal, setGoal] = useState<GoalType | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -35,6 +40,13 @@ const GoalContribution: FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<"form" | "review">("form");
+  const [permissionErrorModal, setPermissionErrorModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    suggestedActions?: string[];
+    userRole?: string;
+  }>({ isOpen: false, title: '', message: '' });
   
   useEffect(() => {
     const fetchData = async () => {
@@ -47,44 +59,20 @@ const GoalContribution: FC = () => {
           return;
         }
         
-        // Fetch goal details from Supabase
-        let goalData: any = null;
-        let goalError: any = null;
+        // Use enhanced data service with automatic fallback
+        const goalResult = await goalsDataService.fetchGoalById(id, user.id);
         
-        try {
-          // First try from goal_details view
-          const result = await supabase
-            .from('goal_details')
-            .select('*')
-            .eq('id', id)
-            .single();
-            
-          goalData = result.data;
-          goalError = result.error;
-        } catch (err) {
-          // Fall back to direct goals table
-          console.log("Error with goal_details view, falling back to goals table");
-          const result = await supabase
-            .from('goals')
-            .select('*')
-            .eq('id', id)
-            .single();
-            
-          goalData = result.data;
-          goalError = result.error;
+        if (goalResult.error) {
+          throw new Error(goalResult.error.message);
         }
         
-        // If we have an error and no data, handle accordingly
-        if (goalError && !goalData) {
-          throw new Error(`Error fetching goal: ${goalError.message}`);
-        }
-        
-        if (!goalData) {
-          // Goal not found
-          setLoading(false);
+        if (!goalResult.data) {
+          showErrorToast("Goal not found or access denied");
+          navigate("/goals");
           return;
         }
         
+        const goalData = goalResult.data;
         setGoal(goalData as unknown as GoalType);
         
         // Update notes with goal name
@@ -144,7 +132,7 @@ const GoalContribution: FC = () => {
     
     // Check account balance
     const contributionAmount = parseFloat(contribution.amount);
-    const selectedAccount = accounts.find(acc => acc.id.toString() === contribution.account_id);
+    const selectedAccount = accounts.find(acc => acc.id && acc.id.toString() === contribution.account_id);
     
     if (!selectedAccount) {
       setError("Selected account not found");
@@ -178,8 +166,25 @@ const GoalContribution: FC = () => {
         return;
       }
       
+      // Check permissions for family goals
+      if (goal.is_family_goal) {
+        const contributionValidation = await goalContributionPermissions.validateGoalContribution();
+        if (!contributionValidation.canContribute) {
+          setPermissionErrorModal({
+            isOpen: true,
+            title: contributionValidation.errorTitle || 'Contribution Access Denied',
+            message: contributionValidation.errorMessage || 'You cannot contribute to family goals.',
+            suggestedActions: contributionValidation.suggestedActions || ['Contact your family admin for assistance'],
+            userRole: contributionValidation.userRole
+          });
+          setIsSubmitting(false);
+          setViewMode("form");
+          return;
+        }
+      }
+      
       const contributionAmount = parseFloat(contribution.amount);
-      const selectedAccount = accounts.find(acc => acc.id.toString() === contribution.account_id);
+      const selectedAccount = accounts.find(acc => acc.id && acc.id.toString() === contribution.account_id);
       
       if (!selectedAccount) {
         showErrorToast("Selected account not found");
@@ -196,66 +201,19 @@ const GoalContribution: FC = () => {
         return;
       }
       
-      // Start a Supabase transaction using RPC
-      const { data: result, error: rpcError } = await supabase.rpc('contribute_to_goal', {
-        p_goal_id: id,
-        p_amount: contributionAmount,
-        p_account_id: contribution.account_id,
-        p_notes: contribution.notes,
-        p_user_id: user.id
-      });
+      // Use enhanced goals data service for contribution
+      const contributionResult = await goalsDataService.createGoalContribution(
+        id,
+        user.id,
+        {
+          amount: contributionAmount,
+          account_id: contribution.account_id,
+          notes: contribution.notes
+        }
+      );
       
-      // If RPC fails or is not available, perform the operations manually
-      if (rpcError) {
-        console.warn("RPC failed, falling back to manual transaction:", rpcError.message);
-        
-        // Begin manual transaction process
-        
-        // 1. Create a new transaction record
-        const { data: transactionData, error: transactionError } = await supabase
-          .from('transactions')
-          .insert([{
-            date: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
-            amount: contributionAmount,
-            notes: contribution.notes,
-            type: 'expense', // Expense from account perspective
-            account_id: contribution.account_id,
-            goal_id: id,
-            user_id: user.id
-          }])
-          .select()
-          .single();
-          
-        if (transactionError) {
-          throw new Error(`Error creating transaction: ${transactionError.message}`);
-        }
-        
-        // 2. Update account balance
-        const newBalance = selectedAccount.balance - contributionAmount;
-        const { error: accountError } = await supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', contribution.account_id);
-          
-        if (accountError) {
-          throw new Error(`Error updating account balance: ${accountError.message}`);
-        }
-        
-        // 3. Update goal progress
-        const newAmount = goal.current_amount + contributionAmount;
-        const goalStatus = newAmount >= goal.target_amount ? 'completed' : 'in_progress';
-        
-        const { error: goalError } = await supabase
-          .from('goals')
-          .update({ 
-            current_amount: newAmount,
-            status: goalStatus
-          })
-          .eq('id', id);
-          
-        if (goalError) {
-          throw new Error(`Error updating goal progress: ${goalError.message}`);
-        }
+      if (!contributionResult.success) {
+        throw new Error(contributionResult.error || 'Failed to create contribution');
       }
       
       // Show success message
@@ -323,7 +281,7 @@ const GoalContribution: FC = () => {
   
   if (viewMode === "review") {
     const selectedAccount = accounts.find(
-      account => account.id.toString() === contribution.account_id
+      account => account.id && account.id.toString() === contribution.account_id
     );
     
     return (
@@ -332,9 +290,6 @@ const GoalContribution: FC = () => {
         <div className="d-sm-flex align-items-center justify-content-between mb-4">
           <h1 className="h3 mb-0 text-gray-800">Review Contribution</h1>
           <div className="d-flex align-items-center">
-            <span className="text-xs text-success mr-3">
-              <i className="fas fa-sync text-xs mr-1"></i> Real-time updates enabled
-            </span>
             <Link to="/goals" className="btn btn-sm btn-secondary shadow-sm">
               <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
             </Link>
@@ -469,9 +424,6 @@ const GoalContribution: FC = () => {
       <div className="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 className="h3 mb-0 text-gray-800">Make a Contribution</h1>
         <div className="d-flex align-items-center">
-          <span className="text-xs text-success mr-3">
-            <i className="fas fa-sync text-xs mr-1"></i> Real-time updates enabled
-          </span>
           <Link to={`/goals/${id}`} className="btn btn-sm btn-secondary shadow-sm">
             <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Goal Details
           </Link>
@@ -559,8 +511,8 @@ const GoalContribution: FC = () => {
                         required
                       >
                         <option value="">Select Account</option>
-                        {accounts.map((account) => (
-                          <option key={account.id} value={account.id.toString()}>
+                        {accounts.filter(account => account.id).map((account) => (
+                          <option key={account.id} value={account.id!.toString()}>
                             {account.account_name} ({formatCurrency(account.balance)})
                           </option>
                         ))}
@@ -653,7 +605,7 @@ const GoalContribution: FC = () => {
               <div className="mb-3">
                 <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">Current Progress</div>
                 <div className="mb-2">
-                  <div className="progress">
+                  <div className="progress" style={{ height: '8px' }}>
                     <div
                       className={`progress-bar bg-${
                         progressPercentage >= 75 ? "success" : 
@@ -694,8 +646,24 @@ const GoalContribution: FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Permission Error Modal */}
+      <PermissionErrorModal
+        isOpen={permissionErrorModal.isOpen}
+        onClose={() => setPermissionErrorModal({ isOpen: false, title: '', message: '' })}
+        errorTitle={permissionErrorModal.title}
+        errorMessage={permissionErrorModal.message}
+        suggestedActions={permissionErrorModal.suggestedActions}
+        userRole={permissionErrorModal.userRole}
+      />
     </div>
   );
 };
 
-export default GoalContribution; 
+export default function GoalContributionWithErrorBoundary() {
+  return (
+    <GoalErrorBoundary>
+      <GoalContribution />
+    </GoalErrorBoundary>
+  );
+} 

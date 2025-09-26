@@ -4,6 +4,11 @@ import { formatCurrency, getMonthDates } from "../../utils/helpers";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { BudgetFormData } from "./types";
+import { BudgetAmountInput } from "../common/CentavoInput";
+import { formatCurrency as formatCurrencyNew, sanitizeBudgetName, roundToCentavo } from "../../utils/currencyUtils";
+import BudgetErrorBoundary from "../common/BudgetErrorBoundary";
+import { BudgetNotificationService } from "../../services/database/budgetNotificationService";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -16,18 +21,12 @@ interface ExpenseCategory {
   category_name: string;
 }
 
-interface BudgetFormData {
-  category_id: string;
-  amount: string;
-  period: string;
-  startDate: string;
-}
-
 interface Budget {
   id: string;
+  budget_name: string;
   category_id: string;
   amount: number;
-  period: string;
+  period: "month" | "quarter" | "year";
   start_date: string;
   end_date: string;
   user_id: string;
@@ -46,8 +45,9 @@ const EditBudget: FC = () => {
   const [originalBudget, setOriginalBudget] = useState<Budget | null>(null);
 
   const [budget, setBudget] = useState<BudgetFormData>({
+    budget_name: "",
     category_id: "",
-    amount: "",
+    amount: 0, // Changed to number for centavo precision
     period: "month",
     startDate: new Date().toISOString().slice(0, 7),
   });
@@ -92,8 +92,9 @@ const EditBudget: FC = () => {
         
         // Populate form with existing budget data
         setBudget({
-          category_id: budgetData.category_id.toString(),
-          amount: budgetData.amount.toString(),
+          budget_name: budgetData.budget_name || '',
+          category_id: budgetData.category_id, // Keep as string, no conversion needed
+          amount: budgetData.amount || 0, // Convert to number
           period: budgetData.period,
           startDate: new Date(budgetData.start_date).toISOString().slice(0, 7),
         });
@@ -122,14 +123,33 @@ const EditBudget: FC = () => {
     fetchBudgetData();
   }, [user, navigate, showErrorToast, id]);
 
+  const handleAmountChange = (newAmount: number) => {
+    setBudget(prev => ({
+      ...prev,
+      amount: newAmount
+    }));
+  };
+
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ): void => {
     const { name, value } = e.target;
-    setBudget((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    // Handle category selection specifically
+    if (name === 'category_id') {
+      const selectedCategory = expenseCategories.find(cat => cat.id === value);
+      setBudget((prev) => ({
+        ...prev,
+        category_id: value,
+        // Update category_name for consistency
+        category_name: selectedCategory?.category_name || ''
+      }));
+    } else {
+      setBudget((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
   };
 
   const getEndDate = (): string => {
@@ -148,12 +168,36 @@ const EditBudget: FC = () => {
     e.preventDefault();
 
     // Validate
+    if (!budget.budget_name.trim()) {
+      showErrorToast("Please enter a budget name");
+      return;
+    }
+
+    // Validate budget name for format string safety
+    const sanitizedName = sanitizeBudgetName(budget.budget_name);
+    if (sanitizedName !== budget.budget_name.trim()) {
+      const proceed = window.confirm(
+        `Budget name contains special characters that will be cleaned up. Original: "${budget.budget_name.trim()}" will become "${sanitizedName}". Continue?`
+      );
+      if (!proceed) {
+        return;
+      }
+      setBudget(prev => ({ ...prev, budget_name: sanitizedName }));
+    }
+
     if (!budget.category_id) {
       showErrorToast("Please select a category");
       return;
     }
 
-    if (!budget.amount || parseFloat(budget.amount) <= 0) {
+    // Validate category exists in loaded categories
+    const selectedCategory = expenseCategories.find(cat => cat.id === budget.category_id);
+    if (!selectedCategory) {
+      showErrorToast("Selected category is invalid. Please select a valid category.");
+      return;
+    }
+
+    if (!budget.amount || budget.amount <= 0) {
       showErrorToast("Please enter a valid amount");
       return;
     }
@@ -181,11 +225,14 @@ const EditBudget: FC = () => {
       }
       
       const budgetData = {
+        budget_name: sanitizeBudgetName(budget.budget_name.trim()), // Sanitize for format string safety
         category_id: budget.category_id,
-        amount: parseFloat(budget.amount),
+        amount: roundToCentavo(budget.amount), // Ensure centavo precision
         period: budget.period,
         start_date: startDate,
         end_date: endDate,
+        alert_threshold: 0.8, // Maintain alert threshold
+        updated_at: new Date().toISOString() // Track update time
       };
 
       const { data, error } = await supabase
@@ -197,7 +244,27 @@ const EditBudget: FC = () => {
         .single();
         
       if (error) {
-        throw new Error(error.message);
+        // Handle specific database errors
+        if (error.code === '23503') {
+          throw new Error('Invalid category selected. Please choose a valid category.');
+        } else if (error.code === '23505') {
+          throw new Error('A budget with this name already exists. Please choose a different name.');
+        } else {
+          throw new Error(`Database error: ${error.message}`);
+        }
+      }
+      
+      if (!data) {
+        throw new Error('Budget update failed - no data returned');
+      }
+      
+      // Trigger budget update notifications
+      if (data) {
+        try {
+          await BudgetNotificationService.getInstance().checkBudgetThresholds(id);
+        } catch (notificationError) {
+          // Log notification error but don't fail the budget update
+        }
       }
       
       showSuccessToast("Budget updated successfully!");
@@ -252,6 +319,24 @@ const EditBudget: FC = () => {
     );
   }
 
+  // Show error if data failed to load
+  if (error) {
+    return (
+      <div className="container-fluid">
+        <div className="text-center my-5">
+          <div className="alert alert-danger" role="alert">
+            <h4 className="alert-heading">Loading Error</h4>
+            <p>{error}</p>
+            <hr />
+            <button className="btn btn-outline-danger" onClick={() => window.location.reload()}>
+              <i className="fas fa-refresh mr-2"></i>Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (viewMode === "review") {
     const selectedCategory = expenseCategories.find(
       category => category.id === budget.category_id
@@ -279,6 +364,25 @@ const EditBudget: FC = () => {
               <div className="card-body">
                 <div className="row mb-4">
                   <div className="col-md-6 mb-4 mb-md-0">
+                    <div className="card border-left-info shadow h-100 py-2">
+                      <div className="card-body">
+                        <div className="row no-gutters align-items-center">
+                          <div className="col mr-2">
+                            <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
+                              Budget Name
+                            </div>
+                            <div className="h5 mb-0 font-weight-bold text-gray-800">
+                              {budget.budget_name || 'N/A'}
+                            </div>
+                          </div>
+                          <div className="col-auto">
+                            <i className="fas fa-file-alt fa-2x text-gray-300"></i>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
                     <div className="card border-left-primary shadow h-100 py-2">
                       <div className="card-body">
                         <div className="row no-gutters align-items-center">
@@ -287,30 +391,11 @@ const EditBudget: FC = () => {
                               Amount
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {formatCurrency(parseFloat(budget.amount))}
+                              {formatCurrencyNew(budget.amount, 'PHP')}
                             </div>
                           </div>
                           <div className="col-auto">
                             <i className="fas fa-solid fa-peso-sign fa-2x text-gray-300"></i>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="card border-left-info shadow h-100 py-2">
-                      <div className="card-body">
-                        <div className="row no-gutters align-items-center">
-                          <div className="col mr-2">
-                            <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
-                              Period
-                            </div>
-                            <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {budget.period.charAt(0).toUpperCase() + budget.period.slice(1)}
-                            </div>
-                          </div>
-                          <div className="col-auto">
-                            <i className="fas fa-calendar fa-2x text-gray-300"></i>
                           </div>
                         </div>
                       </div>
@@ -325,6 +410,25 @@ const EditBudget: FC = () => {
                         <div className="row no-gutters align-items-center">
                           <div className="col mr-2">
                             <div className="text-xs font-weight-bold text-success text-uppercase mb-1">
+                              Period
+                            </div>
+                            <div className="h5 mb-0 font-weight-bold text-gray-800">
+                              {budget.period.charAt(0).toUpperCase() + budget.period.slice(1)}
+                            </div>
+                          </div>
+                          <div className="col-auto">
+                            <i className="fas fa-calendar fa-2x text-gray-300"></i>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="card border-left-warning shadow h-100 py-2">
+                      <div className="card-body">
+                        <div className="row no-gutters align-items-center">
+                          <div className="col mr-2">
+                            <div className="text-xs font-weight-bold text-warning text-uppercase mb-1">
                               Category
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
@@ -338,12 +442,15 @@ const EditBudget: FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-6">
-                    <div className="card border-left-warning shadow h-100 py-2">
+                </div>
+
+                <div className="row mb-4">
+                  <div className="col-md-6 mb-4 mb-md-0">
+                    <div className="card border-left-info shadow h-100 py-2">
                       <div className="card-body">
                         <div className="row no-gutters align-items-center">
                           <div className="col mr-2">
-                            <div className="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
                               Start Date
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
@@ -352,6 +459,25 @@ const EditBudget: FC = () => {
                           </div>
                           <div className="col-auto">
                             <i className="fas fa-calendar-day fa-2x text-gray-300"></i>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="card border-left-secondary shadow h-100 py-2">
+                      <div className="card-body">
+                        <div className="row no-gutters align-items-center">
+                          <div className="col mr-2">
+                            <div className="text-xs font-weight-bold text-secondary text-uppercase mb-1">
+                              End Date
+                            </div>
+                            <div className="h5 mb-0 font-weight-bold text-gray-800">
+                              {new Date(getEndDate()).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div className="col-auto">
+                            <i className="fas fa-calendar-check fa-2x text-gray-300"></i>
                           </div>
                         </div>
                       </div>
@@ -439,7 +565,33 @@ const EditBudget: FC = () => {
             <div className="card-body">
               <form onSubmit={handleReview}>
                 <div className="row">
-                  <div className="col-md-6">
+                  <div className="col-12">
+                    <div className="form-group">
+                      <label htmlFor="budget_name" className="font-weight-bold text-gray-800">
+                        Budget Name <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="budget_name"
+                        name="budget_name"
+                        value={budget.budget_name}
+                        onChange={handleChange}
+                        className="form-control form-control-user"
+                        placeholder="Enter budget name (e.g., Monthly Food Budget)"
+                        maxLength={100}
+                        pattern="[^%.*]+"
+                        title="Budget name cannot contain %, ., or * characters"
+                        required
+                      />
+                      <small className="form-text text-muted">
+                        Give your budget a descriptive name (avoid special characters like %, ., *)
+                      </small>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="row">
+                  <div className="col-md-4">
                     <div className="form-group">
                       <label htmlFor="category_id" className="font-weight-bold text-gray-800">
                         Category <span className="text-danger">*</span>
@@ -462,37 +614,7 @@ const EditBudget: FC = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="amount" className="font-weight-bold text-gray-800">
-                        Amount <span className="text-danger">*</span>
-                      </label>
-                      <div className="input-group">
-                        <div className="input-group-prepend">
-                          <span className="input-group-text">₱</span>
-                        </div>
-                        <input
-                          type="number"
-                          id="amount"
-                          name="amount"
-                          value={budget.amount}
-                          onChange={handleChange}
-                          className="form-control form-control-user"
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          required
-                        />
-                      </div>
-                      <small className="form-text text-muted">
-                        Enter your budget amount
-                      </small>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="row">
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="form-group">
                       <label htmlFor="period" className="font-weight-bold text-gray-800">
                         Period <span className="text-danger">*</span>
@@ -512,7 +634,7 @@ const EditBudget: FC = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="form-group">
                       <label htmlFor="startDate" className="font-weight-bold text-gray-800">
                         Start Date <span className="text-danger">*</span>
@@ -530,6 +652,20 @@ const EditBudget: FC = () => {
                         When does this budget start?
                       </small>
                     </div>
+                  </div>
+                </div>
+
+                <div className="row">
+                  <div className="col-md-6 mx-auto">
+                    <BudgetAmountInput
+                      value={budget.amount}
+                      onChange={handleAmountChange}
+                      currency="PHP"
+                      label="Amount"
+                      placeholder="0.00"
+                      required={true}
+                      suggestedAmounts={[1000, 2500, 5000, 10000, 15000, 25000]}
+                    />
                   </div>
                 </div>
 
@@ -626,4 +762,10 @@ const EditBudget: FC = () => {
   );
 };
 
-export default EditBudget; 
+export default function EditBudgetWithErrorBoundary() {
+  return (
+    <BudgetErrorBoundary>
+      <EditBudget />
+    </BudgetErrorBoundary>
+  );
+} 

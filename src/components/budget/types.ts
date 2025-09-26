@@ -3,19 +3,40 @@
 export interface BudgetItem {
   id: string;
   user_id: string;
-  category_id: string;
-  category_name: string;
+  budget_name: string;
+  description?: string;
   amount: number;
   spent: number;
-  remaining: number;
-  percentage: number;
-  status: "success" | "warning" | "danger";
-  month: string;
-  year: number;
+  currency: string;
   period: string;
   start_date: string;
   end_date: string;
+  category_id?: string;
+  category_name?: string;
+  status: string;
+  alert_threshold?: number;
+  alert_enabled?: boolean;
   created_at: string;
+  updated_at: string;
+  
+  // Calculated fields (from view or computed)
+  remaining?: number;
+  percentage_used?: number;
+  status_indicator?: string;
+  display_category?: string;
+  category_icon?: string;
+  category_color?: string;
+  formatted_amount?: string;
+  formatted_spent?: string;
+  formatted_remaining?: string;
+  period_status?: string;
+  days_remaining?: number;
+  unread_alerts?: number;
+  
+  // Legacy compatibility fields
+  percentage?: number;
+  month?: string;
+  year?: number;
 }
 
 export interface Transaction {
@@ -23,7 +44,7 @@ export interface Transaction {
   user_id: string;
   account_id: string;
   category_id: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "contribution";
   amount: number;
   date: string;
   notes: string;
@@ -40,8 +61,10 @@ export interface FilterState {
 }
 
 export interface BudgetFormData {
+  budget_name: string;
   category_id: string;
-  amount: string;
+  category_name?: string; // Optional category name for display purposes
+  amount: number; // Changed from string to number for centavo precision
   period: "month" | "quarter" | "year";
   startDate: string;
 }

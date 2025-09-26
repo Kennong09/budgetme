@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reauthentication Required - BudgetMe</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; background-color: #f9fafb; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%; background-color: #f9fafb;">
+        <tr>
+            <td style="padding: 40px 20px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); overflow: hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 30px 40px; text-align: center;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <div style="display: inline-block; width: 60px; height: 60px; background-color: rgba(255, 255, 255, 0.2); border-radius: 50%; line-height: 60px; margin-bottom: 15px; padding: 10px;">
+                                            <img src="https://raw.githubusercontent.com/Kennong09/budgetme/refs/heads/main/public/favicon.ico" alt="BudgetMe" style="width: 40px; height: 40px; display: block; margin: 0 auto;" />
+                                        </div>
+                                        <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 0; letter-spacing: -0.5px;">BudgetMe</h1>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <!-- Security Icon -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%; margin-bottom: 30px;">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <div style="display: inline-block; width: 80px; height: 80px; background-color: rgba(245, 158, 11, 0.1); border-radius: 50%; line-height: 80px; margin-bottom: 20px;">
+                                            <i class="fas fa-shield-alt" style="color: #f59e0b; font-size: 36px;"></i>
+                                        </div>
+                                        <h2 style="color: #1f2937; font-size: 24px; font-weight: 600; margin: 0; margin-bottom: 16px;">Reauthentication Required</h2>
+                                        <p style="color: #6b7280; font-size: 16px; margin: 0; line-height: 1.6;">For your security, we need to verify your identity before proceeding.</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- Main Message -->
+                            <div style="background-color: #fef3c7; border-radius: 8px; padding: 24px; margin-bottom: 30px; border-left: 4px solid #f59e0b;">
+                                <p style="color: #374151; font-size: 16px; margin: 0; margin-bottom: 16px; line-height: 1.6;">You're attempting to access a sensitive area of your BudgetMe account. Please use the verification code below to confirm your identity:</p>
+                                <div style="text-align: center; background-color: #ffffff; border-radius: 6px; padding: 20px; margin: 16px 0;">
+                                    <p style="color: #6b7280; font-size: 14px; margin: 0; margin-bottom: 8px; font-weight: 500;">Your Verification Code:</p>
+                                    <div style="font-family: 'Courier New', monospace; font-size: 28px; font-weight: 700; color: #f59e0b; letter-spacing: 4px; background-color: #fef3c7; padding: 12px 20px; border-radius: 6px; border: 2px dashed #f59e0b;">{{ .Token }}</div>
+                                </div>
+                                <p style="color: #374151; font-size: 14px; margin: 0; line-height: 1.6; text-align: center;">Enter this code in your browser to complete the reauthentication process.</p>
+                            </div>
+                            
+                            <!-- Instructions -->
+                            <div style="background-color: #f0f9ff; border-radius: 8px; padding: 16px; margin-bottom: 20px; border-left: 4px solid #6366f1;">
+                                <h3 style="color: #1e40af; font-size: 16px; font-weight: 600; margin: 0; margin-bottom: 8px;">How to use this code:</h3>
+                                <ol style="color: #1e40af; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.5;">
+                                    <li>Return to your BudgetMe browser tab</li>
+                                    <li>Enter the verification code shown above</li>
+                                    <li>Click "Verify" to complete the process</li>
+                                    <li>You'll then have access to the requested feature</li>
+                                </ol>
+                            </div>
+                            
+                            <!-- Security Notice -->
+                            <div style="background-color: #fef2f2; border-radius: 8px; padding: 16px; border-left: 4px solid #ef4444;">
+                                <h3 style="color: #991b1b; font-size: 16px; font-weight: 600; margin: 0; margin-bottom: 8px;">Security Notice</h3>
+                                <ul style="color: #991b1b; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.5;">
+                                    <li>This verification code expires in 10 minutes</li>
+                                    <li>Never share this code with anyone</li>
+                                    <li>If you didn't request this verification, secure your account immediately</li>
+                                    <li>BudgetMe will never ask for this code via phone or email</li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9fafb; padding: 30px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="color: #6b7280; font-size: 14px; margin: 0; margin-bottom: 8px;">This verification code was sent from BudgetMe Security</p>
+                            <p style="color: #9ca3af; font-size: 12px; margin: 0;">If you didn't request this verification, please contact our support team immediately.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

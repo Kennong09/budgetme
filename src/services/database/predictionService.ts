@@ -5,9 +5,9 @@ import { GoalService } from './goalService';
 import axios from 'axios';
 
 // FastAPI backend configuration
-const PREDICTION_API_BASE_URL = process.env.REACT_APP_PREDICTION_API_URL || 'https://prediction-7816fzm49-kcprsnlcc-personal-projects.vercel.app';
+const PREDICTION_API_BASE_URL = process.env.REACT_APP_PREDICTION_API_URL || 'https://prediction-api-rust.vercel.app';
 
-// Types for prediction service
+// Types for prediction service - UPDATED TO MATCH SQL SCHEMA
 export interface FinancialDataPoint {
   date: Date;
   income: number;
@@ -73,7 +73,7 @@ export interface PredictionServiceConfig {
   seasonalityMode: 'additive' | 'multiplicative';
 }
 
-// New interfaces for FastAPI integration
+// UPDATED interfaces to match SQL schema structure
 export interface TransactionData {
   date: string;
   amount: number;
@@ -120,6 +120,7 @@ export interface AIInsight {
   recommendation?: string;
 }
 
+// UPDATED UsageStatus to match SQL schema
 export interface UsageStatus {
   user_id: string;
   current_usage: number;
@@ -127,94 +128,169 @@ export interface UsageStatus {
   reset_date: string;
   exceeded: boolean;
   remaining: number;
+  tier?: string;
+  rate_limited?: boolean;
+  rate_limit_remaining?: number;
+  suspended?: boolean;
+}
+
+// NEW interfaces for SQL schema integration
+export interface PredictionRequestLog {
+  id: string;
+  user_id: string;
+  external_request_id?: string;
+  api_endpoint: string;
+  timeframe: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'timeout' | 'rate_limited';
+  input_data: any;
+  response_data?: any;
+  error_details?: any;
+}
+
+export interface ProphetPredictionResult {
+  id: string;
+  user_id: string;
+  request_id: string;
+  timeframe: string;
+  predictions: any;
+  category_forecasts: any;
+  model_accuracy: any;
+  confidence_score: number;
+  user_profile: any;
+  generated_at: string;
+  expires_at: string;
 }
 
 export class PredictionService {
   /**
-   * Generate Prophet-based financial predictions using FastAPI backend
+   * Generate Prophet-based financial predictions with SQL schema integration
    */
   static async generateProphetPredictions(
     userId: string,
     timeframe: 'months_3' | 'months_6' | 'year_1' = 'months_3'
   ): Promise<PredictionResponse> {
+    let requestId: string | null = null;
+    
     try {
-      // For now, return mock data since our Vercel API is simplified
-      // In production, you would want to implement the full Prophet integration
-      
-      // Fetch user's transaction data
+      // Step 1: Check usage limits using SQL schema
+      const usageCheck = await this.checkUsageLimitsFromDB(userId, 'prophet');
+      if (!usageCheck.can_request) {
+        throw new Error(`Usage limit exceeded. ${usageCheck.remaining} requests remaining until ${usageCheck.reset_date}`);
+      }
+
+      // Step 2: Check for cached predictions
+      const cachedPrediction = await this.getCachedPredictionFromDB(userId, timeframe);
+      if (cachedPrediction.found && cachedPrediction.data) {
+        console.log('Returning cached prediction for user:', userId);
+        return cachedPrediction.data;
+      }
+
+      // Step 3: Fetch user transaction data
       const transactions = await this.fetchUserTransactionData(userId);
       
       if (transactions.length < 3) {
         throw new Error('At least 3 transactions are required for predictions');
       }
 
-      // Call our simplified prediction endpoint
-      const requestPayload = {
+      // Step 4: Log prediction request to database
+      requestId = await this.logPredictionRequestToDB(
+        userId,
+        '/api/v1/predictions/generate',
+        timeframe,
+        { transaction_count: transactions.length, api_call: 'prophet' }
+      );
+
+      // Step 5: Prepare request payload for FastAPI
+      const requestPayload: PredictionRequest = {
         user_id: userId,
-        transactions: transactions.slice(0, 10), // Send recent transactions
-        prediction_type: 'expense',
-        days_ahead: timeframe === 'months_3' ? 90 : timeframe === 'months_6' ? 180 : 365
+        transaction_data: transactions.slice(0, 20), // Limit data size
+        timeframe,
+        seasonality_mode: 'additive',
+        include_categories: true,
+        include_insights: true
       };
 
+      let response: PredictionResponse;
+
       try {
-        // Try to call the Vercel API
-        const response = await axios.post(
-          `${PREDICTION_API_BASE_URL}/predict`,
+        // Step 6: Call FastAPI backend
+        console.log('Calling FastAPI prediction service...');
+        const apiResponse = await axios.post(
+          `${PREDICTION_API_BASE_URL}/api/v1/predictions/generate`,
           requestPayload,
           {
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await this.getAuthToken()}`
             },
-            timeout: 30000 // 30 second timeout
+            timeout: 45000 // 45 second timeout
           }
         );
 
-        // Convert the simple response to our expected format
-        const simpleResponse = response.data;
+        response = apiResponse.data;
         
-        return {
-          user_id: userId,
-          timeframe,
-          predictions: simpleResponse.predictions.map((pred: any) => ({
-            date: new Date(pred.date),
-            predicted: pred.predicted_amount,
-            upper: pred.predicted_amount * 1.2,
-            lower: pred.predicted_amount * 0.8,
-            trend: pred.predicted_amount,
-            seasonal: 0,
-            confidence: pred.confidence
-          })),
-          model_accuracy: {
-            mape: 15.0,
-            rmse: 100.0,
-            mae: 80.0,
-            data_points: transactions.length
-          },
-          confidence_score: 0.75,
-          user_profile: await this.buildUserFinancialProfile(userId),
-          category_forecasts: {},
-          insights: [
-            {
-              title: 'Statistical Analysis',
-              description: 'Predictions generated using statistical analysis',
-              category: 'trend',
-              confidence: 0.8
-            }
-          ],
-          usage_count: 1,
-          max_usage: 10,
-          reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          generated_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-        };
-      } catch (apiError) {
-        console.warn('Vercel API call failed, using fallback:', apiError);
+        // Step 7: Update request status to completed
+        if (requestId) {
+          await this.updateRequestStatusInDB(
+            requestId,
+            'completed',
+            response,
+            null,
+            Date.now() - parseInt(requestId.split('-')[0] || '0')
+          );
+        }
+
+      } catch (apiError: any) {
+        console.warn('FastAPI call failed, using fallback:', apiError.message);
+        
+        // Step 8: Update request status to failed and use fallback
+        if (requestId) {
+          await this.updateRequestStatusInDB(
+            requestId,
+            'failed',
+            null,
+            { error: apiError.message, fallback_used: true }
+          );
+        }
         
         // Fallback to local calculation
-        return this.generateFallbackPredictions(userId, timeframe, transactions);
+        response = this.generateFallbackPredictions(userId, timeframe, transactions);
       }
+
+      // Step 9: Store prediction result in database
+      const predictionId = await this.storeProphetPredictionToDB(
+        userId,
+        requestId || '',
+        timeframe,
+        response.predictions,
+        response.category_forecasts || {},
+        response.model_accuracy,
+        response.confidence_score,
+        response.user_profile
+      );
+
+      // Step 10: Cache results locally for quick access
+      await this.cachePredictionResults(userId, response);
+
+      // Step 11: Increment usage counter
+      await this.incrementUsageInDB(userId, 'prophet');
+
+      console.log(`Prediction generated and stored with ID: ${predictionId}`);
+      return response;
+
     } catch (error: any) {
       console.error('Prediction generation error:', error);
+      
+      // Update request status to failed if we have a requestId
+      if (requestId) {
+        await this.updateRequestStatusInDB(
+          requestId,
+          'failed',
+          null,
+          { error: error.message }
+        );
+      }
+      
       throw new Error(`Failed to generate predictions: ${error.message}`);
     }
   }
@@ -294,19 +370,23 @@ export class PredictionService {
   }
 
   /**
-   * Check user's prediction usage status
+   * Check user's prediction usage status using SQL schema
    */
   static async checkUsageLimit(userId: string): Promise<UsageStatus> {
     try {
-      // For simplified Vercel deployment, we'll just allow usage
-      // In production, you would implement proper usage tracking
+      const usageCheck = await this.checkUsageLimitsFromDB(userId, 'prophet');
+      
       return {
         user_id: userId,
-        current_usage: 0,
-        max_usage: 10,
-        reset_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        exceeded: false,
-        remaining: 10
+        current_usage: usageCheck.current_usage,
+        max_usage: usageCheck.limit,
+        reset_date: usageCheck.reset_date,
+        exceeded: !usageCheck.can_request,
+        remaining: usageCheck.remaining,
+        tier: usageCheck.tier,
+        rate_limited: usageCheck.rate_limited,
+        rate_limit_remaining: usageCheck.rate_limit_remaining,
+        suspended: usageCheck.suspended
       };
     } catch (error: any) {
       console.error('Error checking usage limit:', error);
@@ -320,6 +400,245 @@ export class PredictionService {
         exceeded: false,
         remaining: 5
       };
+    }
+  }
+
+  // =====================================================
+  // SQL SCHEMA INTEGRATION METHODS
+  // =====================================================
+
+  /**
+   * Check usage limits using the SQL schema functions
+   */
+  static async checkUsageLimitsFromDB(
+    userId: string, 
+    serviceType: 'prophet' | 'ai_insights' = 'prophet'
+  ): Promise<any> {
+    try {
+      const { data, error } = await supabase.rpc('can_make_prediction_request', {
+        p_user_id: userId,
+        p_service_type: serviceType
+      });
+
+      if (error) {
+        console.error('Error checking usage limits:', error);
+        // Return permissive default
+        return {
+          can_request: true,
+          current_usage: 0,
+          limit: 10,
+          remaining: 10,
+          tier: 'free',
+          rate_limited: false,
+          reset_date: new Date().toISOString()
+        };
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Database error checking usage limits:', error);
+      return {
+        can_request: true,
+        current_usage: 0,
+        limit: 5,
+        remaining: 5,
+        tier: 'free',
+        rate_limited: false,
+        reset_date: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * Increment usage counter after successful request
+   */
+  static async incrementUsageInDB(
+    userId: string, 
+    serviceType: 'prophet' | 'ai_insights' = 'prophet'
+  ): Promise<boolean> {
+    try {
+      const { data, error } = await supabase.rpc('increment_prediction_usage', {
+        p_user_id: userId,
+        p_service_type: serviceType
+      });
+
+      if (error) {
+        console.error('Error incrementing usage:', error);
+        return false;
+      }
+
+      console.log(`Successfully incremented ${serviceType} usage for user:`, userId);
+      return data === true;
+    } catch (error) {
+      console.error('Database error incrementing usage:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Log prediction request to database
+   */
+  static async logPredictionRequestToDB(
+    userId: string,
+    apiEndpoint: string,
+    timeframe: string,
+    inputData: any,
+    externalRequestId?: string
+  ): Promise<string> {
+    try {
+      const { data, error } = await supabase.rpc('log_prediction_request', {
+        p_user_id: userId,
+        p_api_endpoint: apiEndpoint,
+        p_timeframe: timeframe,
+        p_input_data: inputData,
+        p_external_request_id: externalRequestId
+      });
+
+      if (error) {
+        console.error('Error logging prediction request:', error);
+        return `fallback-${Date.now()}`;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Database error logging request:', error);
+      return `fallback-${Date.now()}`;
+    }
+  }
+
+  /**
+   * Update request status in database
+   */
+  static async updateRequestStatusInDB(
+    requestId: string,
+    status: string,
+    responseData?: any,
+    errorDetails?: any,
+    apiResponseTimeMs?: number
+  ): Promise<boolean> {
+    try {
+      const { data, error } = await supabase.rpc('update_request_status', {
+        p_request_id: requestId,
+        p_status: status,
+        p_response_data: responseData,
+        p_error_details: errorDetails,
+        p_api_response_time_ms: apiResponseTimeMs
+      });
+
+      if (error) {
+        console.error('Error updating request status:', error);
+        return false;
+      }
+
+      return data === true;
+    } catch (error) {
+      console.error('Database error updating request status:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Store Prophet prediction result in database
+   */
+  static async storeProphetPredictionToDB(
+    userId: string,
+    requestId: string,
+    timeframe: string,
+    predictions: any,
+    categoryForecasts: any,
+    modelAccuracy: any,
+    confidenceScore: number,
+    userProfile: any
+  ): Promise<string> {
+    try {
+      const { data, error } = await supabase.rpc('store_prophet_prediction', {
+        p_user_id: userId,
+        p_request_id: requestId,
+        p_timeframe: timeframe,
+        p_predictions: predictions,
+        p_category_forecasts: categoryForecasts,
+        p_model_accuracy: modelAccuracy,
+        p_confidence_score: confidenceScore,
+        p_user_profile: userProfile
+      });
+
+      if (error) {
+        console.error('Error storing Prophet prediction:', error);
+        return `fallback-${Date.now()}`;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Database error storing prediction:', error);
+      return `fallback-${Date.now()}`;
+    }
+  }
+
+  /**
+   * Get cached prediction from database
+   */
+  static async getCachedPredictionFromDB(
+    userId: string,
+    timeframe: string
+  ): Promise<{ found: boolean; data?: PredictionResponse }> {
+    try {
+      const { data, error } = await supabase.rpc('get_cached_prophet_prediction', {
+        p_user_id: userId,
+        p_timeframe: timeframe
+      });
+
+      if (error) {
+        console.error('Error getting cached prediction:', error);
+        return { found: false };
+      }
+
+      if (data && data.found) {
+        // Convert cached data to PredictionResponse format
+        const cachedResponse: PredictionResponse = {
+          user_id: userId,
+          timeframe: timeframe,
+          generated_at: data.generated_at,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          predictions: Array.isArray(data.predictions) ? data.predictions.map((p: any) => ({
+            date: new Date(p.date),
+            predicted: p.predicted,
+            upper: p.upper,
+            lower: p.lower,
+            trend: p.trend,
+            seasonal: p.seasonal || 0,
+            confidence: p.confidence
+          })) : [],
+          category_forecasts: data.category_forecasts || {},
+          model_accuracy: data.model_accuracy || { mae: 0, mape: 0, rmse: 0, data_points: 0 },
+          confidence_score: data.confidence_score || 0.75,
+          user_profile: data.user_profile || {
+            avgMonthlyIncome: 0,
+            avgMonthlyExpenses: 0,
+            savingsRate: 0,
+            budgetCategories: [],
+            financialGoals: [],
+            spendingPatterns: [],
+            transactionCount: 0
+          },
+          insights: [],
+          usage_count: 0,
+          max_usage: 10,
+          reset_date: new Date().toISOString()
+        };
+
+        console.log('Retrieved cached prediction:', {
+          id: data.id,
+          generated_at: data.generated_at,
+          predictions_count: cachedResponse.predictions.length
+        });
+
+        return { found: true, data: cachedResponse };
+      }
+
+      return { found: false };
+    } catch (error) {
+      console.error('Database error getting cached prediction:', error);
+      return { found: false };
     }
   }
 

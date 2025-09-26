@@ -69,7 +69,7 @@ const JoinRequestsSection: React.FC<JoinRequestsSectionProps> = ({ familyId }) =
         if (userIds.length > 0) {
           const { data: profilesData, error: profilesError } = await supabase
             .from('profiles')
-            .select('id, email, user_metadata')
+            .select('id, email, full_name, avatar_url')
             .in('id', userIds);
             
           if (profilesError) {
@@ -272,14 +272,14 @@ const JoinRequestsSection: React.FC<JoinRequestsSectionProps> = ({ familyId }) =
                     <div className="d-flex align-items-center">
                       <img 
                         className="img-profile rounded-circle mr-3" 
-                        src={request.profiles?.user_metadata?.avatar_url || `../images/placeholder.png`} 
+                        src={request.profiles?.avatar_url || `../images/placeholder.png`} 
                         width="40" 
                         height="40" 
                         alt="User" 
                       />
                       <div className="font-weight-bold">
-                        {request.profiles?.user_metadata?.username || 
-                         request.profiles?.user_metadata?.full_name || 
+                        {request.profiles?.full_name || 
+                         request.profiles?.email || 
                          "User"}
                       </div>
                     </div>

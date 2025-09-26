@@ -21,6 +21,27 @@ const BudgetForm: FC<BudgetFormProps> = ({
   return (
     <form onSubmit={onSubmit}>
       <div className="form-group">
+        <label htmlFor="budget_name" className="font-weight-bold text-gray-800">
+          Budget Name <span className="text-danger">*</span>
+        </label>
+        <input
+          type="text"
+          id="budget_name"
+          name="budget_name"
+          value={budget.budget_name || ''}
+          onChange={onChange}
+          className="form-control form-control-user"
+          placeholder="Enter budget name (e.g., Monthly Food Budget)"
+          maxLength={100}
+          required
+          disabled={isLoading}
+        />
+        <small className="form-text text-muted">
+          Give your budget a descriptive name
+        </small>
+      </div>
+      
+      <div className="form-group">
         <label htmlFor="category_id" className="font-weight-bold text-gray-800">
           Category <span className="text-danger">*</span>
         </label>

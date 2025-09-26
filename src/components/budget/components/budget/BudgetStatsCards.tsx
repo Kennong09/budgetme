@@ -42,7 +42,7 @@ const BudgetStatsCards: FC<BudgetStatsCardsProps> = ({ budget }) => {
               Remaining
             </div>
             <div className="h5 mb-0 font-weight-bold text-gray-800">
-              {formatCurrency(budget.remaining)}
+              {formatCurrency(budget.remaining || 0)}
             </div>
           </div>
         </div>

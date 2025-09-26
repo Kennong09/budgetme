@@ -3,3 +3,9 @@ export { default as BudgetPerformanceChart } from './BudgetPerformanceChart';
 export { default as GoalPerformanceChart } from './GoalPerformanceChart';
 export { default as GoalBreakdownChart } from './GoalBreakdownChart';
 export { default as ContributionChart } from './ContributionChart';
+
+// Export shared components
+export * from './shared';
+
+// Export utilities
+export * from './utils';

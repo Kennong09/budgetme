@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode, Suspense } from "react";
+import React, { Component, ReactNode, ErrorInfo, Suspense } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import AppRoutes from "./AppRoutes";
 import { AuthProvider } from "./utils/AuthContext";
@@ -6,6 +6,9 @@ import { ToastProvider } from "./utils/ToastContext";
 import { CurrencyProvider } from "./utils/CurrencyContext";
 import FloatingChatbot from "./components/chatbot/FloatingChatbot";
 import "./App.css";
+
+// Import dashboard CSS at app level to avoid lazy loading issues
+import "./components/dashboard/dashboard.css";
 
 // Error Boundary Component
 interface ErrorBoundaryProps {
@@ -116,7 +119,7 @@ function App() {
   return (
     <ErrorBoundary>
       <Suspense fallback={<AppLoading />}>
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <ToastProvider>
         <AuthProvider>
           <CurrencyProvider>

@@ -49,7 +49,7 @@ const BudgetReview: FC<BudgetReviewProps> = ({
         <div className="col-lg-8 mx-auto">
           <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
             <div className="card-header py-3">
-              <h6 className="m-0 font-weight-bold text-primary">Budget Details</h6>
+              <h6 className="m-0 font-weight-bold text-primary">{budget.budget_name || 'Budget Details'}</h6>
             </div>
             <div className="card-body">
               <div className="row mb-4">
@@ -59,10 +59,10 @@ const BudgetReview: FC<BudgetReviewProps> = ({
                       <div className="row no-gutters align-items-center">
                         <div className="col mr-2">
                           <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                            Category
+                            Budget Name
                           </div>
                           <div className="h5 mb-0 font-weight-bold text-gray-800">
-                            {category ? category.category_name : "Unknown Category"}
+                            {budget.budget_name || 'N/A'}
                           </div>
                         </div>
                         <div className="col-auto">
@@ -78,14 +78,14 @@ const BudgetReview: FC<BudgetReviewProps> = ({
                       <div className="row no-gutters align-items-center">
                         <div className="col mr-2">
                           <div className="text-xs font-weight-bold text-success text-uppercase mb-1">
-                            Budget Amount
+                            Category
                           </div>
                           <div className="h5 mb-0 font-weight-bold text-gray-800">
-                            {formatCurrency(parseFloat(budget.amount))}
+                            {category ? category.category_name : "Unknown Category"}
                           </div>
                         </div>
                         <div className="col-auto">
-                          <i className="fas fa-solid fa-peso-sign fa-2x text-gray-300"></i>
+                          <i className="fas fa-layer-group fa-2x text-gray-300"></i>
                         </div>
                       </div>
                     </div>
@@ -95,6 +95,25 @@ const BudgetReview: FC<BudgetReviewProps> = ({
               
               <div className="row mb-4">
                 <div className="col-md-6 mb-4 mb-md-0">
+                  <div className="card border-left-success shadow h-100 py-2">
+                    <div className="card-body">
+                      <div className="row no-gutters align-items-center">
+                        <div className="col mr-2">
+                          <div className="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Budget Amount
+                          </div>
+                          <div className="h5 mb-0 font-weight-bold text-gray-800">
+                            {formatCurrency(Number(budget.amount))}
+                          </div>
+                        </div>
+                        <div className="col-auto">
+                          <i className="fas fa-solid fa-peso-sign fa-2x text-gray-300"></i>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-6">
                   <div className="card border-left-info shadow h-100 py-2">
                     <div className="card-body">
                       <div className="row no-gutters align-items-center">
@@ -113,7 +132,9 @@ const BudgetReview: FC<BudgetReviewProps> = ({
                     </div>
                   </div>
                 </div>
-                <div className="col-md-6">
+              </div>
+              <div className="row mb-4">
+                <div className="col-md-6 mb-4 mb-md-0">
                   <div className="card border-left-warning shadow h-100 py-2">
                     <div className="card-body">
                       <div className="row no-gutters align-items-center">
@@ -127,6 +148,25 @@ const BudgetReview: FC<BudgetReviewProps> = ({
                         </div>
                         <div className="col-auto">
                           <i className="fas fa-calendar fa-2x text-gray-300"></i>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="card border-left-secondary shadow h-100 py-2">
+                    <div className="card-body">
+                      <div className="row no-gutters align-items-center">
+                        <div className="col mr-2">
+                          <div className="text-xs font-weight-bold text-secondary text-uppercase mb-1">
+                            End Date
+                          </div>
+                          <div className="h5 mb-0 font-weight-bold text-gray-800">
+                            {new Date(getEndDate()).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="col-auto">
+                          <i className="fas fa-calendar-check fa-2x text-gray-300"></i>
                         </div>
                       </div>
                     </div>

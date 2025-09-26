@@ -12,7 +12,7 @@ import {
 import { supabase } from '../../utils/supabaseClient';
 
 // Configuration for Prophet API
-const PROPHET_API_BASE_URL = process.env.REACT_APP_PROPHET_API_URL || 'https://prediction-7816fzm49-kcprsnlcc-personal-projects.vercel.app';
+const PROPHET_API_BASE_URL = process.env.REACT_APP_PROPHET_API_URL || 'https://prediction-api-rust.vercel.app';
 
 interface ProphetAIInsightRequest {
   predictions: ProphetPrediction[];
@@ -57,81 +57,312 @@ interface InsightCache {
   };
 }
 
+// NEW interfaces for SQL schema integration
+interface AIInsightDBResult {
+  id: string;
+  user_id: string;
+  prediction_id?: string;
+  insights: any;
+  ai_service: string;
+  model_used: string;
+  generation_time_ms?: number;
+  cache_key?: string;
+  generated_at: string;
+  expires_at: string;
+}
+
 export class AIInsightsService {
   private static cache: InsightCache = {};
   private static readonly CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
   /**
-   * Generates AI insights using Prophet API with OpenRouter AI (openai/gpt-oss-20b:free)
+   * Generates AI insights with SQL schema integration
    */
   static async generateInsights(request: AIInsightRequest): Promise<AIInsightResponse> {
+    const startTime = Date.now();
+    let insightId: string | null = null;
+    
     try {
-      // Check cache first
+      // Step 1: Check usage limits for AI insights
+      const usageCheck = await this.checkAIInsightsUsage(request.userContext);
+      if (!usageCheck.can_request) {
+        throw new Error(`RATE_LIMIT: AI insights limit exceeded. ${usageCheck.remaining} requests remaining.`);
+      }
+
+      // Step 2: Check cache in database first
       const cacheKey = this.generateCacheKey(request);
-      const cached = this.cache[cacheKey];
+      const cachedInsight = await this.getCachedInsightFromDB(cacheKey);
       
-      if (cached && (Date.now() - cached.timestamp) < this.CACHE_TTL) {
-        return cached.response;
+      if (cachedInsight) {
+        console.log('Returning cached AI insight');
+        return cachedInsight;
       }
 
-      // Try the new dedicated AI insights endpoint
+      let insights: AIInsightResponse | null = null;
+      let aiService = 'fallback';
+      let modelUsed = 'local';
+
+      // Step 3: Try interactive AI insights endpoint
       try {
-        const interactiveInsights = await this.generateInteractiveAIInsights(request);
-        if (interactiveInsights) {
-          // Cache the result
-          this.cache[cacheKey] = {
-            response: interactiveInsights,
-            timestamp: Date.now()
-          };
-          return interactiveInsights;
+        const interactiveResult = await this.generateInteractiveAIInsights(request);
+        if (interactiveResult) {
+          insights = interactiveResult;
+          aiService = 'openrouter';
+          modelUsed = 'openai/gpt-oss-120b:free';
+          console.log('Generated insights using OpenRouter API');
+        } else {
+          throw new Error('OpenRouter returned null response');
         }
-      } catch (apiError) {
-        console.warn('Interactive AI insights API failed, trying Prophet API:', apiError);
+      } catch (apiError: any) {
+        console.warn('OpenRouter API failed, trying Prophet API:', apiError.message);
+        
+        // Step 4: Try Prophet API
+        try {
+          const prophetResult = await this.generateProphetAIInsights(request);
+          if (prophetResult) {
+            insights = prophetResult;
+            aiService = 'prophet';
+            modelUsed = 'prophet-ai';
+          } else {
+            throw new Error('Prophet API returned null response');
+          }
+        } catch (prophetError: any) {
+          console.warn('Prophet AI failed, using chatbot fallback:', prophetError.message);
+          
+          // Step 5: Fallback to chatbot service
+          insights = await this.generateChatbotInsights(request);
+          aiService = 'chatbot';
+          modelUsed = 'chatbot-service';
+        }
       }
 
-      // Try Prophet API (existing implementation)
-      try {
-        const prophetInsights = await this.generateProphetAIInsights(request);
-        if (prophetInsights) {
-          // Cache the result
-          this.cache[cacheKey] = {
-            response: prophetInsights,
-            timestamp: Date.now()
-          };
-          return prophetInsights;
-        }
-      } catch (prophetError) {
-        console.warn('Prophet AI insights failed, falling back to chatbot service:', prophetError);
+      // Ensure we have insights (fallback if all methods failed)
+      if (!insights) {
+        console.warn('All AI methods failed, generating fallback insights');
+        insights = this.generateFallbackInsights(request);
+        aiService = 'fallback';
+        modelUsed = 'local-fallback';
       }
 
-      // Fallback to existing chatbot service
+      // Step 6: Store insights in database
+      const generationTime = Date.now() - startTime;
+      
+      // Extract userId from request context
+      const userId = (request.userContext as any).userId || 
+                    (request.userContext as any).user_id || 
+                    'anonymous';
+      
+      insightId = await this.storeAIInsightsToDB(
+        userId,
+        null, // No prediction ID for standalone insights
+        insights,
+        aiService,
+        modelUsed,
+        generationTime,
+        cacheKey
+      );
+
+      // Step 7: Increment usage counter
+      await this.incrementAIInsightsUsage(request.userContext);
+
+      console.log(`AI insights generated and stored with ID: ${insightId}`);
+      return insights;
+
+    } catch (error: any) {
+      console.error('Error generating AI insights:', error);
+      
+      // Check if this is a rate limiting error
+      if (error.message && error.message.startsWith('RATE_LIMIT:')) {
+        throw error; // Re-throw rate limit errors
+      }
+      
+      // For other errors, return fallback insights
+      return this.generateFallbackInsights(request);
+    }
+  }
+
+  // =====================================================
+  // SQL SCHEMA INTEGRATION METHODS
+  // =====================================================
+
+  /**
+   * Check AI insights usage limits using SQL schema
+   */
+  private static async checkAIInsightsUsage(userContext: UserFinancialProfile): Promise<any> {
+    try {
+      // Extract user ID from context (you may need to adjust this based on your UserFinancialProfile structure)
+      const userId = (userContext as any).userId || (userContext as any).user_id;
+      if (!userId) {
+        console.warn('No user ID found in context, allowing usage with default limits');
+        // If no user ID, allow usage with default limits
+        return {
+          can_request: true,
+          current_usage: 0,
+          limit: 5,
+          remaining: 5
+        };
+      }
+
+      const { data, error } = await supabase.rpc('can_make_prediction_request', {
+        p_user_id: userId,
+        p_service_type: 'ai_insights'
+      });
+
+      if (error) {
+        console.error('Error checking AI insights usage:', error);
+        return {
+          can_request: true,
+          current_usage: 0,
+          limit: 5,
+          remaining: 5
+        };
+      }
+
+      console.log('AI insights usage check:', {
+        userId,
+        can_request: data.can_request,
+        current_usage: data.current_usage,
+        limit: data.limit
+      });
+
+      return data;
+    } catch (error) {
+      console.error('Database error checking AI insights usage:', error);
+      return {
+        can_request: true,
+        current_usage: 0,
+        limit: 5,
+        remaining: 5
+      };
+    }
+  }
+
+  /**
+   * Increment AI insights usage counter
+   */
+  private static async incrementAIInsightsUsage(userContext: UserFinancialProfile): Promise<boolean> {
+    try {
+      const userId = (userContext as any).userId || (userContext as any).user_id;
+      if (!userId) {
+        console.warn('No user ID found, skipping usage increment');
+        return true; // Skip if no user ID
+      }
+
+      const { data, error } = await supabase.rpc('increment_prediction_usage', {
+        p_user_id: userId,
+        p_service_type: 'ai_insights'
+      });
+
+      if (error) {
+        console.error('Error incrementing AI insights usage:', error);
+        return false;
+      }
+
+      console.log('Successfully incremented AI insights usage for user:', userId);
+      return data === true;
+    } catch (error) {
+      console.error('Database error incrementing AI insights usage:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Store AI insights in database
+   */
+  private static async storeAIInsightsToDB(
+    userId: string,
+    predictionId: string | null,
+    insights: AIInsightResponse,
+    aiService: string,
+    modelUsed: string,
+    generationTimeMs: number,
+    cacheKey: string
+  ): Promise<string> {
+    try {
+      // Ensure userId is available from context if not provided
+      if (!userId && insights && typeof insights === 'object') {
+        const insightsAny = insights as any;
+        userId = insightsAny.userId || insightsAny.user_id || '';
+      }
+
+      const { data, error } = await supabase.rpc('store_ai_insights', {
+        p_user_id: userId,
+        p_prediction_id: predictionId,
+        p_insights: insights,
+        p_ai_service: aiService,
+        p_model_used: modelUsed,
+        p_generation_time_ms: generationTimeMs,
+        p_cache_key: cacheKey
+      });
+
+      if (error) {
+        console.error('Error storing AI insights:', error);
+        return `fallback-${Date.now()}`;
+      }
+
+      console.log(`AI insights stored successfully with ID: ${data}`);
+      return data;
+    } catch (error) {
+      console.error('Database error storing AI insights:', error);
+      return `fallback-${Date.now()}`;
+    }
+  }
+
+  /**
+   * Get cached AI insights from database
+   */
+  private static async getCachedInsightFromDB(cacheKey: string): Promise<AIInsightResponse | null> {
+    try {
+      const { data, error } = await supabase
+        .from('ai_insights')
+        .select('*')
+        .eq('cache_key', cacheKey)
+        .gt('expires_at', new Date().toISOString())
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        return null;
+      }
+
+      // Update access tracking
+      await supabase
+        .from('ai_insights')
+        .update({ 
+          access_count: (data.access_count || 0) + 1,
+          last_accessed_at: new Date().toISOString()
+        })
+        .eq('id', data.id);
+
+      console.log('Retrieved cached AI insights:', {
+        id: data.id,
+        cache_key: cacheKey,
+        generated_at: data.generated_at
+      });
+
+      return data.insights as AIInsightResponse;
+    } catch (error) {
+      console.error('Database error getting cached insights:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate AI insights using chatbot service (fallback)
+   */
+  private static async generateChatbotInsights(request: AIInsightRequest): Promise<AIInsightResponse> {
+    try {
       const prompt = this.buildFinancialAnalysisPrompt(request);
       const response = await chatbotService.sendMessage(prompt);
       
       if (!response.success) {
-        throw new Error(response.error || 'Failed to get AI insights');
+        throw new Error(response.error || 'Chatbot service failed');
       }
 
-      // Parse and validate the response
-      const insights = this.parseInsightResponse(response.message || '');
-      
-      // Cache the result
-      this.cache[cacheKey] = {
-        response: insights,
-        timestamp: Date.now()
-      };
-
-      return insights;
+      return this.parseInsightResponse(response.message || '');
     } catch (error) {
-      console.error('Error generating AI insights:', error);
-      
-      // Check if this is a rate limiting error
-      if (error instanceof Error && error.message.startsWith('RATE_LIMIT:')) {
-        const rateLimitMessage = error.message.replace('RATE_LIMIT: ', '');
-        throw new Error(`Rate limit exceeded: ${rateLimitMessage}`);
-      }
-      
-      // Return fallback insights for other errors
+      console.error('Chatbot insights generation failed:', error);
       return this.generateFallbackInsights(request);
     }
   }

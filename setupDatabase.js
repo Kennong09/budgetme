@@ -132,38 +132,13 @@ async function createUserProfileTrigger() {
           )
           ON CONFLICT (id) DO NOTHING;
           
-          -- Create default accounts
-          INSERT INTO public.accounts (id, user_id, account_name, account_type, balance, status, created_at)
-          VALUES
-            (uuid_generate_v4(), NEW.id, 'Primary Checking', 'checking', 5234.65, 'active', NOW()),
-            (uuid_generate_v4(), NEW.id, 'Savings Account', 'savings', 12750.42, 'active', NOW()),
-            (uuid_generate_v4(), NEW.id, 'Credit Card', 'credit', -1250.3, 'active', NOW());
-            
-          -- Create default income categories
-          INSERT INTO public.income_categories (id, user_id, category_name, icon, is_default, created_at)
-          VALUES
-            (uuid_generate_v4(), NEW.id, 'Salary', 'cash', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Freelance', 'briefcase', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Investments', 'trending-up', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Gifts', 'gift', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Other Income', 'plus-circle', TRUE, NOW());
-            
-          -- Create default expense categories
-          INSERT INTO public.expense_categories (id, user_id, category_name, icon, is_default, created_at)
-          VALUES
-            (uuid_generate_v4(), NEW.id, 'Housing', 'home', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Utilities', 'zap', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Groceries', 'shopping-cart', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Transportation', 'truck', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Dining Out', 'coffee', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Entertainment', 'film', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Healthcare', 'activity', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Education', 'book', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Shopping', 'shopping-bag', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Personal Care', 'user', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Travel', 'map', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Subscriptions', 'repeat', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Other Expenses', 'more-horizontal', TRUE, NOW());
+          -- NOTE: Default accounts and categories are now handled by
+          -- DefaultConfigurationService in the backend services.
+          -- This provides better error handling, transaction management,
+          -- and template customization capabilities.
+          --
+          -- The service will be called during user onboarding flow
+          -- from the frontend application.
           
           RETURN NEW;
         EXCEPTION
@@ -193,38 +168,13 @@ async function createUserProfileTrigger() {
           )
           ON CONFLICT (id) DO NOTHING;
           
-          -- Create default accounts
-          INSERT INTO public.accounts (id, user_id, account_name, account_type, balance, status, created_at)
-          VALUES
-            (uuid_generate_v4(), NEW.id, 'Primary Checking', 'checking', 5234.65, 'active', NOW()),
-            (uuid_generate_v4(), NEW.id, 'Savings Account', 'savings', 12750.42, 'active', NOW()),
-            (uuid_generate_v4(), NEW.id, 'Credit Card', 'credit', -1250.3, 'active', NOW());
-            
-          -- Create default income categories
-          INSERT INTO public.income_categories (id, user_id, category_name, icon, is_default, created_at)
-          VALUES
-            (uuid_generate_v4(), NEW.id, 'Salary', 'cash', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Freelance', 'briefcase', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Investments', 'trending-up', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Gifts', 'gift', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Other Income', 'plus-circle', TRUE, NOW());
-            
-          -- Create default expense categories
-          INSERT INTO public.expense_categories (id, user_id, category_name, icon, is_default, created_at)
-          VALUES
-            (uuid_generate_v4(), NEW.id, 'Housing', 'home', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Utilities', 'zap', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Groceries', 'shopping-cart', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Transportation', 'truck', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Dining Out', 'coffee', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Entertainment', 'film', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Healthcare', 'activity', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Education', 'book', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Shopping', 'shopping-bag', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Personal Care', 'user', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Travel', 'map', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Subscriptions', 'repeat', TRUE, NOW()),
-            (uuid_generate_v4(), NEW.id, 'Other Expenses', 'more-horizontal', TRUE, NOW());
+          -- NOTE: Default accounts and categories are now handled by
+          -- DefaultConfigurationService in the backend services.
+          -- This provides better error handling, transaction management,
+          -- and template customization capabilities.
+          --
+          -- The service will be called during user onboarding flow
+          -- from the frontend application.
           
           RETURN NEW;
         EXCEPTION
@@ -767,47 +717,20 @@ async function createUserProcessingRPC() {
         )
         ON CONFLICT (id) DO NOTHING;
         
-        -- Create default accounts
-        INSERT INTO public.accounts (id, user_id, account_name, account_type, balance, status, created_at)
-        VALUES
-          (uuid_generate_v4(), user_record.id, 'Primary Checking', 'checking', 5234.65, 'active', NOW()),
-          (uuid_generate_v4(), user_record.id, 'Savings Account', 'savings', 12750.42, 'active', NOW()),
-          (uuid_generate_v4(), user_record.id, 'Credit Card', 'credit', -1250.3, 'active', NOW())
-        ON CONFLICT DO NOTHING;
-          
-        -- Create default income categories
-        INSERT INTO public.income_categories (id, user_id, category_name, icon, is_default, created_at)
-        VALUES
-          (uuid_generate_v4(), user_record.id, 'Salary', 'cash', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Freelance', 'briefcase', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Investments', 'trending-up', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Gifts', 'gift', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Other Income', 'plus-circle', TRUE, NOW())
-        ON CONFLICT DO NOTHING;
-          
-        -- Create default expense categories
-        INSERT INTO public.expense_categories (id, user_id, category_name, icon, is_default, created_at)
-        VALUES
-          (uuid_generate_v4(), user_record.id, 'Housing', 'home', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Utilities', 'zap', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Groceries', 'shopping-cart', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Transportation', 'truck', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Dining Out', 'coffee', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Entertainment', 'film', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Healthcare', 'activity', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Education', 'book', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Shopping', 'shopping-bag', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Personal Care', 'user', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Travel', 'map', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Subscriptions', 'repeat', TRUE, NOW()),
-          (uuid_generate_v4(), user_record.id, 'Other Expenses', 'more-horizontal', TRUE, NOW())
-        ON CONFLICT DO NOTHING;
+        -- NOTE: Default accounts and categories are now handled by
+        -- DefaultConfigurationService in the backend services.
+        -- This provides better error handling, transaction management,
+        -- and template customization capabilities.
+        --
+        -- For manual user processing, call DefaultConfigurationService.migrateExistingUser()
+        -- from the backend instead of this SQL function.
         
         result := jsonb_build_object(
           'success', true,
           'user_id', user_record.id,
           'email', user_record.email,
-          'processed_at', now()
+          'processed_at', now(),
+          'note', 'Profile created. Use DefaultConfigurationService.migrateExistingUser() for complete setup.'
         );
         
         RETURN result;

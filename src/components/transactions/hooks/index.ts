@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../utils/supabaseClient';
 import { useAuth } from '../../../utils/AuthContext';
 import { useToast } from '../../../utils/ToastContext';
+import { EnhancedTransactionService } from '../../../services/database/enhancedTransactionService';
 import { 
   Transaction, 
   UserData, 
@@ -71,14 +72,17 @@ export const useTransactionData = () => {
         
       if (goalsError) throw goalsError;
       
-      // Fetch transactions
-      const { data: transactionsData, error: transactionsError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false });
+      // Fetch transactions using EnhancedTransactionService for proper category mapping
+      const transactionResult = await EnhancedTransactionService.fetchTransactionsWithMapping(
+        user.id,
+        { limit: 1000 } // Get a reasonable limit
+      );
       
-      if (transactionsError) throw transactionsError;
+      if (!transactionResult.success) {
+        throw new Error(transactionResult.error || 'Failed to fetch transactions');
+      }
+      
+      const transactionsData = transactionResult.data || [];
       
       // Update state with fetched data
       const userData = {
@@ -229,14 +233,14 @@ export const useTransactionFilters = (
     if (name === "type") {
       setFilter(prev => ({
         ...prev,
-        type: value as "all" | "income" | "expense",
+        type: value as "all" | "income" | "expense" | "contribution",
         categoryId: "all"
       }));
     } else if (name === "categoryId") {
       if (value === "all") {
         setFilter(prev => ({ ...prev, categoryId: value }));
       } else if (userData) {
-        const transactionType = getTransactionTypeFromCategory(value, userData, filter.type);
+        const transactionType = getTransactionTypeFromCategory(value, userData, filter.type as "income" | "expense" | "contribution" | "all");
         setFilter(prev => ({ 
           ...prev,
           categoryId: value,

@@ -1,40 +1,34 @@
-import React, { FC, useMemo, useEffect, useState } from "react";
+import React, { FC, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { formatCurrency, formatDate } from "../../utils/helpers";
-import { supabase } from "../../utils/supabaseClient";
-
-// Define the Transaction type to match the one in Transactions.tsx
-interface Transaction {
-  id: string;
-  user_id: string;
-  date: string;
-  amount: number;
-  notes: string;
-  type: "income" | "expense" | "transfer" | "contribution";
-  category_id?: string;
-  account_id: string;
-  goal_id?: string;
-  created_at: string;
-  updated_at: string;
-}
+import { Transaction } from "../../types";
 
 interface Category {
-  id: string;
+  id: string | number;
   category_name: string;
   icon?: string;
 }
 
 interface Account {
-  id: string;
+  id: string | number;
   account_name: string;
   account_type: string;
+  balance?: number; // Optional for compatibility
 }
 
 interface Goal {
-  id: string;
+  id: string | number;
   goal_name: string;
   current_amount: number;
   target_amount: number;
+}
+
+interface UserData {
+  accounts: Account[];
+  incomeCategories: Category[];
+  expenseCategories: Category[];
+  goals: Goal[];
+  transactions: Transaction[];
 }
 
 interface RecentTransactionsProps {
@@ -42,13 +36,15 @@ interface RecentTransactionsProps {
   categories?: Category[];
   accounts?: Account[];
   goals?: Goal[];
+  userData?: UserData;
 }
 
 const RecentTransactions: FC<RecentTransactionsProps> = ({ 
   transactions,
   categories = [],
   accounts = [],
-  goals = []
+  goals = [],
+  userData
 }) => {
   // Sort transactions by date (newest first)
   const sortedTransactions = useMemo(() => {
@@ -72,32 +68,87 @@ const RecentTransactions: FC<RecentTransactionsProps> = ({
     );
   }
 
-  // Get category name from category_id
-  const getCategoryName = (categoryId?: string): string => {
-    if (!categoryId) return "Uncategorized";
+  // Get proper category name using the same logic as TransactionTable
+  const getTransactionCategoryName = (transaction: Transaction): string => {
+    // Debug logging to understand what data we're getting
+    console.log('RecentTransactions Debug:', {
+      transactionId: transaction.id,
+      transactionType: transaction.type,
+      categoryId: transaction.category_id,
+      userData: {
+        hasIncomeCategories: userData?.incomeCategories?.length || 0,
+        hasExpenseCategories: userData?.expenseCategories?.length || 0,
+        incomeCategories: userData?.incomeCategories?.map(c => ({ id: c.id, name: c.category_name })),
+        expenseCategories: userData?.expenseCategories?.map(c => ({ id: c.id, name: c.category_name }))
+      }
+    });
     
-    // First check in expense categories
-    if (categories) {
-      const expenseCategory = categories.find(cat => cat.id === categoryId);
-      if (expenseCategory) return expenseCategory.category_name;
+    // Handle goal contributions first
+    if (transaction.goal_id) {
+      return "Goal Contribution";
     }
     
-    // If not found and we have income categories, check there
-    // Note: In the Dashboard, we're only passing expenseCategories currently,
-    // but this makes the function more robust if that changes
-    return "Uncategorized";
+    // Handle transfer type
+    if (transaction.type === "transfer") {
+      return "Transfer";
+    }
+    
+    // Handle contribution type (legacy) 
+    if (transaction.type === "contribution") {
+      return "Goal Contribution";
+    }
+    
+    // Get category info with proper handling of uncategorized transactions
+    let categoryName = "Uncategorized";
+    if (transaction.category_id && userData) {
+      const categoryIdStr = transaction.category_id.toString();
+      
+      // For income transactions, check income categories
+      if (transaction.type === "income") {
+        const category = userData.incomeCategories.find(c => c.id.toString() === categoryIdStr);
+        if (category) {
+          categoryName = category.category_name;
+          console.log('Found income category:', category.category_name);
+        } else {
+          console.log('Income category not found for ID:', categoryIdStr);
+        }
+      } else {
+        // For expense and contribution transactions, check expense categories
+        const category = userData.expenseCategories.find(c => c.id.toString() === categoryIdStr);
+        if (category) {
+          categoryName = category.category_name;
+          console.log('Found expense category:', category.category_name);
+        } else {
+          console.log('Expense category not found for ID:', categoryIdStr);
+        }
+      }
+    } else {
+      console.log('No category_id or userData available');
+    }
+    
+    return categoryName;
   };
 
-  // Get account name from account_id
-  const getAccountName = (accountId: string): string => {
-    const account = accounts.find(acc => acc.id === accountId);
+  // Get proper account name using the same logic as TransactionTable
+  const getTransactionAccountName = (accountId: string | number): string => {
+    if (!userData) {
+      // Fallback to the old logic if userData is not available
+      const accountIdStr = accountId.toString();
+      const account = accounts.find(acc => acc.id.toString() === accountIdStr);
+      return account ? account.account_name : "Unknown Account";
+    }
+    
+    // Get account from userData similar to TransactionTable
+    const accountIdStr = accountId.toString();
+    const account = userData.accounts.find(a => a.id.toString() === accountIdStr);
     return account ? account.account_name : "Unknown Account";
   };
 
   // Get goal name from goal_id
-  const getGoalName = (goalId?: string): string => {
+  const getGoalName = (goalId?: string | number): string => {
     if (!goalId) return "Unknown Goal";
-    const goal = goals.find(g => g.id === goalId);
+    const goalIdStr = goalId.toString();
+    const goal = goals.find(g => g.id.toString() === goalIdStr);
     return goal ? goal.goal_name : "Unknown Goal";
   };
 
@@ -132,10 +183,8 @@ const RecentTransactions: FC<RecentTransactionsProps> = ({
   return (
     <div className="transaction-list">
       {sortedTransactions.map((transaction, index) => {
-        // Get category name for this transaction
-        const categoryName = transaction.goal_id 
-          ? "Goal Contribution" 
-          : getCategoryName(transaction.category_id);
+        // Get category name for this transaction using the proper utility function
+        const categoryName = getTransactionCategoryName(transaction);
 
         // Helper function to get the appropriate icon for the transaction
         const getTransactionIcon = (): string => {
@@ -153,9 +202,14 @@ const RecentTransactions: FC<RecentTransactionsProps> = ({
         const getTransactionDescription = (): string => {
           // Check if it's a goal contribution first
           if (transaction.goal_id) {
-            return transaction.notes || `Contribution to ${getGoalName(transaction.goal_id)}`;
+            return transaction.description || `Contribution to ${getGoalName(transaction.goal_id)}`;
           }
           
+          if (transaction.description) {
+            return transaction.description;
+          }
+          
+          // Fallback to notes if description is not available
           if (transaction.notes) {
             return transaction.notes;
           }
@@ -202,7 +256,7 @@ const RecentTransactions: FC<RecentTransactionsProps> = ({
               </div>
               <div className="transaction-category">
                 {categoryName}
-                {transaction.account_id ? ` • ${getAccountName(transaction.account_id)}` : ''}
+                {transaction.account_id ? ` • ${getTransactionAccountName(transaction.account_id)}` : ''}
               </div>
             </div>
 

@@ -13,7 +13,7 @@ interface Transaction {
   date: string;
   description?: string;
   notes?: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "contribution";
   category_id?: number;
   account_id: string;
   created_at: string;

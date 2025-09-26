@@ -23,7 +23,7 @@ if (!supabaseServiceKey) {
 let _supabase: SupabaseClient | undefined;
 let _supabaseAdmin: SupabaseClient | undefined;
 
-// Create the Supabase client with enhanced auth configuration
+// Create the Supabase client with optimized configuration for email performance
 export const supabase = (() => {
   if (!_supabase) {
     _supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -33,12 +33,23 @@ export const supabase = (() => {
         detectSessionInUrl: true,
         flowType: 'pkce',
         storageKey: 'budgetme-auth', // Specific storage key for this app
-        debug: false
+        debug: false // Disable verbose GoTrueClient logs
       },
       global: {
         headers: {
-          'x-application-name': 'budgetme'
+          'x-application-name': 'budgetme',
+          'x-client-version': '1.0.0'
         }
+      },
+      // Optimized realtime and database settings
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        }
+      },
+      // Connection pooling for better performance
+      db: {
+        schema: 'public'
       }
     });
   }

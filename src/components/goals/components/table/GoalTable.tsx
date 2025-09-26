@@ -94,7 +94,13 @@ const GoalTable: React.FC<GoalTableProps> = ({
                 </tr>
               ) : filteredGoals.length > 0 ? (
                 filteredGoals.map((goal) => {
-                  const progressPercentage = Math.min(goal.percentage, 100);
+                  // Calculate percentage with fallback if not provided
+                  const calculatePercentage = (current: number, target: number): number => {
+                    if (!target || target <= 0) return 0;
+                    return Math.min((current / target) * 100, 100);
+                  };
+                  
+                  const progressPercentage = goal.percentage ?? calculatePercentage(goal.current_amount, goal.target_amount);
                   const priorityClass = goal.priority === "high" ? "text-danger" : 
                                        goal.priority === "medium" ? "text-warning" : "text-info";
                   const statusClass = goal.status === "completed" ? "badge-success" : 
@@ -113,7 +119,7 @@ const GoalTable: React.FC<GoalTableProps> = ({
                         <div className="font-weight-bold">
                           {goal.goal_name}
                         </div>
-                        {goal.is_shared && (
+                        {goal.is_family_goal && (
                           <div className="small mt-1">
                             <span className="badge badge-info">
                               <i className="fas fa-users mr-1"></i> Family
@@ -125,7 +131,7 @@ const GoalTable: React.FC<GoalTableProps> = ({
                             )}
                           </div>
                         )}
-                        {!goal.is_shared && (
+                        {!goal.is_family_goal && (
                           <div className="small mt-1">
                             <span className="badge badge-secondary">
                               <i className="fas fa-user mr-1"></i> Personal
@@ -193,7 +199,7 @@ const GoalTable: React.FC<GoalTableProps> = ({
                             <i className="fas fa-eye"></i>
                           </Link>
                           {/* Show edit and delete buttons for personal goals */}
-                          {!goal.is_shared && (
+                          {!goal.is_family_goal && (
                             <>
                               <Link
                                 to={`/goals/${goal.id}/edit`}
@@ -212,7 +218,7 @@ const GoalTable: React.FC<GoalTableProps> = ({
                             </>
                           )}
                           {/* Allow editing shared goals if user is the owner */}
-                          {goal.is_shared && goal.user_id === user?.id && (
+                          {goal.is_family_goal && goal.user_id === user?.id && (
                             <>
                               <Link
                                 to={`/goals/${goal.id}/edit`}

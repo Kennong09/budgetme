@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import React, { FC, useState } from "react";
 import { Link } from "react-router-dom";
 import { InsightData } from "../types";
 
@@ -6,14 +6,34 @@ interface FinancialInsightsProps {
   insights: InsightData[];
   expandedInsight: string | null;
   onToggleInsightExpand: (insightTitle: string) => void;
+  onRefreshInsights?: () => void;
 }
 
 const FinancialInsights: FC<FinancialInsightsProps> = ({
   insights,
   expandedInsight,
   onToggleInsightExpand,
+  onRefreshInsights,
 }) => {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  const handleRefresh = async () => {
+    if (onRefreshInsights) {
+      setIsRefreshing(true);
+      onRefreshInsights();
+      // Reset refreshing state after animation
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
+  // Debug logging to understand why no insights are shown
+  console.log('FinancialInsights Debug:', {
+    insightsReceived: insights,
+    insightsLength: insights.length,
+    insightsArray: insights.map(i => ({ title: i.title, type: i.type }))
+  });
+  
   if (insights.length === 0) {
+    console.log('FinancialInsights: Showing "No Financial Insights Yet" because insights array is empty');
     return (
       <div className="row mb-4">
         <div className="col-12">
@@ -39,9 +59,22 @@ const FinancialInsights: FC<FinancialInsightsProps> = ({
   return (
     <div className="row mb-4">
       <div className="col-12">
-        <h6 className="text-xs font-weight-bold text-primary text-uppercase mb-3">
-          Financial Insights
-        </h6>
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h6 className="text-xs font-weight-bold text-primary text-uppercase mb-0">
+            Financial Insights
+          </h6>
+          {onRefreshInsights && insights.length > 0 && (
+            <button 
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className={`btn btn-sm btn-outline-primary shadow-sm refresh-btn ${isRefreshing ? 'refreshing' : ''}`}
+              title="Refresh insights to see different recommendations"
+            >
+              <i className={`fas fa-sync-alt fa-sm mr-1 ${isRefreshing ? 'fa-spin' : ''}`}></i> 
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          )}
+        </div>
         <div className="row">
           {insights.map((insight, index) => (
             <div 
@@ -49,7 +82,7 @@ const FinancialInsights: FC<FinancialInsightsProps> = ({
               className={`col-md-${12 / insights.length} mb-2 ${index === 0 ? 'new-insight' : ''}`}
             >
               <div 
-                className={`card insight-card border-left-${insight.type} shadow-sm h-100 py-2 animate__animated animate__fadeIn`} 
+                className={`card insight-card border-left-${insight.type} shadow-sm h-100 py-2 animate__animated animate__fadeIn ${isRefreshing ? 'refreshing' : ''}`} 
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
                 <div className="card-body">

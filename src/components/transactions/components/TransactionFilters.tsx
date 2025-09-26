@@ -27,6 +27,7 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
             <option value="all">All</option>
             <option value="income">Income</option>
             <option value="expense">Expense</option>
+            <option value="contribution">Contribution</option>
           </select>
           {filter.categoryId !== "all" && (
             <small className="form-text text-info" style={{ fontSize: "0.7rem", lineHeight: "1.2" }}>
@@ -66,6 +67,9 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
             disabled={isFiltering}
           >
             <option value="all">All</option>
+            <option value="uncategorized">
+              Uncategorized
+            </option>
             {filter.type === 'all' && (
               <>
                 <optgroup label="Income">
@@ -97,6 +101,15 @@ const TransactionFilters: React.FC<TransactionFiltersProps> = ({
               <optgroup label="Expense">
                 {userData?.expenseCategories.map((cat) => (
                   <option key={`expense-${cat.id}`} value={cat.id}>
+                    {cat.category_name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {filter.type === 'contribution' && (
+              <optgroup label="Contribution">
+                {userData?.expenseCategories.filter(cat => cat.category_name.toLowerCase().includes('contribution')).map((cat) => (
+                  <option key={`contribution-${cat.id}`} value={cat.id}>
                     {cat.category_name}
                   </option>
                 ))}

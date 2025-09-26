@@ -4,8 +4,8 @@ export interface Transaction {
   id: string;
   date: string;
   amount: number;
-  notes: string;
-  type: "income" | "expense";
+  description: string;
+  type: "income" | "expense" | "contribution";
   category_id?: string;
   account_id: string;
   created_at: string;
@@ -47,7 +47,7 @@ export interface FilterState {
   endDate: string;
   minAmount: string;
   maxAmount: string;
-  type: "all" | "income" | "expense";
+  type: "all" | "income" | "expense" | "contribution";
   sortBy: "date" | "amount" | "category";
   sortOrder: "asc" | "desc";
   accountId: string;

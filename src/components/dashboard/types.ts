@@ -275,6 +275,9 @@ export interface BudgetData {
   expense_categories?: {
     category_name: string;
   };
+  budget_categories?: {
+    category_name: string;
+  };
 }
 
 export interface FilterState {

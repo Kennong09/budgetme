@@ -43,114 +43,86 @@ export const useFamilyData = (userId: string | undefined, showErrorToast: (messa
         }
       }
       
-      // Check user's family membership
-      const { data: checkResult, error: checkError } = await supabase.rpc(
-        'check_user_family',
-        { p_user_id: userId }
-      );
-      
-      if (checkError) {
-        console.error("Error checking family membership:", checkError);
-        
-        // Try direct membership check as fallback
-        const { data: directResult, error: directError } = await supabase.rpc(
-          'get_family_membership',
-          { p_user_id: userId }
-        );
-        
-        if (directError) {
-          console.error("Error using direct membership check:", directError);
-          
-          if (retryCount < maxRetries - 1) {
-            setTimeout(() => {
-              fetchFamilyData(retryCount + 1, maxRetries);
-            }, 1500);
-            return;
-          }
-          
-          showErrorToast(`Error checking family status: ${checkError.message}`);
+      // Use direct query instead of RPC functions to avoid errors
+      const { data: memberData, error: memberError } = await supabase
+        .from('family_members')
+        .select(`
+          family_id,
+          role,
+          status,
+          families (
+            id,
+            family_name,
+            description,
+            currency_pref,
+            created_by,
+            created_at,
+            updated_at,
+            is_public
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .single();
+
+      if (memberError || !memberData) {
+        if (retryCount < maxRetries - 1) {
+          setTimeout(() => {
+            fetchFamilyData(retryCount + 1, maxRetries);
+          }, 1500);
           return;
         }
         
-        if (directResult && directResult.is_member) {
-          const familyFromDirect = {
-            id: directResult.family_id,
-            family_name: directResult.family_name,
-            description: directResult.description || "",
-            currency_pref: directResult.currency_pref || "",
-            created_by: "",
-            created_at: "",
-            updated_at: ""
-          };
-          
-          setFamilyData(familyFromDirect);
-          
-          // Fetch full family details
-          const { data: fullFamilyDetails, error: fullFamilyError } = await supabase
-            .from('families')
-            .select('*')
-            .eq('id', directResult.family_id)
-            .single();
-            
-          if (!fullFamilyError && fullFamilyDetails) {
-            setFamilyData(fullFamilyDetails);
-            setIsCreator(userId === fullFamilyDetails.created_by);
-          }
-        } else {
-          if (retryCount < maxRetries - 1) {
-            setTimeout(() => {
-              fetchFamilyData(retryCount + 1, maxRetries);
-            }, 1500);
-            return;
-          }
-          
-          setFamilyData(null);
-          return;
-        }
-      } else if (checkResult) {
-        // Handle both old JSON format and new table format
-        let isMember = false;
-        let familyId = null;
-        
-        if (Array.isArray(checkResult) && checkResult.length > 0) {
-          isMember = checkResult[0].is_member;
-          familyId = checkResult[0].family_id;
-        } else if (checkResult.is_member !== undefined) {
-          isMember = checkResult.is_member;
-          familyId = checkResult.family_id;
-        }
-        
-        if (!isMember || !familyId) {
-          if (retryCount < maxRetries - 1) {
-            setTimeout(() => {
-              fetchFamilyData(retryCount + 1, maxRetries);
-            }, 1500);
-            return;
-          }
-          
-          setFamilyData(null);
+        setFamilyData(null);
+        return;
+      }
+
+      // Set family data from the joined query result
+      const familyData = memberData.families as any;
+      if (familyData) {
+        setFamilyData({
+          id: familyData.id,
+          family_name: familyData.family_name,
+          description: familyData.description || '',
+          currency_pref: familyData.currency_pref || 'PHP',
+          created_by: familyData.created_by,
+          created_at: familyData.created_at,
+          updated_at: familyData.updated_at,
+          is_public: familyData.is_public || false
+        });
+        setIsCreator(userId === familyData.created_by);
+      } else {
+        if (retryCount < maxRetries - 1) {
+          setTimeout(() => {
+            fetchFamilyData(retryCount + 1, maxRetries);
+          }, 1500);
           return;
         }
         
-        // Fetch full family data
-        const { data, error } = await supabase
-          .from("families")
-          .select("*")
-          .eq("id", familyId)
-          .single();
-          
-        if (error) {
-          console.error("Error fetching family data:", error);
-          showErrorToast(`Error loading family data: ${error.message}`);
-          return;
-        }
-        
-        setFamilyData(data);
-        setIsCreator(userId === data.created_by);
+        setFamilyData(null);
       }
     } catch (err) {
       console.error("Error in fetchFamilyData:", err);
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+      
+      // Check for specific database errors that could cause infinite loops
+      if (errorMessage.includes('400') || 
+          errorMessage.includes('Bad Request') ||
+          errorMessage.includes('RPC') ||
+          errorMessage.includes('get_family_membership') ||
+          errorMessage.includes('check_user_family')) {
+        showErrorToast("Database connection error. Please try refreshing the page.");
+        setFamilyData(null);
+        return;
+      }
+      
+      if (retryCount < maxRetries - 1) {
+        setTimeout(() => {
+          fetchFamilyData(retryCount + 1, maxRetries);
+        }, 1500);
+        return;
+      }
+      
       showErrorToast(`Error loading family data: ${errorMessage}`);
     } finally {
       setIsLoadingFamilyData(false);

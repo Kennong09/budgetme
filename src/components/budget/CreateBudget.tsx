@@ -4,6 +4,10 @@ import { formatCurrency, getMonthDates } from "../../utils/helpers";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { BudgetFormData } from "./types";
+import { BudgetAmountInput } from "../common/CentavoInput";
+import { formatCurrency as formatCurrencyNew, sanitizeBudgetName, roundToCentavo } from "../../utils/currencyUtils";
+import { BudgetNotificationService } from "../../services/database/budgetNotificationService";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -16,12 +20,14 @@ interface ExpenseCategory {
   category_name: string;
 }
 
-interface BudgetFormData {
-  category_id: string;
-  amount: string;
-  period: string;
-  startDate: string;
-}
+// Helper function to get next month in YYYY-MM format using local time
+const getNextMonthString = () => {
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const year = nextMonth.getFullYear();
+  const month = String(nextMonth.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
 
 const CreateBudget: FC = () => {
   const navigate = useNavigate();
@@ -35,10 +41,11 @@ const CreateBudget: FC = () => {
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
 
   const [budget, setBudget] = useState<BudgetFormData>({
+    budget_name: "",
     category_id: "",
-    amount: "",
+    amount: 0, // Changed to number for centavo precision
     period: "month", // month, quarter, year
-    startDate: new Date().toISOString().slice(0, 7), // YYYY-MM
+    startDate: getNextMonthString(), // YYYY-MM
   });
 
   const [viewMode, setViewMode] = useState<"form" | "review">("form");
@@ -79,14 +86,33 @@ const CreateBudget: FC = () => {
     fetchCategories();
   }, [user, navigate, showErrorToast]);
 
+  const handleAmountChange = (newAmount: number) => {
+    setBudget(prev => ({
+      ...prev,
+      amount: newAmount
+    }));
+  };
+
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ): void => {
     const { name, value } = e.target;
-    setBudget((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    
+    // Handle category selection specifically
+    if (name === 'category_id') {
+      const selectedCategory = expenseCategories.find(cat => cat.id === value);
+      setBudget((prev) => ({
+        ...prev,
+        category_id: value,
+        // Update category_name for consistency
+        category_name: selectedCategory?.category_name || ''
+      }));
+    } else {
+      setBudget((prev) => ({
+        ...prev,
+        [name]: value,
+      }));
+    }
   };
 
   const getEndDate = (): string => {
@@ -105,12 +131,36 @@ const CreateBudget: FC = () => {
     e.preventDefault();
 
     // Validate
+    if (!budget.budget_name.trim()) {
+      showErrorToast("Please enter a budget name");
+      return;
+    }
+
+    // Validate budget name for format string safety
+    const sanitizedName = sanitizeBudgetName(budget.budget_name);
+    if (sanitizedName !== budget.budget_name.trim()) {
+      const proceed = window.confirm(
+        `Budget name contains special characters that will be cleaned up. Original: "${budget.budget_name.trim()}" will become "${sanitizedName}". Continue?`
+      );
+      if (!proceed) {
+        return;
+      }
+      setBudget(prev => ({ ...prev, budget_name: sanitizedName }));
+    }
+
     if (!budget.category_id) {
       showErrorToast("Please select a category");
       return;
     }
 
-    if (!budget.amount || parseFloat(budget.amount) <= 0) {
+    // Validate category exists in loaded categories
+    const selectedCategory = expenseCategories.find(cat => cat.id === budget.category_id);
+    if (!selectedCategory) {
+      showErrorToast("Selected category is invalid. Please select a valid category.");
+      return;
+    }
+
+    if (!budget.amount || budget.amount <= 0) {
       showErrorToast("Please enter a valid amount");
       return;
     }
@@ -136,13 +186,18 @@ const CreateBudget: FC = () => {
       
       // Prepare budget data for insertion
       const budgetData = {
+        budget_name: sanitizeBudgetName(budget.budget_name.trim()), // Sanitize for format string safety
         category_id: budget.category_id,
-        amount: parseFloat(budget.amount),
+        amount: roundToCentavo(budget.amount), // Ensure centavo precision
         period: budget.period,
         start_date: startDate,
         end_date: endDate,
         user_id: user.id,
         spent: 0, // Initial spent is zero
+        currency: 'PHP', // Default currency
+        alert_enabled: true, // Enable alerts by default
+        alert_threshold: 0.8, // 80% threshold
+        status: 'active' // Ensure budget is active
       };
 
       // Insert budget into Supabase
@@ -153,7 +208,27 @@ const CreateBudget: FC = () => {
         .single();
         
       if (error) {
-        throw new Error(error.message);
+        // Handle specific database errors
+        if (error.code === '23503') {
+          throw new Error('Invalid category selected. Please choose a valid category.');
+        } else if (error.code === '23505') {
+          throw new Error('A budget with this name already exists. Please choose a different name.');
+        } else {
+          throw new Error(`Database error: ${error.message}`);
+        }
+      }
+      
+      if (!data) {
+        throw new Error('Budget creation failed - no data returned');
+      }
+      
+      // Trigger budget creation notifications
+      if (data) {
+        try {
+          await BudgetNotificationService.getInstance().checkBudgetThresholds(data.id);
+        } catch (notificationError) {
+          // Log notification error but don't fail the budget creation
+        }
       }
       
       // Success! Show toast and redirect
@@ -209,6 +284,42 @@ const CreateBudget: FC = () => {
     );
   }
 
+  // Show error if categories failed to load
+  if (error) {
+    return (
+      <div className="container-fluid">
+        <div className="text-center my-5">
+          <div className="alert alert-danger" role="alert">
+            <h4 className="alert-heading">Loading Error</h4>
+            <p>{error}</p>
+            <hr />
+            <button className="btn btn-outline-danger" onClick={() => window.location.reload()}>
+              <i className="fas fa-refresh mr-2"></i>Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show warning if no categories available
+  if (expenseCategories.length === 0) {
+    return (
+      <div className="container-fluid">
+        <div className="text-center my-5">
+          <div className="alert alert-warning" role="alert">
+            <h4 className="alert-heading">No Categories Found</h4>
+            <p>You need to create expense categories before you can create budgets.</p>
+            <hr />
+            <Link to="/categories" className="btn btn-warning">
+              <i className="fas fa-plus mr-2"></i>Create Categories
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (viewMode === "review") {
     const selectedCategory = expenseCategories.find(
       category => category.id === budget.category_id
@@ -241,14 +352,14 @@ const CreateBudget: FC = () => {
                         <div className="row no-gutters align-items-center">
                           <div className="col mr-2">
                             <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                              Amount
+                              Budget Name
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {formatCurrency(parseFloat(budget.amount))}
+                              {budget.budget_name || 'N/A'}
                             </div>
                           </div>
                           <div className="col-auto">
-                            <i className="fas fa-solid fa-peso-sign fa-2x text-gray-300"></i>
+                            <i className="fas fa-file-alt fa-2x text-gray-300"></i>
                           </div>
                         </div>
                       </div>
@@ -260,14 +371,14 @@ const CreateBudget: FC = () => {
                         <div className="row no-gutters align-items-center">
                           <div className="col mr-2">
                             <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
-                              Period
+                              Amount
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {budget.period.charAt(0).toUpperCase() + budget.period.slice(1)}
+                              {formatCurrencyNew(budget.amount, 'PHP')}
                             </div>
                           </div>
                           <div className="col-auto">
-                            <i className="fas fa-calendar fa-2x text-gray-300"></i>
+                            <i className="fas fa-solid fa-peso-sign fa-2x text-gray-300"></i>
                           </div>
                         </div>
                       </div>
@@ -277,30 +388,11 @@ const CreateBudget: FC = () => {
 
                 <div className="row mb-4">
                   <div className="col-md-6 mb-4 mb-md-0">
-                    <div className="card border-left-success shadow h-100 py-2">
+                    <div className="card border-left-info shadow h-100 py-2">
                       <div className="card-body">
                         <div className="row no-gutters align-items-center">
                           <div className="col mr-2">
-                            <div className="text-xs font-weight-bold text-success text-uppercase mb-1">
-                              Category
-                            </div>
-                            <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {selectedCategory?.category_name || 'N/A'}
-                            </div>
-                          </div>
-                          <div className="col-auto">
-                            <i className="fas fa-tag fa-2x text-gray-300"></i>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="card border-left-warning shadow h-100 py-2">
-                      <div className="card-body">
-                        <div className="row no-gutters align-items-center">
-                          <div className="col mr-2">
-                            <div className="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
                               Start Date
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
@@ -309,6 +401,25 @@ const CreateBudget: FC = () => {
                           </div>
                           <div className="col-auto">
                             <i className="fas fa-calendar-day fa-2x text-gray-300"></i>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="card border-left-secondary shadow h-100 py-2">
+                      <div className="card-body">
+                        <div className="row no-gutters align-items-center">
+                          <div className="col mr-2">
+                            <div className="text-xs font-weight-bold text-secondary text-uppercase mb-1">
+                              End Date
+                            </div>
+                            <div className="h5 mb-0 font-weight-bold text-gray-800">
+                              {new Date(getEndDate()).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <div className="col-auto">
+                            <i className="fas fa-calendar-check fa-2x text-gray-300"></i>
                           </div>
                         </div>
                       </div>
@@ -396,7 +507,33 @@ const CreateBudget: FC = () => {
             <div className="card-body">
               <form onSubmit={handleReview}>
                 <div className="row">
-                  <div className="col-md-6">
+                  <div className="col-12">
+                    <div className="form-group">
+                      <label htmlFor="budget_name" className="font-weight-bold text-gray-800">
+                        Budget Name <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="budget_name"
+                        name="budget_name"
+                        value={budget.budget_name}
+                        onChange={handleChange}
+                        className="form-control form-control-user"
+                        placeholder="Enter budget name (e.g., Monthly Food Budget)"
+                        maxLength={100}
+                        pattern="[^%.*]+"
+                        title="Budget name cannot contain %, ., or * characters"
+                        required
+                      />
+                      <small className="form-text text-muted">
+                        Give your budget a descriptive name (avoid special characters like %, ., *)
+                      </small>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="row">
+                  <div className="col-md-4">
                     <div className="form-group">
                       <label htmlFor="category_id" className="font-weight-bold text-gray-800">
                         Category <span className="text-danger">*</span>
@@ -419,37 +556,7 @@ const CreateBudget: FC = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="amount" className="font-weight-bold text-gray-800">
-                        Amount <span className="text-danger">*</span>
-                      </label>
-                      <div className="input-group">
-                        <div className="input-group-prepend">
-                          <span className="input-group-text">₱</span>
-                        </div>
-                        <input
-                          type="number"
-                          id="amount"
-                          name="amount"
-                          value={budget.amount}
-                          onChange={handleChange}
-                          className="form-control form-control-user"
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          required
-                        />
-                      </div>
-                      <small className="form-text text-muted">
-                        Enter your budget amount
-                      </small>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="row">
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="form-group">
                       <label htmlFor="period" className="font-weight-bold text-gray-800">
                         Period <span className="text-danger">*</span>
@@ -469,7 +576,7 @@ const CreateBudget: FC = () => {
                     </div>
                   </div>
 
-                  <div className="col-md-6">
+                  <div className="col-md-4">
                     <div className="form-group">
                       <label htmlFor="startDate" className="font-weight-bold text-gray-800">
                         Start Date <span className="text-danger">*</span>
@@ -487,6 +594,20 @@ const CreateBudget: FC = () => {
                         When does this budget start?
                       </small>
                     </div>
+                  </div>
+                </div>
+
+                <div className="row">
+                  <div className="col-md-6 mx-auto">
+                    <BudgetAmountInput
+                      value={budget.amount}
+                      onChange={handleAmountChange}
+                      currency="PHP"
+                      label="Amount"
+                      placeholder="0.00"
+                      required={true}
+                      suggestedAmounts={[1000, 2500, 5000, 10000, 15000, 25000]}
+                    />
                   </div>
                 </div>
 

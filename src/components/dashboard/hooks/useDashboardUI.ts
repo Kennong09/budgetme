@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export const useDashboardUI = () => {
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
@@ -34,34 +34,35 @@ export const useDashboardUI = () => {
     };
   }, []);
 
-  // Toggle tip function to position tooltips correctly below each info icon
-  const toggleTip = (tipId: string, event?: React.MouseEvent): void => {
+  // Stable ref for tooltip position calculation
+  const calculateTooltipPosition = useRef((element: Element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      top: rect.bottom + window.scrollY,
+      left: rect.left + (rect.width / 2) + window.scrollX
+    };
+  }).current;
+
+  // Stable toggle tip function with useCallback
+  const toggleTip = useCallback((tipId: string, event?: React.MouseEvent): void => {
     if (activeTip === tipId) {
       setActiveTip(null);
       setTooltipPosition(null);
     } else {
       setActiveTip(tipId);
-      if (event) {
-        // Get the position of the clicked element
-        const rect = event.currentTarget.getBoundingClientRect();
-        
-        // Calculate position accounting for scroll
-        setTooltipPosition({
-          top: rect.bottom + window.scrollY,
-          left: rect.left + (rect.width / 2) + window.scrollX
-        });
+      if (event && event.currentTarget) {
+        const position = calculateTooltipPosition(event.currentTarget);
+        setTooltipPosition(position);
       }
     }
-  };
+  }, [activeTip]);
 
-  // Toggle expanded insight
-  const toggleInsightExpand = (insightTitle: string) => {
-    if (expandedInsight === insightTitle) {
-      setExpandedInsight(null);
-    } else {
-      setExpandedInsight(insightTitle);
-    }
-  };
+  // Stable toggle expanded insight with useCallback
+  const toggleInsightExpand = useCallback((insightTitle: string) => {
+    setExpandedInsight(current => 
+      current === insightTitle ? null : insightTitle
+    );
+  }, []);
 
   return {
     showWelcome,

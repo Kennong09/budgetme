@@ -1,13 +1,17 @@
 // Account Types (currency forced to PHP)
 export interface Account {
-  id: string;
+  id?: string; // Optional for new accounts, required for existing ones
   user_id: string;
   account_name: string;
-  account_type: 'checking' | 'savings' | 'credit' | 'investment' | 'other';
+  account_type: 'checking' | 'savings' | 'credit' | 'investment' | 'cash' | 'other';
   balance: number;
-  // currency removed - always PHP
-  status: 'active' | 'inactive';
+  initial_balance?: number;
+  currency?: string; // Fixed to PHP
+  status: 'active' | 'inactive' | 'closed';
   is_default: boolean;
+  description?: string;
+  institution_name?: string;
+  account_number_masked?: string;
   color?: string;
   created_at?: string;
   updated_at?: string;
@@ -54,6 +58,7 @@ export const ACCOUNT_TYPE_OPTIONS = [
   { value: 'savings', label: 'Savings' },
   { value: 'credit', label: 'Credit Card' },
   { value: 'investment', label: 'Investment' },
+  { value: 'cash', label: 'Cash' },
   { value: 'other', label: 'Other' },
 ];
 

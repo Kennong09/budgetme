@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Transaction, UserData, FilterState, DateFilterType, TypeFilterType } from '../types';
 
 /**
@@ -14,15 +14,23 @@ export const useFilteredData = (userData: UserData | null) => {
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [filteredUserData, setFilteredUserData] = useState<UserData | null>(null);
 
-  // Filter transactions based on current filters
-  const filterTransactions = (transactions: Transaction[]): Transaction[] => {
+  // Stable memoized filter values to prevent unnecessary recalculations
+  const stableDateFilter = useMemo(() => dateFilter, [dateFilter]);
+  const stableCategoryFilter = useMemo(() => categoryFilter, [categoryFilter]);
+  const stableTypeFilter = useMemo(() => typeFilter, [typeFilter]);
+  const stableCustomStartDate = useMemo(() => customStartDate, [customStartDate]);
+  const stableCustomEndDate = useMemo(() => customEndDate, [customEndDate]);
+  const stableUserData = useMemo(() => userData, [userData]);
+
+  // Stable filter transactions function with proper memoization
+  const filterTransactions = useCallback((transactions: Transaction[]): Transaction[] => {
     return transactions.filter(transaction => {
       const txDate = new Date(transaction.date);
       const currentDate = new Date();
       
       // Date filter
-      if (dateFilter !== 'all') {
-        switch (dateFilter) {
+      if (stableDateFilter !== 'all') {
+        switch (stableDateFilter) {
           case 'current-month':
             const currentMonth = currentDate.getMonth();
             const currentYear = currentDate.getFullYear();
@@ -52,10 +60,10 @@ export const useFilteredData = (userData: UserData | null) => {
             }
             break;
           case 'custom':
-            if (customStartDate && txDate < new Date(customStartDate)) {
+            if (stableCustomStartDate && txDate < new Date(stableCustomStartDate)) {
               return false;
             }
-            if (customEndDate && txDate > new Date(customEndDate)) {
+            if (stableCustomEndDate && txDate > new Date(stableCustomEndDate)) {
               return false;
             }
             break;
@@ -63,40 +71,40 @@ export const useFilteredData = (userData: UserData | null) => {
       }
       
       // Type filter
-      if (typeFilter !== 'all' && transaction.type !== typeFilter) {
+      if (stableTypeFilter !== 'all' && transaction.type !== stableTypeFilter) {
         return false;
       }
       
       // Category filter
-      if (categoryFilter !== 'all' && transaction.category_id !== categoryFilter) {
+      if (stableCategoryFilter !== 'all' && transaction.category_id !== stableCategoryFilter) {
         return false;
       }
       
       return true;
     });
-  };
+  }, [stableDateFilter, stableTypeFilter, stableCategoryFilter, stableCustomStartDate, stableCustomEndDate]);
 
-  // Generate URL parameters based on current filters
-  const getFilteredUrlParams = (): string => {
+  // Memoized URL parameters generation with stable dependencies
+  const getFilteredUrlParams = useCallback((): string => {
     const params = new URLSearchParams();
     
     try {
-      if (dateFilter !== 'all') {
-        if (dateFilter === 'current-month') {
+      if (stableDateFilter !== 'all') {
+        if (stableDateFilter === 'current-month') {
           const now = new Date();
           if (isNaN(now.getTime())) return params.toString();
           params.append('month', String(now.getMonth() + 1));
           params.append('year', String(now.getFullYear()));
-        } else if (dateFilter === 'custom' && customStartDate && customEndDate) {
+        } else if (stableDateFilter === 'custom' && stableCustomStartDate && stableCustomEndDate) {
           // Validate custom dates
-          const startDate = new Date(customStartDate);
-          const endDate = new Date(customEndDate);
+          const startDate = new Date(stableCustomStartDate);
+          const endDate = new Date(stableCustomEndDate);
           if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
-            params.append('startDate', customStartDate);
-            params.append('endDate', customEndDate);
+            params.append('startDate', stableCustomStartDate);
+            params.append('endDate', stableCustomEndDate);
           }
-        } else if (dateFilter.startsWith('last-')) {
-          const monthsStr = dateFilter.split('-')[1];
+        } else if (stableDateFilter.startsWith('last-')) {
+          const monthsStr = stableDateFilter.split('-')[1];
           const months = parseInt(monthsStr);
           
           if (!isNaN(months) && months > 0) {
@@ -132,55 +140,79 @@ export const useFilteredData = (userData: UserData | null) => {
       return new URLSearchParams().toString();
     }
     
-    if (typeFilter !== 'all') {
-      params.append('type', typeFilter);
+    if (stableTypeFilter !== 'all') {
+      params.append('type', stableTypeFilter);
     }
     
-    if (categoryFilter !== 'all') {
-      params.append('categoryId', categoryFilter);
+    if (stableCategoryFilter !== 'all') {
+      params.append('categoryId', stableCategoryFilter);
     }
     
     return params.toString();
-  };
+  }, [stableDateFilter, stableCustomStartDate, stableCustomEndDate, stableTypeFilter, stableCategoryFilter]);
 
-  // Clear all filters
-  const clearFilters = () => {
+  // Stable clear filters function
+  const clearFilters = useCallback(() => {
     setDateFilter('all');
     setCategoryFilter('all');
     setTypeFilter('all');
     setCustomStartDate('');
     setCustomEndDate('');
-  };
+  }, []);
 
-  // Update filtered data when filters change
-  useEffect(() => {
-    if (userData && userData.transactions) {
-      const filtered = filterTransactions(userData.transactions);
-      setFilteredTransactions(filtered);
+  // Memoized filtered transactions with stable dependencies
+  const memoizedFilteredTransactions = useMemo(() => {
+    if (!stableUserData || !stableUserData.transactions) {
+      return [];
+    }
+    return filterTransactions(stableUserData.transactions);
+  }, [stableUserData, filterTransactions]);
+
+  // Memoized summary calculations with stable dependencies
+  const memoizedSummaryData = useMemo(() => {
+    if (!memoizedFilteredTransactions.length) {
+      return {
+        income: 0,
+        expenses: 0,
+        balance: 0,
+        savingsRate: 0
+      };
+    }
+
+    const filteredIncome = memoizedFilteredTransactions
+      .filter(tx => tx.type === 'income')
+      .reduce((sum, tx) => sum + (parseFloat(tx.amount.toString()) || 0), 0);
       
-      // Recalculate summary data based on filtered transactions
-      const filteredIncome = filtered
-        .filter(tx => tx.type === 'income')
-        .reduce((sum, tx) => sum + (parseFloat(tx.amount.toString()) || 0), 0);
-        
-      const filteredExpenses = filtered
-        .filter(tx => tx.type === 'expense')
-        .reduce((sum, tx) => sum + (parseFloat(tx.amount.toString()) || 0), 0);
-        
-      const filteredSavingsRate = filteredIncome > 0 ? ((filteredIncome - filteredExpenses) / filteredIncome) * 100 : 0;
+    const filteredExpenses = memoizedFilteredTransactions
+      .filter(tx => tx.type === 'expense')
+      .reduce((sum, tx) => sum + (parseFloat(tx.amount.toString()) || 0), 0);
+      
+    const filteredSavingsRate = filteredIncome > 0 ? ((filteredIncome - filteredExpenses) / filteredIncome) * 100 : 0;
+    
+    return {
+      income: filteredIncome,
+      expenses: filteredExpenses,
+      balance: filteredIncome - filteredExpenses,
+      savingsRate: filteredSavingsRate
+    };
+  }, [memoizedFilteredTransactions]);
+
+  // Debounced effect to update filtered data (300ms delay)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setFilteredTransactions(memoizedFilteredTransactions);
       
       // Update userData with filtered summary
-      setFilteredUserData({
-        ...userData,
-        summaryData: {
-          income: filteredIncome,
-          expenses: filteredExpenses,
-          balance: filteredIncome - filteredExpenses,
-          savingsRate: filteredSavingsRate
-        }
-      });
-    }
-  }, [userData, dateFilter, typeFilter, categoryFilter, customStartDate, customEndDate]);
+      if (stableUserData) {
+        setFilteredUserData({
+          ...stableUserData,
+          summaryData: memoizedSummaryData
+        });
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [memoizedFilteredTransactions, memoizedSummaryData, stableUserData]);
 
   return {
     // Filter states

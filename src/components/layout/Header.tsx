@@ -5,6 +5,7 @@ import { getCurrentMonthYear } from "../../utils/helpers";
 import { HeaderProps } from "../../types";
 import { useClickOutside, useUserData } from "./shared/hooks";
 import { SearchBar, NotificationDropdown, UserDropdown } from "./shared/components";
+import { useNotifications } from "../../hooks/useNotifications";
 
 const Header: FC<HeaderProps> = ({ toggleSidebar }) => {
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
@@ -14,6 +15,20 @@ const Header: FC<HeaderProps> = ({ toggleSidebar }) => {
   
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+  
+  // Use real notifications from our notification system
+  const { 
+    notifications, 
+    unreadCount, 
+    markAsRead, 
+    markAllAsRead, 
+    deleteNotification,
+    loading: notificationsLoading,
+    error: notificationsError
+  } = useNotifications({
+    limit: 10,
+    enableRealTime: true
+  });
   
   // Create refs for click outside detection
   const notificationRef = useRef<HTMLLIElement>(null);
@@ -54,27 +69,44 @@ const Header: FC<HeaderProps> = ({ toggleSidebar }) => {
     }
   };
 
-  // Mock notifications
-  const notifications = [
-    {
-      id: 1,
-      text: "You exceeded your Food budget by $50",
-      time: "10 minutes ago",
-      isRead: false,
-    },
-    {
-      id: 2,
-      text: "Your monthly report is ready",
-      time: "1 hour ago",
-      isRead: false,
-    },
-    {
-      id: 3,
-      text: "New feature: Family budgeting is now available",
-      time: "2 days ago",
-      isRead: true,
-    },
-  ];
+  // Handle notification interactions
+  const handleNotificationClick = async (notification: any) => {
+    try {
+      // Mark notification as read
+      if (!notification.is_read) {
+        await markAsRead(notification.id);
+      }
+      
+      // Navigate to relevant page based on notification type
+      if (notification.related_budget_id) {
+        navigate(`/budget/${notification.related_budget_id}`);
+      } else if (notification.related_goal_id) {
+        navigate(`/goals/${notification.related_goal_id}`);
+      } else if (notification.related_transaction_id) {
+        navigate(`/transactions/${notification.related_transaction_id}`);
+      } else if (notification.related_family_id) {
+        navigate(`/family/${notification.related_family_id}`);
+      }
+      
+      // Close dropdown
+      setShowNotifications(false);
+    } catch (error) {
+      console.error('Error handling notification click:', error);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await markAllAsRead();
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
+  const handleShowAllNotifications = () => {
+    navigate('/notifications');
+    setShowNotifications(false);
+  };
 
   return (
     <nav className="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
@@ -112,6 +144,8 @@ const Header: FC<HeaderProps> = ({ toggleSidebar }) => {
       <SearchBar 
         className="d-none d-sm-inline-block"
         onSearch={(query) => console.log("Search query:", query)}
+        enableAutoComplete={true}
+        showResults={true}
       />
 
       {/* Topbar Navbar */}
@@ -123,6 +157,8 @@ const Header: FC<HeaderProps> = ({ toggleSidebar }) => {
             mobileSearchOpen={showMobileSearch}
             onMobileToggle={toggleMobileSearch}
             onSearch={(query) => console.log("Mobile search query:", query)}
+            enableAutoComplete={true}
+            showResults={true}
           />
         </li>
 
@@ -138,10 +174,14 @@ const Header: FC<HeaderProps> = ({ toggleSidebar }) => {
 
         {/* Nav Item - Notifications */}
         <NotificationDropdown
-          notifications={notifications}
+          userId={user?.id}
           isOpen={showNotifications}
           onToggle={toggleNotifications}
-          onShowAll={() => console.log("Show all notifications")}
+          onNotificationClick={handleNotificationClick}
+          onMarkAllRead={handleMarkAllAsRead}
+          onShowAll={handleShowAllNotifications}
+          enableRealTimeUpdates={true}
+          maxDisplayCount={5}
         />
 
         <div className="topbar-divider d-none d-sm-block"></div>

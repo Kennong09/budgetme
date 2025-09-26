@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FC } from "react";
+import React, { useState, useEffect, useCallback, useMemo, FC } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
@@ -26,17 +26,25 @@ import {
   useDashboardUI
 } from "./hooks";
 
-// Import styles
+
+
+// Import styles (CSS imported at app level to avoid lazy loading issues)
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
-import "./dashboard.css";
 import "animate.css";
 
 const Dashboard: FC = () => {
+  // ALL HOOKS MUST BE CALLED FIRST - NO EXCEPTIONS
   const { user } = useAuth();
   const navigate = useNavigate();
   const { showSuccessToast, showErrorToast } = useToast();
 
-  // Custom hooks for data management
+
+  
+  // ALL useState hooks
+  const [hasRenderError, setHasRenderError] = useState(false);
+  const [showBudgetSetupModal, setShowBudgetSetupModal] = useState(false);
+
+  // ALL custom hooks - MUST be called in same order every time
   const {
     userData,
     budgetProgress,
@@ -48,7 +56,6 @@ const Dashboard: FC = () => {
     handleRejectInvite
   } = useDashboardData();
 
-  // Custom hook for filtered data
   const {
     dateFilter,
     setDateFilter,
@@ -66,20 +73,23 @@ const Dashboard: FC = () => {
     clearFilters
   } = useFilteredData(userData);
 
-  // Custom hook for insights and charts
   const {
     insights,
     trends,
     monthlyData,
-    categoryData
+    categoryData,
+    refreshInsights
   } = useInsightsAndCharts(
     filteredTransactions,
     budgetProgress,
     userData?.expenseCategories || [],
-    user?.id || ''
+    user?.id || '',
+    dateFilter,
+    customStartDate,
+    customEndDate
   );
 
-  // Custom hook for UI state
+
   const {
     showWelcome,
     setShowWelcome,
@@ -90,20 +100,14 @@ const Dashboard: FC = () => {
     toggleInsightExpand
   } = useDashboardUI();
 
-  // Budget Setup Modal state
-  const [showBudgetSetupModal, setShowBudgetSetupModal] = useState(false);
-
-  // Check if user should see budget setup modal
+  // ALL useEffect hooks
   useEffect(() => {
     if (!loading && user && userData) {
-      // Check if user has any budgets using budgetProgress data
       const hasBudgets = budgetProgress && budgetProgress.length > 0;
-      
-      // Check if user has skipped setup
+      const hasTransactions = recentTransactions && recentTransactions.length > 0;
       const hasSkippedSession = sessionStorage.getItem('budgetSetupSkipped');
       const hasSkippedPermanent = localStorage.getItem('budgetSetupSkipped') === 'permanent';
       
-      // Check if reminder is set and still valid
       const reminderDate = localStorage.getItem('budgetSetupReminder');
       let shouldRemind = false;
       if (reminderDate) {
@@ -112,37 +116,35 @@ const Dashboard: FC = () => {
         shouldRemind = now >= reminder;
       }
       
-      // Show modal if user has no budgets and hasn't skipped (or reminder time has come)
-      if (!hasBudgets && !hasSkippedSession && (!hasSkippedPermanent || shouldRemind)) {
-        // Delay showing modal slightly to ensure dashboard is loaded
+      // Only show modal if user has no budgets AND no transactions
+      // This prevents showing the setup modal to users who are already actively using the system
+      if (!hasBudgets && !hasTransactions && !hasSkippedSession && (!hasSkippedPermanent || shouldRemind)) {
         const timer = setTimeout(() => {
           setShowBudgetSetupModal(true);
         }, 1000);
-        
         return () => clearTimeout(timer);
       }
     }
-  }, [loading, user, userData, budgetProgress]);
+  }, [loading, user, userData, budgetProgress, recentTransactions]);
 
-  // Handle budget setup modal events
-  const handleBudgetSetupClose = () => {
+
+
+  // ALL useCallback hooks
+  const handleBudgetSetupClose = useCallback(() => {
     setShowBudgetSetupModal(false);
-  };
+  }, []);
 
-  const handleBudgetSetupSkip = () => {
+  const handleBudgetSetupSkip = useCallback(() => {
     setShowBudgetSetupModal(false);
-  };
+  }, []);
 
-  const handleBudgetCreated = () => {
+  const handleBudgetCreated = useCallback(() => {
     setShowBudgetSetupModal(false);
     showSuccessToast('Budget created successfully! Welcome to smart budgeting.');
-    fetchUserData(); // Refresh dashboard data
-  };
+    fetchUserData();
+  }, [showSuccessToast, fetchUserData]);
 
-  // Real-time subscriptions removed to reduce API usage
-
-  // Helper functions
-  const getFilteredChartTitle = (): string => {
+  const getFilteredChartTitle = useCallback((): string => {
     if (dateFilter === 'all') {
       return 'All Time Overview';
     } else if (dateFilter === 'current-month') {
@@ -157,14 +159,16 @@ const Dashboard: FC = () => {
       return `Custom Range (${new Date(customStartDate).toLocaleDateString()} - ${new Date(customEndDate).toLocaleDateString()})`;
     }
     return 'Monthly Overview';
-  };
+  }, [dateFilter, customStartDate, customEndDate]);
 
-  const handleBudgetItemClick = (budget: any) => {
+  const handleBudgetItemClick = useCallback((budget: any) => {
     const currentParams = getFilteredUrlParams();
     const params = new URLSearchParams(currentParams);
     params.set('categoryId', String(budget.id));
     navigate(`/transactions?${params.toString()}`);
-  };
+  }, [getFilteredUrlParams, navigate]);
+
+
 
   if (loading) {
     return (
@@ -216,6 +220,7 @@ const Dashboard: FC = () => {
         insights={insights}
         expandedInsight={expandedInsight}
         onToggleInsightExpand={toggleInsightExpand}
+        onRefreshInsights={refreshInsights}
       />
 
       {/* Page Heading */}
@@ -298,6 +303,7 @@ const Dashboard: FC = () => {
         expenseCategories={userData.expenseCategories}
         accounts={userData.accounts}
         goals={userData.goals}
+        userData={userData}
         activeTip={activeTip}
         onToggleTip={toggleTip}
         getFilteredUrlParams={getFilteredUrlParams}

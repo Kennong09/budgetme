@@ -8,13 +8,22 @@ export interface Transaction {
   date: string;
   amount: number;
   notes: string;
-  type: "income" | "expense";
-  category: string;
+  description?: string;
+  type: "income" | "expense" | "transfer" | "contribution";
+  category?: string;
   category_id?: string;
-  account_id: string;
+  account_id?: string;
   goal_id?: string;
+  status?: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  
+  // Additional fields from transaction_details view
+  account_name?: string;
+  account_type?: string;
+  income_category_name?: string;
+  expense_category_name?: string;
+  transfer_account_id?: string;
 }
 
 // Account type
@@ -305,6 +314,9 @@ export interface BudgetData {
   percentage?: number;
   category_name?: string;
   expense_categories?: {
+    category_name: string;
+  };
+  budget_categories?: {
     category_name: string;
   };
 }

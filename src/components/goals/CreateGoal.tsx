@@ -9,6 +9,9 @@ import { useCurrency } from "../../utils/CurrencyContext";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { CentavoInput, ContributionInput } from "../common/CentavoInput";
+import { formatCurrency as formatCurrencyNew, roundToCentavo } from "../../utils/currencyUtils";
+import { GoalNotificationService } from "../../services/database/goalNotificationService";
 
 // Import SB Admin CSS (already imported at the app level)
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -16,9 +19,9 @@ import "animate.css";
 
 interface GoalFormData {
   goal_name: string;
-  target_amount: string;
+  target_amount: number; // Changed from string to number for centavo precision
   target_date: string;
-  current_amount: string;
+  current_amount: number; // Changed from string to number for centavo precision
   priority: "low" | "medium" | "high";
   notes: string;
   share_with_family: boolean; // Whether to share the goal with family
@@ -41,9 +44,9 @@ const CreateGoal: FC = () => {
 
   const initialFormState: GoalFormData = {
     goal_name: "",
-    target_amount: "",
+    target_amount: 0, // Changed to number
     target_date: "",
-    current_amount: "0",
+    current_amount: 0, // Changed to number
     priority: "medium",
     notes: "",
     share_with_family: false,
@@ -105,63 +108,11 @@ const CreateGoal: FC = () => {
           setUserFamilyId(memberData[0].family_id);
           setFamilyRole(memberData[0].role as "admin" | "viewer");
         } else {
-          // Fallback to the function
-          console.log("No direct family_members record found, using check_user_family RPC");
-          
-          // Explicit cast for proper TypeScript typing
-          const { data: familyStatus, error: statusError } = await supabase.rpc(
-            'check_user_family',
-            { p_user_id: user.id }
-          );
-          
-          console.log("Family status check result:", { familyStatus, statusError });
-          
-          if (!statusError && familyStatus) {
-            // Handle both array and object responses
-            const isMember = Array.isArray(familyStatus) 
-              ? familyStatus.length > 0 && familyStatus[0].is_member
-              : familyStatus.is_member;
-              
-            console.log("Membership check:", { isMember });
-            
-            if (isMember) {
-              // Extract the family ID from the response based on format
-              const familyId = Array.isArray(familyStatus) 
-                ? familyStatus[0].family_id 
-                : familyStatus.family_id;
-              
-              console.log("Setting user family ID:", familyId);
-              setIsFamilyMember(true);
-              setUserFamilyId(familyId);
-              
-              // Fetch role
-              const { data: roleData, error: roleError } = await supabase
-                .from('family_members')
-                .select('role')
-                .eq('user_id', user.id)
-                .eq('family_id', familyId)
-                .single();
-                
-              console.log("Role lookup result:", { roleData, roleError });
-                
-              if (!roleError && roleData) {
-                setFamilyRole(roleData.role as "admin" | "viewer");
-              } else {
-                console.log("Setting default role as viewer");
-                setFamilyRole("viewer"); // Default role if not found
-              }
-            } else {
-              console.log("User is not a family member");
-              setIsFamilyMember(false);
-              setUserFamilyId(null);
-              setFamilyRole(null);
-            }
-          } else {
-            console.log("Failed to check family status, assuming not a family member");
-            setIsFamilyMember(false);
-            setUserFamilyId(null);
-            setFamilyRole(null);
-          }
+          // Fallback: Since check_user_family RPC doesn't exist, set defaults
+          console.log("No family_members record found and check_user_family RPC is not available");
+          setIsFamilyMember(false);
+          setUserFamilyId(null);
+          setFamilyRole(null);
         }
       } catch (err) {
         console.error("Error checking family status:", err);
@@ -186,6 +137,15 @@ const CreateGoal: FC = () => {
     }));
   };
 
+  const handleAmountChange = (field: 'target_amount' | 'current_amount') => (
+    value: number
+  ): void => {
+    setGoal((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
   const handleReview = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
     setError(null);
@@ -196,7 +156,7 @@ const CreateGoal: FC = () => {
       return;
     }
 
-    if (!goal.target_amount || parseFloat(goal.target_amount) <= 0) {
+    if (!goal.target_amount || goal.target_amount <= 0) {
       showErrorToast("Please enter a valid target amount");
       return;
     }
@@ -237,13 +197,14 @@ const CreateGoal: FC = () => {
       // Prepare goal data for insertion
       const goalData: any = {
         goal_name: goal.goal_name,
-        target_amount: parseFloat(goal.target_amount),
-        current_amount: parseFloat(goal.current_amount) || 0,
+        target_amount: roundToCentavo(goal.target_amount),
+        current_amount: roundToCentavo(goal.current_amount) || 0,
         target_date: goal.target_date,
         priority: goal.priority,
         notes: goal.notes,
         user_id: user.id,
         status: "in_progress", // Default status for new goals
+        currency: "PHP", // Default currency
       };
       
       // Add family ID if the goal is shared with family
@@ -251,7 +212,7 @@ const CreateGoal: FC = () => {
         if (isFamilyMember && userFamilyId) {
           console.log("Adding family sharing data", { family_id: userFamilyId });
           goalData.family_id = userFamilyId;
-          goalData.is_shared = true;
+          goalData.is_family_goal = true; // Use correct database column name
         } else {
           console.log("Failed to add family sharing - missing conditions:", { 
             isFamilyMember, 
@@ -276,6 +237,17 @@ const CreateGoal: FC = () => {
         throw new Error(error.message);
       }
       
+      // Trigger goal creation notifications
+      if (data) {
+        try {
+          await GoalNotificationService.getInstance().checkGoalMilestones(data.id);
+          console.log('Goal creation notifications processed successfully');
+        } catch (notificationError) {
+          // Log notification error but don't fail the goal creation
+          console.warn('Failed to process goal creation notifications:', notificationError);
+        }
+      }
+      
       // Success! Show toast and redirect
       showSuccessToast(`Goal "${goal.goal_name}" ${goal.share_with_family ? 'shared with family' : 'created'} successfully!`);
       navigate("/goals");
@@ -292,8 +264,8 @@ const CreateGoal: FC = () => {
   const calculateRecommendation = (): number | null => {
     if (!goal.target_amount || !goal.target_date) return null;
 
-    const targetAmount = parseFloat(goal.target_amount);
-    const currentAmount = parseFloat(goal.current_amount) || 0;
+    const targetAmount = goal.target_amount;
+    const currentAmount = goal.current_amount || 0;
     const targetDate = new Date(goal.target_date);
     const today = new Date();
 
@@ -405,7 +377,7 @@ const CreateGoal: FC = () => {
                               Target Amount
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {formatCurrency(parseFloat(goal.target_amount))}
+                              {formatCurrencyNew(goal.target_amount, 'PHP')}
                             </div>
                           </div>
                           <div className="col-auto">
@@ -424,7 +396,7 @@ const CreateGoal: FC = () => {
                               Current Amount
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {formatCurrency(parseFloat(goal.current_amount) || 0)}
+                              {formatCurrencyNew(goal.current_amount || 0, 'PHP')}
                             </div>
                           </div>
                           <div className="col-auto">
@@ -591,55 +563,32 @@ const CreateGoal: FC = () => {
 
                 <div className="row">
                   <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="target_amount" className="font-weight-bold text-gray-800">
-                        Target Amount <span className="text-danger">*</span>
-                      </label>
-                      <div className="input-group">
-                        <div className="input-group-prepend">
-                          <span className="input-group-text">₱</span>
-                        </div>
-                        <input
-                          type="number"
-                          id="target_amount"
-                          name="target_amount"
-                          value={goal.target_amount}
-                          onChange={handleChange}
-                          className="form-control"
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          required
-                        />
-                      </div>
-                    </div>
+                    <CentavoInput
+                      value={goal.target_amount}
+                      onChange={handleAmountChange('target_amount')}
+                      currency="PHP"
+                      label="Target Amount"
+                      placeholder="0.00"
+                      required={true}
+                      min={0.01}
+                      className="mb-3"
+                    />
                   </div>
-
+                  
                   <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="current_amount" className="font-weight-bold text-gray-800">
-                        Current Amount (Optional)
-                      </label>
-                      <div className="input-group">
-                        <div className="input-group-prepend">
-                          <span className="input-group-text">₱</span>
-                        </div>
-                        <input
-                          type="number"
-                          id="current_amount"
-                          name="current_amount"
-                          value={goal.current_amount}
-                          onChange={handleChange}
-                          className="form-control"
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                        />
-                      </div>
-                      <small className="form-text text-muted">
-                        Money you've already saved towards this goal
-                      </small>
-                    </div>
+                    <CentavoInput
+                      value={goal.current_amount}
+                      onChange={handleAmountChange('current_amount')}
+                      currency="PHP"
+                      label="Current Amount (Optional)"
+                      placeholder="0.00"
+                      required={false}
+                      min={0}
+                      className="mb-3"
+                    />
+                    <small className="form-text text-muted">
+                      Money you've already saved towards this goal
+                    </small>
                   </div>
                 </div>
 
@@ -722,26 +671,30 @@ const CreateGoal: FC = () => {
                 ) : isFamilyMember ? (
                   <div className="form-group">
                     <div className="card border-left-info shadow p-3 mb-3">
-                      <h5 className="font-weight-bold text-info mb-3">
-                        <i className="fas fa-users mr-2"></i>
-                        Family Goal Sharing
-                      </h5>
+                      <div className="mb-3">
+                        <h5 className="font-weight-bold text-info mb-0">
+                          <i className="fas fa-users mr-2"></i>
+                          Family Goal Sharing
+                        </h5>
+                      </div>
                       
-                      <div className="custom-control custom-checkbox">
-                        <input
-                          type="checkbox"
-                          className="custom-control-input"
-                          id="shareWithFamily"
-                          name="share_with_family"
-                          checked={goal.share_with_family}
-                          onChange={(e) => 
-                            setGoal({...goal, share_with_family: e.target.checked})
-                          }
-                        />
-                        <label className="custom-control-label font-weight-bold" htmlFor="shareWithFamily">
-                          Share this goal with my family
-                        </label>
-                        <div className="mt-2">
+                      <div className="row">
+                        <div className="col-md-8">
+                          <div className="d-flex align-items-center mb-3">
+                            <input
+                              type="checkbox"
+                              className="mr-2"
+                              id="shareWithFamily"
+                              name="share_with_family"
+                              checked={goal.share_with_family}
+                              onChange={(e) => 
+                                setGoal({...goal, share_with_family: e.target.checked})
+                              }
+                            />
+                            <label className="font-weight-bold text-nowrap mb-0" htmlFor="shareWithFamily">
+                              Share this goal with my family
+                            </label>
+                          </div>
                           <small className="form-text text-muted d-block">
                             <i className="fas fa-info-circle mr-1"></i>
                             When shared, this goal will appear in your family dashboard and family members can view and contribute to it.
@@ -759,6 +712,8 @@ const CreateGoal: FC = () => {
                               </div>
                             </div>
                           )}
+                        </div>
+                        <div className="col-md-4">
                         </div>
                       </div>
                     </div>

@@ -5,6 +5,7 @@ import { supabase } from '../../../utils/supabaseClient';
 import { useAuth } from '../../../utils/AuthContext';
 import { useToast } from '../../../utils/ToastContext';
 import { useNavigate } from 'react-router-dom';
+import { goalsDataService } from '../services/goalsDataService';
 
 /**
  * Custom hook for managing goals data and real-time subscriptions
@@ -18,7 +19,7 @@ export const useGoalsData = (familyState: FamilyState) => {
   const [goalSubscription, setGoalSubscription] = useState<any>(null);
   const [goalChannelName] = useState<string>(`goals_updates_${user?.id || 'anonymous'}`);
 
-  // Fetch goals data from Supabase
+  // Fetch goals data with robust error handling and fallback
   const fetchGoals = async () => {
     try {
       setLoading(true);
@@ -29,46 +30,69 @@ export const useGoalsData = (familyState: FamilyState) => {
         return;
       }
       
-      // Fetch personal goals
-      const { data: personalGoals, error: personalGoalsError } = await supabase
-        .from('goal_details')
-        .select('*')
-        .eq('user_id', user.id);
+      // Use robust data service with automatic fallback
+      const { data: personalGoals, error: personalGoalsError } = await goalsDataService.fetchGoals(user.id);
         
       if (personalGoalsError) {
-        throw new Error(`Error fetching personal goals: ${personalGoalsError.message}`);
+        throw personalGoalsError;
+      }
+      
+      if (!personalGoals) {
+        console.warn('No personal goals data received');
+        setGoals([]);
+        setLoading(false);
+        return;
       }
       
       // Mark personal goals, ensuring any with family_id are correctly marked as shared
-      const formattedPersonalGoals = (personalGoals || []).map(goal => ({
-        ...goal,
-        is_shared: !!goal.family_id // Ensure goals with family_id are marked as shared
-      }));
+      const formattedPersonalGoals = personalGoals.map(goal => {
+        const processed = {
+          ...goal,
+          is_family_goal: !!goal.family_id || !!goal.is_family_goal, // Ensure goals with family_id are marked as shared
+          // Ensure percentage field is available for display components
+          percentage: goal.percentage || (goal.target_amount > 0 ? (goal.current_amount / goal.target_amount) * 100 : 0),
+          remaining: goal.remaining || Math.max(0, goal.target_amount - goal.current_amount)
+        };
+        
+        // Log only if this goal has family data
+        if (processed.family_id || processed.is_family_goal) {
+          console.log('Family goal found:', {
+            id: processed.id,
+            name: processed.goal_name,
+            family_id: processed.family_id,
+            is_family_goal: processed.is_family_goal
+          });
+        }
+        
+        return processed;
+      });
       
       let allGoals = [...formattedPersonalGoals];
       
       // If user is in a family, also fetch family's shared goals
       if (familyState.isFamilyMember && familyState.userFamilyId) {
-        // Fetch shared goals from other family members
+        // Fetch shared goals from other family members using robust service
         const { data: sharedGoals, error: sharedGoalsError } = await supabase
           .from('goals')
           .select(`
             *,
-            profiles:user_id (
-              user_metadata
+            profiles!user_id (
+              full_name,
+              email
             )
           `)
           .eq('family_id', familyState.userFamilyId)
-          .neq('user_id', user.id); // Only goals from other family members
+          .eq('is_family_goal', true)
+          .neq('user_id', user.id);
           
         if (!sharedGoalsError && sharedGoals) {
           // Format shared goals with owner information
           const formattedSharedGoals = sharedGoals.map(goal => ({
             ...goal,
-            is_shared: true,
+            is_family_goal: true,
             shared_by: goal.user_id,
-            shared_by_name: goal.profiles?.user_metadata?.username || 
-                           goal.profiles?.user_metadata?.full_name || 
+            shared_by_name: goal.profiles?.full_name || 
+                           goal.profiles?.email?.split('@')[0] || 
                            "Family Member"
           }));
           
@@ -80,10 +104,27 @@ export const useGoalsData = (familyState: FamilyState) => {
       
       setGoals(allGoals);
       setLoading(false);
+      
+      // Log service state for debugging
+      const serviceState = goalsDataService.getServiceState();
+      if (serviceState.fallbackMode) {
+        console.warn('Goals loaded in fallback mode - enhanced features may be limited');
+      }
+      
     } catch (err) {
       console.error("Error loading goals:", err);
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-      showErrorToast(`Failed to load goals: ${errorMessage}`);
+      
+      // Provide user-friendly error messages based on error type
+      if (errorMessage.includes('schema cache') || errorMessage.includes('does not exist')) {
+        showErrorToast('Goals system is being updated. Please try again in a moment.');
+      } else if (errorMessage.includes('unauthorized') || errorMessage.includes('authentication')) {
+        showErrorToast('Session expired. Please sign in again.');
+        navigate('/login');
+      } else {
+        showErrorToast(`Failed to load goals: ${errorMessage}`);
+      }
+      
       setLoading(false);
     }
   };
@@ -100,7 +141,7 @@ export const useGoalsData = (familyState: FamilyState) => {
 
     console.log(`Setting up new subscription for user ${user.id}`);
 
-    // Create new goal subscription with unique channel name
+    // Create new goal subscription with unique channel name and error handling
     const newGoalSubscription = supabase
       .channel(goalChannelName)
       .on('postgres_changes', { 
@@ -109,11 +150,27 @@ export const useGoalsData = (familyState: FamilyState) => {
         table: 'goals',
         filter: `user_id=eq.${user.id}`
       }, (payload) => {
-        console.log("Goal update received:", payload);
-        fetchGoals(); // Refresh data when changes occur
+        console.log('Goals data changed:', payload.eventType);
+        // Add a small delay to ensure database consistency
+        setTimeout(() => fetchGoals(), 500);
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'goal_contributions'
+      }, (payload) => {
+        console.log('Goal contributions changed:', payload.eventType);
+        setTimeout(() => fetchGoals(), 500);
       })
       .subscribe((status) => {
-        console.log(`Goal subscription status: ${status}`);
+        if (status === 'SUBSCRIBED') {
+          console.log(`Goal subscription active for user ${user.id}`);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Goal subscription error - continuing without real-time updates');
+          // Don't fail completely if subscriptions don't work
+        } else if (status === 'TIMED_OUT') {
+          console.warn('Goal subscription timed out - will retry on next data fetch');
+        }
       });
 
     // Save subscription references
@@ -123,7 +180,12 @@ export const useGoalsData = (familyState: FamilyState) => {
     return () => {
       console.log("Cleaning up subscription");
       if (newGoalSubscription) {
-        supabase.removeChannel(newGoalSubscription);
+        try {
+          supabase.removeChannel(newGoalSubscription);
+        } catch (error) {
+          console.warn('Error cleaning up goal subscription:', error);
+          // Continue cleanup despite subscription cleanup errors
+        }
       }
     };
   }, [user, goalChannelName]);

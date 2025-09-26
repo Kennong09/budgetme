@@ -4,13 +4,8 @@ export interface User {
   id: string;
   email: string;
   created_at: string;
-  user_metadata?: {
-    avatar_url?: string;
-    full_name?: string;
-    username?: string;
-    name?: string;
-    phone_number?: string;
-  };
+  full_name?: string;
+  avatar_url?: string;
 }
 
 export interface Family {
@@ -28,9 +23,20 @@ export interface FamilyMember {
   id: string;
   family_id: string;
   user_id: string;
-  role: 'admin' | 'viewer';
+  role: 'admin' | 'member' | 'viewer';
+  status: 'active' | 'pending' | 'inactive' | 'removed';
   joined_at: string;
+  created_at: string;
+  updated_at: string;
   invited_by?: string;
-  is_active?: boolean;
+  invited_at?: string;
+  // Additional member permissions
+  can_create_goals?: boolean;
+  can_view_budgets?: boolean;
+  can_contribute_goals?: boolean;
+  // User profile data
   user?: User;
+  email?: string;
+  full_name?: string;
+  avatar_url?: string;
 }

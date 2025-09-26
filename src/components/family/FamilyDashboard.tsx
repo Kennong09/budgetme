@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link, useSearchParams, useParams, useNavigate } from 'react-router-dom';
 import { formatCurrency, formatPercentage } from '../../utils/helpers';
 import { supabase } from "../../utils/supabaseClient";
@@ -24,11 +24,10 @@ import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
 // Import Animate.css
 import "animate.css";
 
-// Import shared dashboard styles
-import "../dashboard/dashboard.css";
+// Dashboard CSS imported at app level to avoid lazy loading issues
 
 // Import types
-import { Family, FamilyMember, Goal, Transaction, RecentActivity } from './types';
+import { Family, FamilyMember, Goal, Transaction, RecentActivity, FamilySummaryData } from './types';
 
 
 // --- COMPONENTS ---
@@ -59,6 +58,7 @@ const FamilyDashboard: React.FC = () => {
   
   const {
     familyGoals,
+    loadingFamilyGoals,
     sharedGoalPerformanceChartData,
     sharedGoalBreakdownChartData,
     setSharedGoalPerformanceChartData,
@@ -70,7 +70,7 @@ const FamilyDashboard: React.FC = () => {
   const {
     fetchJoinRequests
   } = useJoinRequests(showErrorToast, showSuccessToast);
-  const [summaryData, setSummaryData] = useState<any | null>(null);
+  const [summaryData, setSummaryData] = useState<FamilySummaryData | null>(null);
   
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -82,6 +82,7 @@ const FamilyDashboard: React.FC = () => {
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteConfirmationInput, setDeleteConfirmationInput] = useState<string>("");
   
   // Handle tab change with URL update
   const handleTabChange = (tab: 'overview' | 'members' | 'activity' | 'goals') => {
@@ -125,9 +126,49 @@ const FamilyDashboard: React.FC = () => {
 
   // Real-time subscription states
   const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isFetchingFamily, setIsFetchingFamily] = useState<boolean>(false);
   
-  // Helper functions
-  const toggleTip = (tipId: string, event?: React.MouseEvent) => {
+  // Add throttling for subscription refresh calls
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0);
+  const REFRESH_THROTTLE_MS = 2000; // Minimum 2 seconds between subscription refreshes
+  
+  // Use refs to avoid dependency issues in useEffect
+  const fetchGoalsRef = useRef(fetchGoals);
+  fetchGoalsRef.current = fetchGoals;
+  
+  // Throttled fetchGoals function for subscriptions
+  const throttledFetchGoals = useCallback(async (familyId: string) => {
+    const now = Date.now();
+    if (now - lastRefreshTime < REFRESH_THROTTLE_MS) {
+      console.log('Subscription refresh throttled - too frequent');
+      return;
+    }
+    setLastRefreshTime(now);
+    await fetchGoals(familyId);
+  }, [fetchGoals, lastRefreshTime]);
+  
+  // Memoize chart data to prevent infinite re-renders
+  const chartData = useMemo(() => {
+    // Use toFixed to ensure consistent number comparison and prevent floating point precision issues
+    const stabilizedExpenses = Number(totalExpenses.toFixed(2));
+    const stabilizedIncome = Number(totalIncome.toFixed(2));
+    const stabilizedUtilization = Number(budgetUtilization.toFixed(2));
+    const stabilizedGoalsCount = familyGoals.length;
+    
+    return {
+      totalExpenses: stabilizedExpenses,
+      totalIncome: stabilizedIncome,
+      budgetUtilization: stabilizedUtilization,
+      familyGoalsCount: stabilizedGoalsCount
+    };
+  }, [totalExpenses, totalIncome, budgetUtilization, familyGoals.length]);
+  
+  // Add a refresh key to force chart re-render only when refresh button is clicked
+  const [chartRefreshKey, setChartRefreshKey] = useState<number>(0);
+  
+  // Helper functions - using useCallback to prevent unnecessary re-renders
+  const toggleTip = useCallback((tipId: string, event?: React.MouseEvent) => {
     event?.stopPropagation();
     if (activeTip === tipId) {
       setActiveTip(null);
@@ -142,15 +183,22 @@ const FamilyDashboard: React.FC = () => {
         });
       }
     }
-  };
+  }, [activeTip]);
   
-  const getMemberRoleBadge = (role: string) => {
+  const getMemberRoleBadge = (role: string, isOwner: boolean = false) => {
     const roleColors: { [key: string]: string } = {
       'admin': 'badge-danger',
-      'moderator': 'badge-warning',
-      'member': 'badge-primary'
+      'member': 'badge-primary',
+      'viewer': 'badge-info'
     };
-    return `badge ${roleColors[role] || 'badge-secondary'}`;
+    const badgeClass = `badge ${roleColors[role] || 'badge-secondary'}`;
+    const displayRole = isOwner ? 'Owner' : role.charAt(0).toUpperCase() + role.slice(1);
+    
+    return (
+      <span className={badgeClass}>
+        {displayRole}
+      </span>
+    );
   };
   
   const getRemainingDays = (targetDate: string) => {
@@ -166,6 +214,27 @@ const FamilyDashboard: React.FC = () => {
     console.log('fetchGoalContributions called for:', goalId);
   };
   
+  // Manual refresh function for charts
+  const handleRefreshCharts = async () => {
+    if (!familyData?.id || isRefreshing) return;
+    
+    setIsRefreshing(true);
+    try {
+      // Refresh family goals and metrics
+      await fetchGoals(familyData.id);
+      await updateFamilyGoalsMetrics(familyData.id);
+      
+      showSuccessToast('Charts refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing charts:', error);
+      showErrorToast('Failed to refresh charts');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+  
+
+  
   // Tooltip content
   const tooltipContent = {
     'family-visibility': {
@@ -173,20 +242,20 @@ const FamilyDashboard: React.FC = () => {
       description: 'Public families can be discovered by other users. Private families require an invite.'
     },
     'family-income': {
-      title: 'Family Income',
-      description: 'Total combined income from all family members for the current period.'
+      title: 'Family Savings Target',
+      description: 'Total target amount for all active family goals. This represents your family\'s collective savings objectives.'
     },
     'family-expenses': {
-      title: 'Family Expenses',
-      description: 'Total combined expenses from all family members for the current period.'
+      title: 'Family Goals Progress',
+      description: 'Total amount currently saved toward all family goals. This shows your family\'s progress toward your shared objectives.'
     },
     'family-balance': {
-      title: 'Family Balance',
-      description: 'Net balance calculated as total income minus total expenses.'
+      title: 'Remaining to Save',
+      description: 'Amount still needed to reach all family goals. This is the difference between your targets and current progress.'
     },
     'family-savings-rate': {
-      title: 'Savings Rate',
-      description: 'Percentage of income saved, calculated as (Income - Expenses) / Income × 100.'
+      title: 'Goals Progress Rate',
+      description: 'Percentage of family goals completed, calculated as (Current Progress / Total Targets) × 100.'
     }
   };
   
@@ -200,59 +269,59 @@ const FamilyDashboard: React.FC = () => {
   
 
   // Memoize data update functions to use in subscriptions
-  const updateTransactionData = useCallback(async (memberUserIds: string[]) => {
+  const updateFamilyGoalsMetrics = useCallback(async (familyId: string) => {
     try {
-      // Get current month date range
-      const currentDate = new Date();
-      const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString();
-      const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).toISOString();
-
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
+      if (!familyId) return;
+      
+      // Fetch family goals to calculate metrics
+      const { data: goalsData, error: goalsError } = await supabase
+        .from('goals')
         .select('*')
-        .in('user_id', memberUserIds)
-        .gte('date', firstDay)
-        .lte('date', lastDay);
+        .eq('family_id', familyId)
+        .eq('status', 'in_progress');
 
-      if (!txError && txData) {
-        setTransactions(txData);
+      if (!goalsError && goalsData) {
+        // Calculate family goals-based financial metrics
+        const totalTargetAmount = goalsData.reduce((sum, goal) => sum + (goal.target_amount || 0), 0);
+        const totalCurrentAmount = goalsData.reduce((sum, goal) => sum + (goal.current_amount || 0), 0);
+        const remainingAmount = totalTargetAmount - totalCurrentAmount;
+        const progressRate = totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount) * 100 : 0;
         
-        // Recalculate summary data
-        const income = txData
-          .filter(tx => tx.type === 'income')
-          .reduce((sum, tx) => sum + tx.amount, 0);
-          
-        const expenses = txData
-          .filter(tx => tx.type === 'expense')
-          .reduce((sum, tx) => sum + tx.amount, 0);
+        // Set individual totals for compatibility with existing components
+        setTotalIncome(totalTargetAmount); // Family's total savings targets
+        setTotalExpenses(totalCurrentAmount); // Family's current progress
         
-        setTotalIncome(income);
-        setTotalExpenses(expenses);
-          
-        const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
-        const utilization = income > 0 ? (expenses / income) * 100 : 0;
+        // Calculate budget utilization based on goals progress
+        const utilization = totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount) * 100 : 0;
         setBudgetUtilization(utilization);
         
         setSummaryData({
-          totalBudget: 0,
-          totalSpent: expenses,
-          remainingBudget: income - expenses,
-          savingsRate,
-          upcomingBills: 0,
-          familyGoalsProgress: 0,
+          income: totalTargetAmount,     // Total family savings targets
+          expenses: totalCurrentAmount, // Current progress toward goals
+          balance: remainingAmount,     // Remaining amount needed
+          savingsRate: progressRate,    // Progress percentage
         });
 
-        // Update family goals
-        if (familyData?.id) {
-          fetchGoals(familyData.id);
-        }
+        // Don't call fetchGoals here to prevent infinite loop
+        // The goals data will be refreshed through real-time subscriptions or manual refresh
         
-        // Update budget performance chart if needed
+      } else {
+        // No goals found - set zero state
+        setTotalIncome(0);
+        setTotalExpenses(0);
+        setBudgetUtilization(0);
+        
+        setSummaryData({
+          income: 0,
+          expenses: 0,
+          balance: 0,
+          savingsRate: 0,
+        });
       }
     } catch (err) {
-      console.error("Error updating transaction data:", err);
+      console.error("Error updating family goals metrics:", err);
     }
-  }, [familyData, fetchGoals]);
+  }, [familyData]); // Removed fetchGoals from dependency array to prevent infinite loop
   
   // The fetchFamilyGoals function has been moved to the useFamilyGoals hook
 
@@ -281,7 +350,7 @@ const FamilyDashboard: React.FC = () => {
         const joinUserIds = recentJoins.map(join => join.user_id);
         const { data: joinProfiles, error: joinProfilesError } = await supabase
           .from('profiles')
-          .select('id, email, user_metadata')
+          .select('id, email, full_name')
           .in('id', joinUserIds);
           
         if (!joinProfilesError && joinProfiles) {
@@ -291,7 +360,7 @@ const FamilyDashboard: React.FC = () => {
               activities.push({
                 id: `join-${join.id}`,
                 type: 'join',
-                user: profile.user_metadata?.username || profile.user_metadata?.full_name || profile.email || "Family Member",
+                user: profile.full_name || profile.email || "Family Member",
                 description: "joined the family.",
                 date: join.created_at,
                 icon: "fa-user-plus"
@@ -319,7 +388,7 @@ const FamilyDashboard: React.FC = () => {
         const goalUserIds = recentGoals.map(goal => goal.user_id);
         const { data: goalProfiles, error: goalProfilesError } = await supabase
           .from('profiles')
-          .select('id, email, user_metadata')
+          .select('id, email, full_name')
           .in('id', goalUserIds);
           
         if (!goalProfilesError && goalProfiles) {
@@ -329,7 +398,7 @@ const FamilyDashboard: React.FC = () => {
               activities.push({
                 id: `goal-${goal.id}`,
                 type: 'goal',
-                user: profile.user_metadata?.username || profile.user_metadata?.full_name || profile.email || "Family Member",
+                user: profile.full_name || profile.email || "Family Member",
                 description: `created a new goal '${goal.goal_name}'.`,
                 date: goal.created_at,
                 icon: "fa-flag-checkered"
@@ -360,7 +429,7 @@ const FamilyDashboard: React.FC = () => {
         const txUserIds = recentTransactions.map(tx => tx.user_id);
         const { data: txProfiles, error: txProfilesError } = await supabase
           .from('profiles')
-          .select('id, email, user_metadata')
+          .select('id, email, full_name')
           .in('id', txUserIds);
           
         if (!txProfilesError && txProfiles) {
@@ -370,7 +439,7 @@ const FamilyDashboard: React.FC = () => {
               activities.push({
                 id: `tx-${tx.id}`,
                 type: 'transaction',
-                user: profile.user_metadata?.username || profile.user_metadata?.full_name || profile.email || "Family Member",
+                user: profile.full_name || profile.email || "Family Member",
                 description: `${tx.type === 'expense' ? 'spent' : 'received'} ${formatCurrency(tx.amount)} ${tx.description ? `for ${tx.description}` : ''}.`,
                 date: tx.created_at,
                 icon: tx.type === 'expense' ? "fa-credit-card" : "fa-money-bill-alt"
@@ -391,6 +460,48 @@ const FamilyDashboard: React.FC = () => {
     }
   }, []);
 
+  // Comprehensive refresh function for active tab - using useCallback to prevent unnecessary re-renders
+  const handleRefreshActiveTab = useCallback(async () => {
+    if (!familyData?.id || isRefreshing) return;
+    
+    setIsRefreshing(true);
+    try {
+      switch (activeTab) {
+        case 'overview':
+          // Refresh goals and metrics for charts
+          await fetchGoals(familyData.id);
+          await updateFamilyGoalsMetrics(familyData.id);
+          // Force chart refresh by updating key
+          setChartRefreshKey(prev => prev + 1);
+          break;
+        case 'members':
+          // Refresh family members
+          await fetchFamilyMembers(familyData.id);
+          break;
+        case 'activity':
+          // Refresh recent activity
+          if (members.length > 0) {
+            const memberUserIds = members.map(member => member.user_id);
+            await updateRecentActivity(familyData.id, memberUserIds);
+          }
+          break;
+        case 'goals':
+          // Refresh family goals
+          await fetchGoals(familyData.id);
+          break;
+        default:
+          break;
+      }
+      
+      showSuccessToast('Data refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      showErrorToast('Failed to refresh data');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [familyData?.id, isRefreshing, activeTab, fetchGoals, updateFamilyGoalsMetrics, fetchFamilyMembers, members, updateRecentActivity, showSuccessToast, showErrorToast]);
+
   // --- Main data fetching function ---
   // Removed duplicate  // Fetch family data internal function (for retries and internal calls)
   const fetchFamilyDataInternal = useCallback(async (retryCount: number = 0, maxRetries: number = 3, forceFamilyId?: string) => {
@@ -406,8 +517,25 @@ const FamilyDashboard: React.FC = () => {
         return;
       }
       
-      // Use the family service to get user's family
-      const family = await familyService.getUserFamily(user.id);
+      // Use the family service to get user's family with error handling
+      let family;
+      try {
+        family = await familyService.getUserFamily(user.id);
+      } catch (error) {
+        console.error('Error getting user family:', error);
+        // If it's a 400 error or RPC error, stop retrying to prevent infinite loops
+        if (error instanceof Error && (
+          error.message.includes('400') || 
+          error.message.includes('Bad Request') ||
+          error.message.includes('RPC') ||
+          error.message.includes('get_family_membership')
+        )) {
+          showErrorToast("Error connecting to family data. Please try refreshing the page.");
+          setFamilyData(null);
+          return;
+        }
+        throw error; // Re-throw for other errors to continue retry logic
+      }
       
       if (!family) {
         // If we've just created a family, try a few times before giving up
@@ -434,8 +562,8 @@ const FamilyDashboard: React.FC = () => {
         try {
           // Use our callback functions to fetch and set all related data
           await Promise.all([
-            updateTransactionData(members.map(member => member.user_id)),
-            fetchGoals(family.id),
+            updateFamilyGoalsMetrics(family.id),
+            fetchGoalsRef.current(family.id),
             updateRecentActivity(family.id, members.map(member => member.user_id))
           ]);
         } catch (err) {
@@ -461,6 +589,16 @@ const FamilyDashboard: React.FC = () => {
       console.error("Error in fetchFamilyData:", err);
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
       
+      // Check if it's a database/RPC error that could cause infinite loops
+      if (errorMessage.includes('400') || 
+          errorMessage.includes('Bad Request') ||
+          errorMessage.includes('RPC') ||
+          errorMessage.includes('get_family_membership')) {
+        showErrorToast("Database connection error. Please try refreshing the page.");
+        setFamilyData(null);
+        return;
+      }
+      
       // If we've just created a family, try a few times before giving up
       if (retryCount < maxRetries - 1) {
         setTimeout(() => {
@@ -471,13 +609,19 @@ const FamilyDashboard: React.FC = () => {
       
       showErrorToast(`Error loading family data: ${errorMessage}`);
     }
-  }, [user, isLoadingFamily, fetchGoals, setFamilyData, setFamilyGoals, setMembers, setSharedGoalBreakdownChartData, setSharedGoalPerformanceChartData, showErrorToast, updateRecentActivity, updateTransactionData]);
+  }, [user, isLoadingFamily, setFamilyData, setFamilyGoals, setMembers, setSharedGoalBreakdownChartData, setSharedGoalPerformanceChartData, showErrorToast, updateRecentActivity, updateFamilyGoalsMetrics]); // Removed fetchGoals from dependency array to prevent infinite loop
 
   // --- DATA FETCHING & PROCESSING ---
   useEffect(() => {
     if (!user) {
       showErrorToast("Please sign in to view your family dashboard");
       // Navigation would be handled by auth redirect
+      return;
+    }
+
+    // Prevent multiple simultaneous fetch operations
+    if (isFetchingFamily) {
+      console.log('Family data fetch already in progress, skipping...');
       return;
     }
 
@@ -489,35 +633,56 @@ const FamilyDashboard: React.FC = () => {
     const queryParams = new URLSearchParams(window.location.search);
     const justCreated = queryParams.get('created') === 'true';
     
+    // Set flag to prevent concurrent fetches
+    setIsFetchingFamily(true);
+    
     // Use setTimeout to prevent immediate execution and allow component to fully mount
-    const timer = setTimeout(() => {
-      if (justCreated) {
-        // Start with higher retry attempts for newly created families
-        fetchFamilyDataInternal(0, 5); // Allow more retries for newly created families
-      } else if (familyIdFromUrl) {
-        // For direct access with family ID, attempt to fetch that specific family
-        fetchFamilyDataInternal(0, 3, familyIdFromUrl);
-      } else {
-        fetchFamilyDataInternal(0, 3); // Standard number of retries
+    const timer = setTimeout(async () => {
+      try {
+        if (justCreated) {
+          // Start with higher retry attempts for newly created families
+          await fetchFamilyDataInternal(0, 5); // Allow more retries for newly created families
+        } else if (familyIdFromUrl) {
+          // For direct access with family ID, attempt to fetch that specific family
+          await fetchFamilyDataInternal(0, 3, familyIdFromUrl);
+        } else {
+          await fetchFamilyDataInternal(0, 3); // Standard number of retries
+        }
+      } finally {
+        // Reset flag when done
+        setIsFetchingFamily(false);
       }
     }, 1000);
     
-    return () => clearTimeout(timer);
-  }, [user, showErrorToast, urlFamilyId, searchParams, fetchFamilyDataInternal]);
+    return () => {
+      clearTimeout(timer);
+      // Reset flag on cleanup
+      setIsFetchingFamily(false);
+    };
+  }, [user, showErrorToast, urlFamilyId, searchParams, fetchFamilyDataInternal]); // Removed isFetchingFamily to prevent infinite loop
   
-  // Fetch family goals when component mounts or family data changes
+  // Fetch family goals when component mounts or family data changes - with controlled refresh
   useEffect(() => {
-    // Only proceed if we have family data and the user
-    if (familyData?.id && user) {
+    // Only proceed if we have family data and the user, and we're not currently fetching family data
+    if (familyData?.id && user && !isFetchingFamily && !isRefreshing) {
       console.log('Fetching family goals on mount or family data change');
-      // Add a slight delay to prevent immediate execution
+      // Use a ref to track if we've already fetched for this family
+      const familyIdRef = familyData.id;
+      
+      // Add a longer delay to prevent immediate execution and reduce frequency
       const timer = setTimeout(() => {
-        fetchGoals(familyData.id);
-      }, 1500);
+        // Only fetch if we still have the same family and haven't refreshed recently
+        if (familyData?.id === familyIdRef && !isFetchingFamily && !isRefreshing) {
+          fetchGoalsRef.current(familyData.id).catch(error => {
+            console.error('Error fetching goals in useEffect:', error);
+            // Don't retry automatically to prevent loops
+          });
+        }
+      }, 3000); // Increased delay to 3 seconds
       
       return () => clearTimeout(timer);
     }
-  }, [familyData?.id, user, fetchGoals]);
+  }, [familyData?.id, user]); // Removed isFetchingFamily and isRefreshing to prevent infinite loop
   
   // Set up user-specific subscription to detect when the user is added to a family
   useEffect(() => {
@@ -566,13 +731,12 @@ const FamilyDashboard: React.FC = () => {
     return () => {
       userMembershipSubscription.unsubscribe();
     };
-  }, [user, userMembershipChannelName, setFamilyData, setMembers, setTransactions, setFamilyGoals, setRecentActivity, setSummaryData, setSharedGoalPerformanceChartData, setSharedGoalBreakdownChartData]);
+  }, [user, userMembershipChannelName]); // Removed setter functions to prevent infinite loop
   
   // Set up real-time subscriptions for existing family data
   useEffect(() => {
     if (!user || !familyData) return;
     
-    // ... (rest of the code remains the same)
     // Array to hold all subscriptions
     const newSubscriptions: any[] = [];
     
@@ -638,10 +802,10 @@ const FamilyDashboard: React.FC = () => {
                   .select(`
                     id,
                     email,
+                    full_name,
+                    avatar_url,
                     created_at,
-                    updated_at,
-                    last_sign_in_at,
-                    user_metadata
+                    updated_at
                   `)
                   .in('id', memberUserIds);
                   
@@ -660,8 +824,8 @@ const FamilyDashboard: React.FC = () => {
                       email: userProfile.email,
                       created_at: userProfile.created_at,
                       updated_at: userProfile.updated_at,
-                      last_sign_in_at: userProfile.last_sign_in_at,
-                      user_metadata: userProfile.user_metadata || {}
+                      full_name: userProfile.full_name,
+                      avatar_url: userProfile.avatar_url
                     } : undefined,
                     joined_at: member.created_at || ''
                   };
@@ -697,8 +861,8 @@ const FamilyDashboard: React.FC = () => {
               }, async (payload) => {
                 console.log('Family goal update received:', payload);
                 
-                // Refresh goals data
-                await fetchGoals(familyData.id);
+                // Use throttled refresh to prevent rapid-fire calls
+                await throttledFetchGoals(familyData.id);
                 
                 // Update activity feed since goals have changed
                 await updateRecentActivity(familyData.id, memberUserIds);
@@ -716,7 +880,7 @@ const FamilyDashboard: React.FC = () => {
                 // Check if this update involves sharing with our family
                 if (payload.new && payload.new.family_id === familyData.id) {
                   console.log('Goal shared with family:', payload);
-                  await fetchGoals(familyData.id);
+                  await throttledFetchGoals(familyData.id);
                   await updateRecentActivity(familyData.id, memberUserIds);
                 }
               })
@@ -738,8 +902,8 @@ const FamilyDashboard: React.FC = () => {
               }, async (payload) => {
                 console.log('Transaction update received:', payload);
                 
-                // Update transaction data, summary, and charts
-                await updateTransactionData(memberUserIds);
+                // Update family goals metrics and charts
+                await updateFamilyGoalsMetrics(familyData.id);
                 
                 // Update activity feed since transactions have changed
                 await updateRecentActivity(familyData.id, memberUserIds);
@@ -779,7 +943,7 @@ const FamilyDashboard: React.FC = () => {
       clearTimeout(setupTimer);
       subscriptions.forEach(subscription => supabase.removeChannel(subscription));
     };
-  }, [user, familyData, members, familyChannelName, memberChannelName, goalChannelName, transactionChannelName, activityChannelName, updateTransactionData, fetchGoals, updateRecentActivity, setFamilyData, setMembers, subscriptions]);
+  }, [user, familyData, members]); // Removed function references and channel names to prevent infinite loop
 
   // --- NEW FUNCTIONS FOR FAMILY MANAGEMENT ---
 
@@ -847,7 +1011,7 @@ const FamilyDashboard: React.FC = () => {
     console.log('Selected goal details before contribution:', {
       id: selectedGoal.id,
       name: selectedGoal.goal_name,
-      isShared: selectedGoal.is_shared,
+      isShared: selectedGoal.is_family_goal,
       familyId: selectedGoal.family_id,
       currentAmount: selectedGoal.current_amount,
       owner: selectedGoal.user_id,
@@ -968,6 +1132,7 @@ const FamilyDashboard: React.FC = () => {
   const closeDeleteModal = () => {
     setShowDeleteModal(false);
     setIsDeleting(false);
+    setDeleteConfirmationInput("");
   };
 
   // Leave family function for regular members (not creators)
@@ -1022,6 +1187,57 @@ const FamilyDashboard: React.FC = () => {
     }
   };
 
+  // Delete family function for owners only
+  const handleDeleteFamily = async () => {
+    if (!familyData || !user) return;
+    
+    setIsDeleting(true);
+    try {
+      // Verify user is the creator/owner
+      if (user.id !== familyData.created_by) {
+        showErrorToast("Only the family owner can permanently delete the family.");
+        setIsDeleting(false);
+        closeDeleteModal();
+        return;
+      }
+
+      // Verify confirmation input matches family name exactly
+      if (deleteConfirmationInput !== familyData.family_name) {
+        showErrorToast("Family name confirmation does not match. Please type the exact family name.");
+        setIsDeleting(false);
+        return;
+      }
+
+      // Use the enhanced deleteFamily service with owner validation
+      await familyService.deleteFamily(familyData.id, user.id);
+      
+      // Try to refresh the materialized view, but don't block on failure
+      try {
+        await refreshFamilyMembershipsView();
+      } catch (refreshError) {
+        console.warn("Failed to refresh materialized view (non-critical):", refreshError);
+        // Continue anyway as this isn't critical
+      }
+      
+      // Success - navigate to create family page
+      showSuccessToast(`Family "${familyData.family_name}" has been permanently deleted`);
+      
+      // Add a short timeout to ensure Supabase events have time to propagate
+      // before redirecting the user
+      setTimeout(() => {
+        navigate('/family/create');
+      }, 300);
+      
+    } catch (err) {
+      console.error("Error deleting family:", err);
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+      
+      showErrorToast(`Failed to delete family: ${errorMessage}`);
+      setIsDeleting(false);
+      closeDeleteModal();
+    }
+  };
+
   // Edit family function
   const navigateToEdit = () => {
     if (!familyData) return;
@@ -1071,14 +1287,36 @@ const FamilyDashboard: React.FC = () => {
               <div className="modal-body text-center">
                 <div className="mb-4">
                   <div className="rounded-circle mx-auto d-flex align-items-center justify-content-center" 
-                    style={{ width: "80px", height: "80px", backgroundColor: "rgba(246, 194, 62, 0.2)" }}>
-                    <i className="fas fa-exclamation-triangle fa-3x text-warning"></i>
+                    style={{ width: "80px", height: "80px", backgroundColor: "rgba(220, 53, 69, 0.2)" }}>
+                    <i className="fas fa-exclamation-triangle fa-3x text-danger"></i>
                   </div>
                 </div>
                 {isCreator ? (
                   <>
-                    <p>Are you sure you want to delete your family group "{familyData?.family_name}"?</p>
-                    <p className="text-muted small">This will remove all family member associations. Individual user data like transactions and goals will remain intact, but will no longer be associated with this family.</p>
+                    <h5 className="text-danger mb-3">⚠️ Permanent Family Deletion ⚠️</h5>
+                    <p className="mb-3">You are about to <strong>permanently delete</strong> your family group <strong>"{familyData?.family_name}"</strong>.</p>
+                    <div className="alert alert-danger text-left mb-4">
+                      <h6 className="text-danger mb-2"><i className="fas fa-exclamation-triangle mr-2"></i>This action cannot be undone!</h6>
+                      <ul className="mb-0">
+                        <li>All family member associations will be permanently removed</li>
+                        <li>All shared family goals and progress will be deleted</li>
+                        <li>All family activity history will be lost</li>
+                        <li>All pending invitations will be cancelled</li>
+                      </ul>
+                    </div>
+                    <p className="mb-3">To confirm deletion, please type the exact name of your family:</p>
+                    <div className="form-group">
+                      <label className="font-weight-bold mb-2">Type "{familyData?.family_name}" to confirm:</label>
+                      <input 
+                        type="text" 
+                        className="form-control text-center"
+                        value={deleteConfirmationInput}
+                        onChange={(e) => setDeleteConfirmationInput(e.target.value)}
+                        placeholder={familyData?.family_name}
+                        disabled={isDeleting}
+                        style={{ fontSize: "16px", padding: "12px" }}
+                      />
+                    </div>
                   </>
                 ) : (
                   <>
@@ -1096,19 +1334,45 @@ const FamilyDashboard: React.FC = () => {
                 >
                   Cancel
                 </button>
-                <button 
-                  type="button" 
-                  className="btn btn-danger" 
-                  onClick={handleLeaveFamily}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-                      Leaving...
-                    </>
-                  ) : "Leave"}
-                </button>
+                {isCreator ? (
+                  <button 
+                    type="button" 
+                    className="btn btn-danger" 
+                    onClick={handleDeleteFamily}
+                    disabled={isDeleting || deleteConfirmationInput !== familyData?.family_name}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-trash mr-2"></i>
+                        Permanently Delete Family
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    className="btn btn-warning" 
+                    onClick={handleLeaveFamily}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                        Leaving...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-sign-out-alt mr-2"></i>
+                        Leave Family
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1286,7 +1550,7 @@ const FamilyDashboard: React.FC = () => {
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                    Family Income
+                    Family Savings Target
                     <i 
                       className="fas fa-info-circle ml-1 text-gray-400"
                       style={{ cursor: 'pointer' }}
@@ -1298,7 +1562,7 @@ const FamilyDashboard: React.FC = () => {
                   </div>
                   {!summaryData || summaryData.income === 0 ? (
                     <div className="small text-gray-500 mt-2">
-                      <i className="fas fa-info-circle mr-1"></i> No income recorded this month
+                      <i className="fas fa-info-circle mr-1"></i> No family goals set yet
                     </div>
                   ) : null}
                 </div>
@@ -1313,7 +1577,7 @@ const FamilyDashboard: React.FC = () => {
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                    Family Expenses
+                    Family Goals Progress
                     <i 
                       className="fas fa-info-circle ml-1 text-gray-400"
                       style={{ cursor: 'pointer' }}
@@ -1325,7 +1589,7 @@ const FamilyDashboard: React.FC = () => {
                   </div>
                   {!summaryData || summaryData.expenses === 0 ? (
                     <div className="small text-gray-500 mt-2">
-                      <i className="fas fa-info-circle mr-1"></i> No expenses recorded this month
+                      <i className="fas fa-info-circle mr-1"></i> No progress recorded yet
                     </div>
                   ) : null}
                 </div>
@@ -1340,7 +1604,7 @@ const FamilyDashboard: React.FC = () => {
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
-                    Family Balance
+                    Remaining to Save
                     <i 
                       className="fas fa-info-circle ml-1 text-gray-400"
                       style={{ cursor: 'pointer' }}
@@ -1352,7 +1616,7 @@ const FamilyDashboard: React.FC = () => {
                   </div>
                   {!summaryData ? (
                     <div className="small text-gray-500 mt-2">
-                      <i className="fas fa-info-circle mr-1"></i> Add transactions to calculate balance
+                      <i className="fas fa-info-circle mr-1"></i> Create family goals to track progress
                     </div>
                   ) : null}
                 </div>
@@ -1367,7 +1631,7 @@ const FamilyDashboard: React.FC = () => {
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className="text-xs font-weight-bold text-success text-uppercase mb-1">
-                    Family Savings Rate
+                    Goals Progress Rate
                     <i 
                       className="fas fa-info-circle ml-1 text-gray-400"
                       style={{ cursor: 'pointer' }}
@@ -1380,7 +1644,7 @@ const FamilyDashboard: React.FC = () => {
                   </div>
                   {!summaryData || summaryData.savingsRate === 0 ? (
                     <div className="small text-gray-500 mt-2">
-                      <i className="fas fa-info-circle mr-1"></i> Record income to calculate savings rate
+                      <i className="fas fa-info-circle mr-1"></i> Set family goals to track progress
                     </div>
                   ) : null}
                 </div>
@@ -1416,8 +1680,8 @@ const FamilyDashboard: React.FC = () => {
       
       {/* Tabs */}
       <div className="card shadow mb-4">
-        <div className="card-header py-3">
-          <ul className="nav nav-tabs card-header-tabs">
+        <div className="card-header py-3 d-flex justify-content-between align-items-center">
+          <ul className="nav nav-tabs card-header-tabs mb-0">
             <li className="nav-item">
               <button className={`nav-link btn btn-link ${activeTab === "overview" ? "active" : ""}`} onClick={() => handleTabChange("overview")}>
                 <i className="fas fa-chart-pie mr-1"></i> Overview
@@ -1439,23 +1703,38 @@ const FamilyDashboard: React.FC = () => {
               </button>
             </li>
           </ul>
+          
+          {/* Refresh Button */}
+          <button 
+            onClick={handleRefreshActiveTab}
+            disabled={isRefreshing}
+            className="btn btn-primary shadow-sm mr-2 d-inline-flex align-items-center"
+            style={{ minWidth: "100px" }}
+          >
+            {isRefreshing ? (
+              <>
+                <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-sync-alt mr-2"></i>
+                Refresh
+              </>
+            )}
+          </button>
         </div>
         <div className="card-body">
           {activeTab === "overview" && (
             <OverviewTab
-              totalExpenses={totalExpenses}
-              totalIncome={totalIncome}
-              budgetUtilization={budgetUtilization}
-              familyGoalsCount={familyGoals.length}
-              categoryChartData={categoryChartData}
-              budgetPerformanceData={budgetPerformanceData}
-              goalPerformanceData={sharedGoalPerformanceChartData}
-              goalBreakdownData={sharedGoalBreakdownChartData}
+              chartData={chartData}
+              familyId={familyData?.id!}
               expenseChartRef={categoryChartRef}
               budgetChartRef={budgetPerformanceChartRef}
               goalChartRef={goalPerformanceChartRef}
               goalBreakdownChartRef={goalBreakdownChartRef}
               toggleTip={toggleTip}
+              refreshKey={chartRefreshKey}
             />
           )}
 
@@ -1466,6 +1745,12 @@ const FamilyDashboard: React.FC = () => {
               members={members}
               getMemberRoleBadge={getMemberRoleBadge}
               familyId={familyData?.id}
+              onMembersUpdate={() => {
+                // Refresh family members when roles are updated
+                if (familyData?.id) {
+                  fetchFamilyMembers(familyData.id);
+                }
+              }}
             />
           )}
 
@@ -1478,7 +1763,7 @@ const FamilyDashboard: React.FC = () => {
             <GoalsTab
               familyGoals={familyGoals}
               isCreator={isCreator}
-              loadingFamilyGoals={isLoadingGoals}
+              loadingFamilyGoals={loadingFamilyGoals}
               selectedGoalForContributions={selectedGoalForContributions}
               loadingContributions={loadingContributions}
               goalContributions={goalContributions}
@@ -1490,6 +1775,7 @@ const FamilyDashboard: React.FC = () => {
               fetchGoalContributions={fetchGoalContributions}
               toggleTip={toggleTip}
               getRemainingDays={getRemainingDays}
+              onRefresh={handleRefreshActiveTab}
             />
           )}
         </div>

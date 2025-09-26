@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../utils/AuthContext";
 import { useCurrency } from "../../utils/CurrencyContext";
 import { getCurrentUserData } from "../../data/mockData";
+import { UserOnboardingService } from "../../services/userOnboardingService";
 import { supabase } from "../../utils/supabaseClient";
 import "./settings.css";
 
@@ -32,7 +33,6 @@ const Settings: FC = () => {
   const { setCurrency: setGlobalCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState<string>("profile");
   const [loading, setLoading] = useState<boolean>(true);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
 
@@ -91,55 +91,25 @@ const Settings: FC = () => {
       try {
         setLoading(true);
 
-        // Default accounts in case Supabase fetch fails
-        const defaultAccounts: Account[] = [
-          {
-            id: "1",
-            user_id: user?.id || "default",
-            account_name: "Primary Checking",
-            account_type: "checking",
-            balance: 5234.65,
-            // currency removed - always PHP
-            status: "active",
-            is_default: true,
-            color: "#4e73df",
-            created_at: new Date().toISOString()
-          },
-          {
-            id: "2",
-            user_id: user?.id || "default",
-            account_name: "Savings Account",
-            account_type: "savings",
-            balance: 12750.42,
-            // currency removed - always PHP
-            status: "active",
-            is_default: false,
-            color: "#1cc88a",
-            created_at: new Date().toISOString()
-          },
-          {
-            id: "3",
-            user_id: user?.id || "default",
-            account_name: "Credit Card",
-            account_type: "credit",
-            balance: -1250.3,
-            // currency removed - always PHP
-            status: "active",
-            is_default: false,
-            color: "#e74a3b",
-            created_at: new Date().toISOString()
-          }
-        ];
-
-        // Fetch accounts from database
-        let userAccounts = defaultAccounts;
+        // Fetch accounts from database or service defaults
+        let userAccounts: Account[] = [];
 
         if (user) {
+          // Ensure user has complete setup first
+          await UserOnboardingService.ensureUserSetup(user.id);
+          
           // Try to fetch real account data from Supabase
           const fetchedAccounts = await fetchAccounts();
 
           if (fetchedAccounts && fetchedAccounts.length > 0) {
             userAccounts = fetchedAccounts;
+          } else {
+            // If no accounts found, try to get service defaults
+            const defaultAccounts = await UserOnboardingService.getUserDefaultAccounts(user.id);
+            userAccounts = defaultAccounts.map((account, index) => ({
+              ...account,
+              color: account.color || ACCOUNT_COLORS[index % ACCOUNT_COLORS.length]
+            }));
           }
 
           setProfile({
@@ -155,7 +125,7 @@ const Settings: FC = () => {
             accounts: userAccounts,
           });
         } else {
-          // Use mock data as fallback
+          // Use mock data as fallback for unauthenticated users
           const userData = getCurrentUserData();
 
           if (userData && userData.user) {
@@ -170,7 +140,7 @@ const Settings: FC = () => {
                 email: true,
                 push: true,
               },
-              accounts: userAccounts,
+              accounts: [], // No accounts for unauthenticated users
             });
           }
         }
@@ -224,33 +194,6 @@ const Settings: FC = () => {
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     handleInputChange(e);
-  };
-
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    try {
-      setIsSaving(true);
-      setSuccessMessage("");
-      setErrorMessage("");
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // In a real app, you would save the data to your backend here
-      
-      
-      // Show success message
-      setSuccessMessage("Settings saved successfully!");
-      
-      // Hide success message after 5 seconds
-      setTimeout(() => setSuccessMessage(""), 5000);
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      setErrorMessage("Failed to save settings. Please try again.");
-    } finally {
-      setIsSaving(false);
-    }
   };
   
   // Handler to update accounts in profile state
@@ -315,7 +258,7 @@ const Settings: FC = () => {
         <div className="col-lg-9">
           <div className="card shadow border-0 mb-4">
             <div className="card-body">
-              <form onSubmit={handleSaveSettings}>
+              <div>
                 {/* Profile Settings */}
                 {activeTab === "profile" && (
                   <div className="settings-section animate__animated animate__fadeIn animate__faster">
@@ -389,29 +332,7 @@ const Settings: FC = () => {
                 {activeTab === "notifications" && (
                   <NotificationSettings profile={profile} onCheckboxChange={handleCheckboxChange} />
                 )}
-
-                {/* Submit Button */}
-                <div className="form-group row mt-5">
-                  <div className="col-sm-9 offset-sm-3">
-                    <button 
-                      type="submit" 
-                      className="btn btn-primary"
-                      disabled={isSaving}
-                    >
-                      {isSaving ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <i className="fas fa-save mr-1"></i> Save Changes
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </form>
+              </div>
             </div>
           </div>
         </div>

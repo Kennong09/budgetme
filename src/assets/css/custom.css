@@ -1,5 +1,80 @@
 /* Custom styles for BudgetMe app */
 
+/* Contribute transaction type styling - cyan theme */
+.bg-contribute {
+  background-color: #17a2b8 !important;
+}
+
+.text-contribute {
+  color: #17a2b8 !important;
+}
+
+.border-left-contribute {
+  border-left-color: #17a2b8 !important;
+}
+
+.badge-contribute {
+  background-color: #17a2b8 !important;
+  color: white !important;
+}
+
+.btn-contribute {
+  background-color: #17a2b8 !important;
+  border-color: #17a2b8 !important;
+  color: white !important;
+}
+
+.btn-contribute:hover {
+  background-color: #138496 !important;
+  border-color: #117a8b !important;
+  color: white !important;
+}
+
+.btn-outline-contribute {
+  color: #17a2b8 !important;
+  border-color: #17a2b8 !important;
+}
+
+.btn-outline-contribute:hover {
+  background-color: #17a2b8 !important;
+  border-color: #17a2b8 !important;
+  color: white !important;
+}
+
+/* Transaction type specific styles */
+.transaction-contribute {
+  border-left: 4px solid #17a2b8 !important;
+}
+
+.transaction-contribute:hover {
+  background-color: rgba(23, 162, 184, 0.05) !important;
+}
+
+.transaction-icon.contribute {
+  background-color: #17a2b8 !important;
+  color: white !important;
+}
+
+/* Progress bar for contribution progress */
+.progress-bar-contribute {
+  background-color: #17a2b8 !important;
+}
+
+/* Alert variations for contributions */
+.alert-contribute {
+  color: #0c5460;
+  background-color: #d1ecf1;
+  border-color: #bee5eb;
+}
+
+.alert-contribute hr {
+  border-top-color: #abdde5;
+}
+
+.alert-contribute .alert-link {
+  color: #062c33;
+}
+
 /* Consistent icon-circle sizing for budgeting tips */
 .icon-circle {
   width: 3rem !important;

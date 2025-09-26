@@ -1,30 +1,34 @@
-import React, { useState, useEffect, FC, ChangeEvent, FormEvent } from "react";
+import React, { useState, useEffect, FC, ChangeEvent, FormEvent, useCallback } from "react";
 import { useNavigate, Link, useParams } from "react-router-dom";
 import { formatCurrency, formatDate } from "../../utils/helpers";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { useFamilyGoalPermissions } from "../../hooks/useFamilyPermissions";
+import PermissionErrorModal from "../common/PermissionErrorModal";
+import { EnhancedTransactionService } from "../../services/database/enhancedTransactionService";
+import { AccountService } from "../../services/database/accountService";
+import TransactionNotificationService from "../../services/database/transactionNotificationService";
+import TransactionErrorBoundary from "../common/TransactionErrorBoundary";
+import BudgetSelector from "../budget/BudgetSelector";
+import { BudgetItem } from "../../services/database/budgetService";
+import { CentavoInput } from "../common/CentavoInput";
+import { formatCurrency as formatCurrencyUtils, sanitizeBudgetName, roundToCentavo } from "../../utils/currencyUtils";
+import AccountSelector from "./components/AccountSelector";
+import CategorySelector from "./components/CategorySelector";
+import GoalSelector from "./components/GoalSelector";
+import type { Goal } from "./components/GoalSelector";
+import { Account as AccountType } from "../settings/types";
+import { Account } from "../settings/types";
+import ErrorBoundary from "../common/ErrorBoundary";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
-import "animate.css";
-
-interface Account {
-  id: string;
-  account_name: string;
-  account_type: string;
-  balance: number;
-}
 
 interface Category {
   id: string;
   category_name: string;
   icon?: string;
-}
-
-interface Goal {
-  id: string;
-  goal_name: string;
 }
 
 interface UserData {
@@ -36,7 +40,7 @@ interface UserData {
 
 interface Transaction {
   id: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "contribution";
   account_id: string;
   category_id: string;
   goal_id?: string;
@@ -48,13 +52,14 @@ interface Transaction {
 }
 
 interface TransactionFormData {
-  type: "income" | "expense";
+  type: "income" | "expense" | "contribution";
   account_id: string;
   category_id: string;
   goal_id: string;
-  amount: string;
+  budget_id: string;
+  amount: number;
   date: string;
-  notes: string;
+  description: string;
 }
 
 const EditTransaction: FC = () => {
@@ -62,6 +67,7 @@ const EditTransaction: FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showSuccessToast, showErrorToast } = useToast();
+  const familyGoalPermissions = useFamilyGoalPermissions();
   const [userData, setUserData] = useState<UserData>({
     accounts: [],
     incomeCategories: [],
@@ -74,15 +80,27 @@ const EditTransaction: FC = () => {
   const [activeTip, setActiveTip] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
   const [originalTransaction, setOriginalTransaction] = useState<Transaction | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<AccountType | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedBudget, setSelectedBudget] = useState<BudgetItem | null>(null);
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
+  const [permissionErrorModal, setPermissionErrorModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    suggestedActions?: string[];
+    userRole?: string;
+  }>({ isOpen: false, title: '', message: '' });
 
   const [transaction, setTransaction] = useState<TransactionFormData>({
     type: "expense",
     account_id: "",
     category_id: "",
     goal_id: "",
-    amount: "",
+    budget_id: "",
+    amount: 0,
     date: new Date().toISOString().slice(0, 10),
-    notes: "",
+    description: "",
   });
 
   useEffect(() => {
@@ -102,37 +120,22 @@ const EditTransaction: FC = () => {
 
         setLoading(true);
         
-        // Fetch transaction details
-        const { data: transactionData, error: transactionError } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('id', id)
-          .single();
-          
-        if (transactionError) throw transactionError;
+        // Use enhanced transaction service with schema-aware category mapping
+        const transactionResult = await EnhancedTransactionService.fetchTransactionForEdit(id, user.id);
         
-        if (!transactionData) {
-          showErrorToast("Transaction not found");
-          navigate("/transactions");
-          return;
+        if (!transactionResult.success) {
+          throw new Error(transactionResult.error || 'Failed to fetch transaction');
         }
         
-        // Verify the user has permission to edit this transaction
-        if (transactionData.user_id !== user.id) {
-          showErrorToast("You don't have permission to edit this transaction");
-          navigate('/transactions');
-          return;
-        }
-        
+        const transactionData = transactionResult.data;
         setOriginalTransaction(transactionData);
 
-        // Fetch user's accounts
-        const { data: accountsData, error: accountsError } = await supabase
-          .from('accounts')
-          .select('id, account_name, account_type, balance')
-          .eq('user_id', user.id);
-          
-        if (accountsError) throw accountsError;
+        // Fetch user's accounts using AccountService for consistent typing
+        const accountsResult = await AccountService.fetchUserAccounts(user.id);
+        if (!accountsResult.success) {
+          throw new Error(accountsResult.error || 'Failed to fetch accounts');
+        }
+        const accountsData = accountsResult.data || [];
         
         // Fetch income categories
         const { data: incomeData, error: incomeError } = await supabase
@@ -155,8 +158,9 @@ const EditTransaction: FC = () => {
         // Fetch goals
         const { data: goalsData, error: goalsError } = await supabase
           .from('goals')
-          .select('id, goal_name')
+          .select('id, goal_name, target_amount, current_amount, target_date, priority, status, is_family_goal')
           .eq('user_id', user.id)
+          .eq('status', 'in_progress')
           .order('goal_name');
           
         if (goalsError) throw goalsError;
@@ -175,10 +179,33 @@ const EditTransaction: FC = () => {
           account_id: transactionData.account_id,
           category_id: transactionData.category_id || "",
           goal_id: transactionData.goal_id || "",
-          amount: transactionData.amount.toString(),
+          budget_id: "", // Will be populated if transaction has budget tags
+          amount: transactionData.amount,
           date: new Date(transactionData.date).toISOString().slice(0, 10),
-          notes: transactionData.notes
+          description: transactionData.description || ""
         });
+        
+        // Set selected goal if goal_id exists
+        if (transactionData.goal_id && goalsData) {
+          const goal = goalsData.find(g => g.id === transactionData.goal_id);
+          setSelectedGoal(goal || null);
+        }
+        
+        // Set selected account with proper type safety
+        if (transactionData.account_id && accountsData) {
+          const account = accountsData.find(acc => acc.id === transactionData.account_id);
+          setSelectedAccount(account || null);
+        }
+        
+        // Set selected category based on transaction data
+        if (transactionData.category_id) {
+          const categories = transactionData.type === 'income' ? incomeData : expenseData;
+          const category = categories?.find(cat => cat.id === transactionData.category_id);
+          setSelectedCategory(category || null);
+        }
+        
+        // TODO: Load budget assignment from transaction tags if available
+        // This would require parsing transaction.tags for budget_id information
       } catch (error: any) {
         console.error('Error fetching data:', error);
         showErrorToast(error.message || "Failed to load transaction data");
@@ -191,32 +218,211 @@ const EditTransaction: FC = () => {
     fetchData();
   }, [id, user, navigate, showErrorToast]);
 
-  const handleChange = (
+  const handleAmountChange = (newAmount: number) => {
+    // Validate amount is within safe range for DECIMAL(15,4) - using centavo precision
+    if (newAmount > 99999999999.99) {
+      showErrorToast('Amount too large: maximum supported amount is ₱99,999,999,999.99');
+      return;
+    }
+    
+    setTransaction(prev => ({
+      ...prev,
+      amount: newAmount
+    }));
+  };
+
+  const handleAccountSelect = (account: AccountType | null) => {
+    setSelectedAccount(account);
+    setTransaction(prev => ({
+      ...prev,
+      account_id: account?.id || ""
+    }));
+  };
+
+  const handleCategorySelect = (category: Category | null) => {
+    setSelectedCategory(category);
+    setTransaction(prev => ({
+      ...prev,
+      category_id: category?.id || ""
+    }));
+    // Clear budget when category changes
+    setSelectedBudget(null);
+    setTransaction(prev => ({
+      ...prev,
+      budget_id: ''
+    }));
+  };
+
+  const handleBudgetSelect = (budget: BudgetItem | null) => {
+    setSelectedBudget(budget);
+    setTransaction((prev) => ({
+      ...prev,
+      budget_id: budget?.id || '',
+      // Automatically set category when budget is selected
+      category_id: budget?.category_id || prev.category_id,
+    }));
+  };
+
+  const handleGoalSelect = async (goal: Goal | null) => {
+    // If family goal and this involves family goal access, check permissions
+    if (goal?.is_family_goal) {
+      // Check if user can access family goals for modifications
+      if (transaction.type === 'contribution') {
+        const contributionValidation = await familyGoalPermissions.validateGoalContribution();
+        if (!contributionValidation.canContribute) {
+          setPermissionErrorModal({
+            isOpen: true,
+            title: contributionValidation.errorTitle || 'Contribution Access Denied',
+            message: contributionValidation.errorMessage || 'You cannot contribute to family goals.',
+            suggestedActions: contributionValidation.suggestedActions || ['Contact your family admin for assistance'],
+            userRole: contributionValidation.userRole
+          });
+          return;
+        }
+      }
+      
+      // Check general family goal access
+      const accessResult = await familyGoalPermissions.checkCanAccessGoal(goal.id);
+      if (!accessResult.hasPermission) {
+        setPermissionErrorModal({
+          isOpen: true,
+          title: 'Access Denied',
+          message: accessResult.errorMessage || 'You do not have permission to access this family goal.',
+          suggestedActions: accessResult.restrictions || ['Contact your family admin for assistance'],
+          userRole: accessResult.userRole
+        });
+        return;
+      }
+    }
+    
+    setSelectedGoal(goal);
+    
+    // Auto-set "Contribution" category for contribution transactions
+    if (transaction.type === 'contribution' && goal) {
+      const contributionCategory = userData.expenseCategories.find(cat => 
+        cat.category_name === 'Contribution'
+      );
+      
+      if (contributionCategory) {
+        setSelectedCategory(contributionCategory);
+        setTransaction((prev) => ({
+          ...prev,
+          goal_id: goal.id || "",
+          category_id: contributionCategory.id
+        }));
+        
+        // Clear any budget assignment since this is now a contribution
+        setSelectedBudget(null);
+        setTransaction(prev => ({
+          ...prev,
+          budget_id: ''
+        }));
+      } else {
+        // If no Contribution category found, just set the goal without changing category
+        setTransaction((prev) => ({
+          ...prev,
+          goal_id: goal.id || "",
+        }));
+      }
+    }
+    // Legacy logic: If a goal is selected and it's an expense transaction, automatically set it to "Contribution" category
+    else if (goal && transaction.type === 'expense') {
+      const contributionCategory = userData.expenseCategories.find(cat => 
+        cat.category_name === 'Contribution'
+      );
+      
+      if (contributionCategory) {
+        setSelectedCategory(contributionCategory);
+        setTransaction((prev) => ({
+          ...prev,
+          goal_id: goal.id || "",
+          category_id: contributionCategory.id
+        }));
+        
+        // Clear any budget assignment since this is now a contribution
+        setSelectedBudget(null);
+        setTransaction(prev => ({
+          ...prev,
+          budget_id: ''
+        }));
+      } else {
+        // If no Contribution category found, just set the goal without changing category
+        setTransaction((prev) => ({
+          ...prev,
+          goal_id: goal.id || "",
+        }));
+      }
+    } else {
+      // If no goal selected or income transaction, just update goal_id
+      setTransaction((prev) => ({
+        ...prev,
+        goal_id: goal?.id || "",
+      }));
+    }
+  };
+
+  const handleChange = useCallback((
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ): void => {
     const { name, value } = e.target;
     
     // Special handling for transaction type changes
     if (name === 'type') {
-      // When changing transaction type, reset the category selection
+      const newType = value as "income" | "expense" | "contribution";
+      
+      // Update transaction state in a single setState call to prevent hook order issues
       setTransaction((prev) => ({
         ...prev,
-        [name]: value as "income" | "expense",
+        type: newType,
         category_id: '', // Clear category selection when changing transaction type
+        budget_id: '', // Clear budget selection when changing transaction type
+        goal_id: '', // Clear goal selection when changing transaction type
       }));
-    } else {
+      
+      // Clear related selections in separate setState calls after the main update
+      setSelectedBudget(null);
+      setSelectedCategory(null);
+      setSelectedGoal(null);
+      
+      return; // Early return to prevent further processing
+    }
+    
+    // Handle other field changes
+    setTransaction((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    
+    // Update selected category when category_id changes via dropdown
+    if (name === 'category_id') {
+      const categories = transaction.type === 'income' ? userData.incomeCategories : userData.expenseCategories;
+      const category = categories.find(cat => cat.id === value);
+      setSelectedCategory(category || null);
+      
+      // Clear budget when category changes
       setTransaction((prev) => ({
         ...prev,
-        [name]: value,
+        budget_id: '',
       }));
+      setSelectedBudget(null);
     }
-  };
+    
+    // Update selected goal when goal_id changes
+    if (name === 'goal_id') {
+      if (value) {
+        const goal = userData.goals.find(g => g.id === value);
+        setSelectedGoal(goal || null);
+      } else {
+        setSelectedGoal(null);
+      }
+    }
+  }, [transaction.type, userData.incomeCategories, userData.expenseCategories, userData.goals]);
 
   const handleReview = (e: FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
 
     // Validation
-    if (!transaction.amount || parseFloat(transaction.amount) <= 0) {
+    if (!transaction.amount || transaction.amount <= 0) {
       showErrorToast("Please enter a valid amount");
       return;
     }
@@ -231,20 +437,69 @@ const EditTransaction: FC = () => {
       return;
     }
 
-    if (!transaction.category_id) {
-      showErrorToast("Please select a category");
-      return;
+    // For contribution type, category should be auto-set but still validate if manually changed
+    if (!transaction.category_id && transaction.type === 'contribution') {
+      // Auto-set Contribution category for contribution type
+      const contributionCategory = userData.expenseCategories.find(cat => 
+        cat.category_name === 'Contribution'
+      );
+      
+      if (contributionCategory) {
+        setSelectedCategory(contributionCategory);
+        setTransaction(prev => ({
+          ...prev,
+          category_id: contributionCategory.id
+        }));
+      }
     }
     
     // Additional validation to ensure the category matches the transaction type
     const isIncome = transaction.type === 'income';
-    const categoryExists = isIncome 
-      ? userData.incomeCategories.some(cat => cat.id === transaction.category_id)
-      : userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+    const isContribution = transaction.type === 'contribution';
     
-    if (!categoryExists) {
-      showErrorToast(`Selected category does not match transaction type. Please select a ${isIncome ? 'income' : 'expense'} category.`);
+    let categoryExists = false;
+    if (isIncome) {
+      categoryExists = userData.incomeCategories.some(cat => cat.id === transaction.category_id);
+    } else if (isContribution) {
+      // For contribution type, we expect a goal to be selected, category is optional
+      if (transaction.category_id) {
+        categoryExists = userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+      } else {
+        categoryExists = true; // Allow no category for contribution type if goal is selected
+      }
+    } else {
+      categoryExists = userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+    }
+    
+    if (!categoryExists && transaction.category_id) {
+      const typeLabel = isIncome ? 'income' : (isContribution ? 'expense (for contributions)' : 'expense');
+      showErrorToast(`Selected category does not match transaction type. Please select a ${typeLabel} category.`);
       return;
+    }
+    
+    // Special validation for contribution type - require goal selection
+    if (isContribution && !transaction.goal_id) {
+      showErrorToast("Please select a goal for your contribution.");
+      return;
+    }
+
+    // Budget validation for expense transactions
+    if (transaction.type === 'expense' && selectedBudget) {
+      const transactionAmount = transaction.amount;
+      const newSpent = (selectedBudget.spent || 0) + transactionAmount;
+      
+      // Check if transaction would trigger threshold warning
+      const newPercentage = (newSpent / selectedBudget.amount) * 100;
+      const thresholdPercentage = (selectedBudget.alert_threshold || 0.8) * 100;
+      
+      if (newPercentage >= thresholdPercentage && newPercentage < 100) {
+        const proceed = window.confirm(
+          `This transaction would put the budget "${selectedBudget.budget_name}" at ${newPercentage.toFixed(1)}% utilization. Do you want to proceed?`
+        );
+        if (!proceed) {
+          return;
+        }
+      }
     }
 
     setViewMode("review");
@@ -260,153 +515,54 @@ const EditTransaction: FC = () => {
     setIsSubmitting(true);
 
     try {
-      const amount = parseFloat(transaction.amount);
+      const amount = roundToCentavo(transaction.amount);
       
-      // Validate that the category matches the transaction type
-      if (transaction.category_id && transaction.type) {
-        const isIncome = transaction.type === 'income';
-        const categoryExists = isIncome 
-          ? userData.incomeCategories.some(cat => cat.id === transaction.category_id)
-          : userData.expenseCategories.some(cat => cat.id === transaction.category_id);
-        
-        if (!categoryExists) {
-          throw new Error(`Selected category does not match transaction type. Please select a ${isIncome ? 'income' : 'expense'} category.`);
-        }
-      }
-      
-      // Calculate the changes in account balance and goal progress
-      const originalAmount = originalTransaction.amount;
-      const originalType = originalTransaction.type;
-      const originalAccountId = originalTransaction.account_id;
-      const originalGoalId = originalTransaction.goal_id;
-      
-      // Calculate account balance adjustments
-      let accountBalanceChange = 0;
-      
-      // Undo the effect of the original transaction on the account
-      if (originalType === 'income') {
-        accountBalanceChange -= originalAmount;
-      } else {
-        accountBalanceChange += originalAmount;
-      }
-      
-      // Apply the effect of the updated transaction on the account
-      if (transaction.type === 'income') {
-        accountBalanceChange += amount;
-      } else {
-        accountBalanceChange -= amount;
-      }
-      
-      // Update the transaction
-      const { error: updateError } = await supabase
-        .from('transactions')
-        .update({
+      // Use enhanced transaction service with schema-aware category mapping
+      const updateResult = await EnhancedTransactionService.updateTransactionWithMapping(
+        id!,
+        user.id,
+        {
           type: transaction.type,
-          account_id: transaction.account_id,
-          category_id: transaction.category_id || null,
-          goal_id: transaction.goal_id || null,
           amount: amount,
           date: transaction.date,
-          notes: transaction.notes
-        })
-        .eq('id', id);
-        
-      if (updateError) throw updateError;
-      
-      // Update account balance
-      if (accountBalanceChange !== 0) {
-        const { error: accountError } = await supabase.rpc('update_account_balance', { 
-          p_account_id: transaction.account_id,
-          p_amount_change: accountBalanceChange
-        });
-        
-        if (accountError) {
-          // If RPC fails, fall back to direct update
-          const { data: accountData, error: fetchError } = await supabase
-            .from('accounts')
-            .select('balance')
-            .eq('id', transaction.account_id)
-            .single();
-            
-          if (fetchError) throw fetchError;
-          
-          const newBalance = accountData.balance + accountBalanceChange;
-          
-          const { error: updateError } = await supabase
-            .from('accounts')
-            .update({ balance: newBalance })
-            .eq('id', transaction.account_id);
-            
-          if (updateError) throw updateError;
+          account_id: transaction.account_id,
+          category_id: transaction.category_id,
+          goal_id: transaction.goal_id || undefined,
+          notes: sanitizeBudgetName(transaction.description)
         }
+      );
+      
+      if (!updateResult.success) {
+        throw new Error(updateResult.error || 'Failed to update transaction');
       }
-      
-      // Handle goal progress updates
-      if (originalGoalId !== transaction.goal_id || amount !== originalAmount || transaction.type !== originalType) {
-        // If the goal has changed or the amount has changed, update both goals
-        
-        // Remove from original goal if there was one
-        if (originalGoalId) {
-          const { error: originalGoalError } = await supabase.rpc('update_goal_progress', {
-            p_goal_id: originalGoalId,
-            p_amount: -originalAmount
-          });
+
+      // Trigger transaction notifications for the updated transaction
+      if (updateResult.data) {
+        try {
+          // Prepare transaction data for notification service
+          const transactionDataForNotification = {
+            id: updateResult.data.id,
+            user_id: updateResult.data.user_id,
+            account_id: updateResult.data.account_id,
+            category_id: transaction.type === 'income' ? updateResult.data.income_category_id : updateResult.data.expense_category_id,
+            goal_id: updateResult.data.goal_id,
+            amount: updateResult.data.amount,
+            transaction_type: updateResult.data.type,
+            description: updateResult.data.description || '',
+            transaction_date: updateResult.data.date,
+            currency: 'PHP',
+            family_id: null,
+            is_recurring: false,
+            recurring_frequency: null
+          };
           
-          if (originalGoalError) {
-            // Fall back to direct update
-            const { data: goalData, error: fetchGoalError } = await supabase
-              .from('goals')
-              .select('current_amount, target_amount')
-              .eq('id', originalGoalId)
-              .single();
-              
-            if (fetchGoalError) throw fetchGoalError;
-              
-            const newAmount = Math.max(0, goalData.current_amount - originalAmount);
-            const status = newAmount >= goalData.target_amount ? 'completed' : 'in_progress';
-              
-            const { error: updateGoalError } = await supabase
-              .from('goals')
-              .update({ 
-                current_amount: newAmount,
-                status: status
-              })
-              .eq('id', originalGoalId);
-              
-            if (updateGoalError) throw updateGoalError;
-          }
-        }
-        
-        // Add to new goal if there is one
-        if (transaction.goal_id) {
-          const { error: newGoalError } = await supabase.rpc('update_goal_progress', {
-            p_goal_id: transaction.goal_id,
-            p_amount: amount
-          });
+          // Trigger notification processing for large transactions and categorization
+          await TransactionNotificationService.getInstance().handleTransactionCreated(transactionDataForNotification);
           
-          if (newGoalError) {
-            // Fall back to direct update
-            const { data: goalData, error: fetchGoalError } = await supabase
-              .from('goals')
-              .select('current_amount, target_amount')
-              .eq('id', transaction.goal_id)
-              .single();
-              
-            if (fetchGoalError) throw fetchGoalError;
-              
-            const newAmount = goalData.current_amount + amount;
-            const status = newAmount >= goalData.target_amount ? 'completed' : 'in_progress';
-              
-            const { error: updateGoalError } = await supabase
-              .from('goals')
-              .update({ 
-                current_amount: newAmount,
-                status: status
-              })
-              .eq('id', transaction.goal_id);
-              
-            if (updateGoalError) throw updateGoalError;
-          }
+          console.log('Transaction update notifications processed successfully');
+        } catch (notificationError) {
+          // Log notification error but don't fail the transaction update
+          console.warn('Failed to process transaction update notifications:', notificationError);
         }
       }
 
@@ -485,8 +641,12 @@ const EditTransaction: FC = () => {
           <div className="col-lg-8 mx-auto">
             <div className="card shadow mb-4">
               <div className="card-header py-3 d-flex align-items-center">
-                <span className={`badge mr-2 ${transaction.type === 'income' ? 'badge-success' : 'badge-danger'}`}>
-                  {transaction.type === 'income' ? 'Income' : 'Expense'}
+                <span className={`badge mr-2 ${
+                  transaction.type === 'income' ? 'badge-success' : 
+                  transaction.type === 'contribution' ? 'badge-info' : 'badge-danger'
+                }`}>
+                  {transaction.type === 'income' ? 'Income' : 
+                   transaction.type === 'contribution' ? 'Contribute' : 'Expense'}
                 </span>
                 <h6 className="m-0 font-weight-bold text-primary">Transaction Details</h6>
               </div>
@@ -501,7 +661,7 @@ const EditTransaction: FC = () => {
                               Amount
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              ${parseFloat(transaction.amount).toFixed(2)}
+                              {formatCurrencyUtils(transaction.amount, 'PHP')}
                             </div>
                           </div>
                           <div className="col-auto">
@@ -574,19 +734,83 @@ const EditTransaction: FC = () => {
                 </div>
 
                 {selectedGoal && (
-                  <div className="card bg-primary text-white shadow mb-4">
+                  <div className="card bg-white shadow mb-4">
+                    <div className="card-body">
+                      <div className="row no-gutters align-items-center">
+                        <div className="col mr-2">
+                          <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Associated Goal
+                          </div>
+                          <div className="h5 mb-0 font-weight-bold text-primary d-flex align-items-center">
+                            {selectedGoal.goal_name}
+                            {selectedGoal.is_family_goal ? (
+                              <span className="badge badge-info ml-2">
+                                <i className="fas fa-users mr-1"></i> Family
+                              </span>
+                            ) : (
+                              <span className="badge badge-secondary ml-2">
+                                <i className="fas fa-user mr-1"></i> Personal
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Progress Bar */}
+                          <div className="mb-2">
+                            <div className="d-flex justify-content-between text-sm mb-1">
+                              <span>Goal Progress</span>
+                              <span>{selectedGoal.target_amount > 0 ? ((selectedGoal.current_amount / selectedGoal.target_amount) * 100).toFixed(1) : 0}%</span>
+                            </div>
+                            <div className="progress" style={{ height: '8px' }}>
+                              <div
+                                className={`progress-bar ${
+                                  selectedGoal.target_amount > 0 && (selectedGoal.current_amount / selectedGoal.target_amount) * 100 >= 90 
+                                    ? 'bg-success' 
+                                    : selectedGoal.target_amount > 0 && (selectedGoal.current_amount / selectedGoal.target_amount) * 100 >= 75 
+                                    ? 'bg-info' 
+                                    : selectedGoal.target_amount > 0 && (selectedGoal.current_amount / selectedGoal.target_amount) * 100 >= 50 
+                                    ? 'bg-warning' 
+                                    : 'bg-danger'
+                                }`}
+                                role="progressbar"
+                                style={{ 
+                                  width: `${selectedGoal.target_amount > 0 ? Math.min(100, (selectedGoal.current_amount / selectedGoal.target_amount) * 100) : 0}%` 
+                                }}
+                                aria-valuenow={selectedGoal.target_amount > 0 ? Math.min(100, (selectedGoal.current_amount / selectedGoal.target_amount) * 100) : 0}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                              ></div>
+                            </div>
+                          </div>
+                          
+                          <div className="text-sm text-gray-600">
+                            ₱{(selectedGoal.target_amount - selectedGoal.current_amount).toFixed(2)} remaining
+                          </div>
+                        </div>
+                        <div className="col-auto">
+                          <i className="fas fa-flag fa-2x text-gray-300"></i>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedBudget && (
+                  <div className="card bg-success text-white shadow mb-4">
                     <div className="card-body">
                       <div className="row no-gutters align-items-center">
                         <div className="col mr-2">
                           <div className="text-xs font-weight-bold text-white text-uppercase mb-1">
-                            Associated Goal
+                            Assigned Budget
                           </div>
                           <div className="h5 mb-0 font-weight-bold text-white">
-                            {selectedGoal.goal_name}
+                            {selectedBudget.budget_name}
+                          </div>
+                          <div className="text-sm text-white-50">
+                            ₱{((selectedBudget.amount - (selectedBudget.spent || 0)) - transaction.amount).toFixed(2)} remaining after transaction
                           </div>
                         </div>
                         <div className="col-auto">
-                          <i className="fas fa-flag fa-2x text-white-50"></i>
+                          <i className="fas fa-wallet fa-2x text-white-50"></i>
                         </div>
                       </div>
                     </div>
@@ -598,7 +822,7 @@ const EditTransaction: FC = () => {
                     <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
                       Description
                     </div>
-                    <p className="mb-0">{transaction.notes}</p>
+                    <p className="mb-0">{transaction.description}</p>
                   </div>
                 </div>
 
@@ -686,7 +910,7 @@ const EditTransaction: FC = () => {
                     Transaction Type <span className="text-danger">*</span>
                   </label>
                   <div className="row">
-                    <div className="col-md-6 mb-3 mb-md-0">
+                    <div className="col-md-4 mb-3 mb-md-0">
                       <div 
                         className={`card ${transaction.type === 'income' ? 'bg-success text-white' : 'bg-light'} py-3 text-center shadow-sm`}
                         style={{ cursor: 'pointer' }}
@@ -698,7 +922,7 @@ const EditTransaction: FC = () => {
                         </div>
                       </div>
                     </div>
-                    <div className="col-md-6">
+                    <div className="col-md-4 mb-3 mb-md-0">
                       <div 
                         className={`card ${transaction.type === 'expense' ? 'bg-danger text-white' : 'bg-light'} py-3 text-center shadow-sm`}
                         style={{ cursor: 'pointer' }}
@@ -710,36 +934,54 @@ const EditTransaction: FC = () => {
                         </div>
                       </div>
                     </div>
+                    <div className="col-md-4">
+                      <div 
+                        className={`card ${transaction.type === 'contribution' ? 'bg-info text-white' : 'bg-light'} py-3 text-center shadow-sm`}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          setTransaction((prev) => ({...prev, type: 'contribution', category_id: ''}));
+                          setSelectedCategory(null);
+                          setSelectedBudget(null);
+                          setSelectedGoal(null);
+                          
+                          // Auto-set Contribution category for contribution type
+                          setTimeout(() => {
+                            const contributionCategory = userData.expenseCategories.find(cat => 
+                              cat.category_name === 'Contribution'
+                            );
+                            
+                            if (contributionCategory) {
+                              setSelectedCategory(contributionCategory);
+                              setTransaction(prev => ({
+                                ...prev,
+                                category_id: contributionCategory.id
+                              }));
+                            }
+                          }, 100);
+                        }}
+                      >
+                        <div className="card-body p-3">
+                          <i className="fas fa-flag fa-2x mb-2"></i>
+                          <h5 className="mb-0">Contribute</h5>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <div className="row">
                   <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="amount" className="font-weight-bold text-gray-800">
-                        Amount <span className="text-danger">*</span>
-                      </label>
-                      <div className="input-group">
-                        <div className="input-group-prepend">
-                          <span className="input-group-text">₱</span>
-                        </div>
-                        <input
-                          type="number"
-                          id="amount"
-                          name="amount"
-                          value={transaction.amount}
-                          onChange={handleChange}
-                          className="form-control form-control-user"
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          required
-                        />
-                      </div>
-                      <small className="form-text text-muted">
-                        Enter the transaction amount
-                      </small>
-                    </div>
+                    <CentavoInput
+                      value={transaction.amount}
+                      onChange={handleAmountChange}
+                      currency="PHP"
+                      label="Amount"
+                      placeholder="0.00"
+                      required={true}
+                      min={0.01}
+                      max={99999999999.99}
+                      className="mb-3"
+                    />
                   </div>
 
                   <div className="col-md-6">
@@ -765,89 +1007,213 @@ const EditTransaction: FC = () => {
 
                 <div className="row">
                   <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="account_id" className="font-weight-bold text-gray-800">
-                        Account <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        id="account_id"
-                        name="account_id"
-                        value={transaction.account_id}
-                        onChange={handleChange}
-                        className="form-control"
-                        required
-                      >
-                        <option value="">Select Account</option>
-                        {userData.accounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.account_name} ({account.account_type})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <AccountSelector
+                      selectedAccountId={transaction.account_id}
+                      onAccountSelect={handleAccountSelect}
+                      required={true}
+                      label="Account"
+                      showBalance={true}
+                      showAccountType={true}
+                      autoSelectDefault={false}
+                      className="mb-3"
+                    />
                   </div>
 
                   <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="category_id" className="font-weight-bold text-gray-800">
-                        Category <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        id="category_id"
-                        name="category_id"
-                        value={transaction.category_id}
-                        onChange={handleChange}
-                        className="form-control"
-                        required
-                      >
-                        <option value="">Select Category</option>
-                        {transaction.type === "income"
-                          ? userData.incomeCategories.map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.category_name}
-                              </option>
-                            ))
-                          : userData.expenseCategories.map((category) => (
-                              <option key={category.id} value={category.id}>
-                                {category.category_name}
-                              </option>
-                            ))}
-                      </select>
-                    </div>
+                    {/* Hide category selector for contribution type as it's auto-set */}
+                    {transaction.type !== 'contribution' ? (
+                      <CategorySelector
+                        selectedCategoryId={transaction.category_id}
+                        onCategorySelect={handleCategorySelect}
+                        transactionType={transaction.type}
+                        incomeCategories={userData.incomeCategories}
+                        expenseCategories={userData.expenseCategories}
+                        required={true}
+                        label="Category"
+                        showIcons={true}
+                        className="mb-3"
+                      />
+                    ) : (
+                      <div className="form-group mb-3">
+                        <label className="font-weight-bold text-gray-800">
+                          Category <span className="text-danger">*</span>
+                        </label>
+                        <div className="form-control d-flex align-items-center bg-contribute text-white" style={{ border: '1px solid #17a2b8' }}>
+                          <div className="d-flex align-items-center">
+                            <i className="fas fa-flag mr-2"></i>
+                            <span className="font-weight-bold">Contribution</span>
+                            <span className="badge badge-light text-contribute ml-2">
+                              <i className="fas fa-magic mr-1"></i>Auto-selected
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Contribution Information Display - Below category field but outside form-group to prevent layout issues */}
+                    {transaction.type === 'contribution' && (
+                      <div className="card mt-3 border-left-contribute shadow-sm mb-4">
+                        <div className="card-body py-3">
+                          <div className="row no-gutters align-items-center">
+                            <div className="col mr-2">
+                              <div className="d-flex align-items-center mb-2">
+                                <div>
+                                  <div className="font-weight-bold text-contribute">
+                                    <i className="fas fa-flag mr-2"></i>
+                                    Contribution Transaction
+                                  </div>
+                                  <div className="text-sm text-gray-600">
+                                    Category: Contribution • Goal Contribution
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Goal Impact Preview */}
+                              {selectedGoal && transaction.amount > 0 && (
+                                <>
+                                  <div className="d-flex justify-content-between align-items-center mb-1">
+                                    <span className="text-xs font-weight-bold text-gray-600 text-uppercase">
+                                      Goal Progress Impact
+                                    </span>
+                                    <span className="font-weight-bold text-contribute">
+                                      +₱{transaction.amount.toFixed(2)}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="mb-2">
+                                    <div className="progress" style={{ height: '6px' }}>
+                                      <div
+                                        className="progress-bar bg-contribute"
+                                        role="progressbar"
+                                        style={{ 
+                                          width: `${selectedGoal.target_amount > 0 
+                                            ? Math.min(100, ((selectedGoal.current_amount + transaction.amount) / selectedGoal.target_amount) * 100) 
+                                            : 0}%` 
+                                        }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="d-flex justify-content-between align-items-center">
+                                    <span className="text-xs text-gray-600">
+                                      {selectedGoal.target_amount > 0 
+                                        ? (((selectedGoal.current_amount + transaction.amount) / selectedGoal.target_amount) * 100).toFixed(1)
+                                        : 0}% of {selectedGoal.goal_name}
+                                    </span>
+                                    <span className="text-xs text-gray-600">
+                                      ₱{Math.max(0, selectedGoal.target_amount - selectedGoal.current_amount - transaction.amount).toFixed(2)} remaining
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+                              
+                              {(!selectedGoal || transaction.amount <= 0) && (
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <span className="text-xs font-weight-bold text-gray-600 text-uppercase">
+                                    Category & Goal
+                                  </span>
+                                  <span className="text-xs text-contribute font-weight-bold">
+                                    Auto-assigned
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="goal_id" className="font-weight-bold text-gray-800">
-                    Goal (Optional)
-                  </label>
-                  <select
-                    id="goal_id"
-                    name="goal_id"
-                    value={transaction.goal_id}
-                    onChange={handleChange}
-                    className="form-control"
-                  >
-                    <option value="">No Goal</option>
-                    {userData.goals.map((goal) => (
-                      <option key={goal.id} value={goal.id}>
-                        {goal.goal_name}
-                      </option>
-                    ))}
-                  </select>
-                  <small className="form-text text-muted">
-                    Is this transaction related to one of your financial goals?
-                  </small>
-                </div>
+
+
+                {/* Budget Assignment */}
+                <BudgetSelector
+                  selectedBudgetId={transaction.budget_id}
+                  selectedCategoryId={transaction.category_id}
+                  transactionAmount={transaction.amount || 0}
+                  transactionType={transaction.type}
+                  onBudgetSelect={handleBudgetSelect}
+                  className="mb-4"
+                />
+
+                {/* Goal Assignment */}
+                <GoalSelector
+                  selectedGoal={selectedGoal}
+                  onGoalSelect={handleGoalSelect}
+                  className="mb-4"
+                  validateFamilyGoalAccess={true}
+                />
+
+                {selectedGoal && (
+                  <div className="card bg-white shadow mb-4">
+                    <div className="card-body">
+                      <div className="row no-gutters align-items-center">
+                        <div className="col mr-2">
+                          <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Associated Goal
+                          </div>
+                          <div className="h5 mb-0 font-weight-bold text-primary d-flex align-items-center">
+                            {selectedGoal.goal_name}
+                            {selectedGoal.is_family_goal ? (
+                              <span className="badge badge-info ml-2">
+                                <i className="fas fa-users mr-1"></i> Family
+                              </span>
+                            ) : (
+                              <span className="badge badge-secondary ml-2">
+                                <i className="fas fa-user mr-1"></i> Personal
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Progress Bar */}
+                          <div className="mb-2">
+                            <div className="d-flex justify-content-between text-sm mb-1">
+                              <span>Goal Progress</span>
+                              <span>{selectedGoal.target_amount > 0 ? ((selectedGoal.current_amount / selectedGoal.target_amount) * 100).toFixed(1) : 0}%</span>
+                            </div>
+                            <div className="progress" style={{ height: '8px' }}>
+                              <div
+                                className={`progress-bar ${
+                                  selectedGoal.target_amount > 0 && (selectedGoal.current_amount / selectedGoal.target_amount) * 100 >= 90 
+                                    ? 'bg-success' 
+                                    : selectedGoal.target_amount > 0 && (selectedGoal.current_amount / selectedGoal.target_amount) * 100 >= 75 
+                                    ? 'bg-info' 
+                                    : selectedGoal.target_amount > 0 && (selectedGoal.current_amount / selectedGoal.target_amount) * 100 >= 50 
+                                    ? 'bg-warning' 
+                                    : 'bg-danger'
+                                }`}
+                                role="progressbar"
+                                style={{ 
+                                  width: `${selectedGoal.target_amount > 0 ? Math.min(100, (selectedGoal.current_amount / selectedGoal.target_amount) * 100) : 0}%` 
+                                }}
+                                aria-valuenow={selectedGoal.target_amount > 0 ? Math.min(100, (selectedGoal.current_amount / selectedGoal.target_amount) * 100) : 0}
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                              ></div>
+                            </div>
+                          </div>
+                          
+                          <div className="text-sm text-gray-600">
+                            ₱{(selectedGoal.target_amount - selectedGoal.current_amount).toFixed(2)} remaining
+                          </div>
+                        </div>
+                        <div className="col-auto">
+                          <i className="fas fa-flag fa-2x text-gray-300"></i>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="form-group">
-                  <label htmlFor="notes" className="font-weight-bold text-gray-800">
+                  <label htmlFor="description" className="font-weight-bold text-gray-800">
                     Description <span className="text-danger">*</span>
                   </label>
                   <textarea
-                    id="notes"
-                    name="notes"
-                    value={transaction.notes}
+                    id="description"
+                    name="description"
+                    value={transaction.description}
                     onChange={handleChange}
                     className="form-control"
                     rows={3}
@@ -949,8 +1315,24 @@ const EditTransaction: FC = () => {
           )}
         </div>
       </div>
+      
+      {/* Permission Error Modal */}
+      <PermissionErrorModal
+        isOpen={permissionErrorModal.isOpen}
+        onClose={() => setPermissionErrorModal({ isOpen: false, title: '', message: '' })}
+        errorTitle={permissionErrorModal.title}
+        errorMessage={permissionErrorModal.message}
+        suggestedActions={permissionErrorModal.suggestedActions}
+        userRole={permissionErrorModal.userRole}
+      />
     </div>
   );
 };
 
-export default EditTransaction; 
+export default function EditTransactionWithErrorBoundary() {
+  return (
+    <TransactionErrorBoundary>
+      <EditTransaction />
+    </TransactionErrorBoundary>
+  );
+} 

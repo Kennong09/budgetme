@@ -14,7 +14,7 @@ export interface Goal {
   owner_name?: string;
   created_at: string;
   updated_at?: string;
-  is_shared?: boolean;
+  is_family_goal?: boolean;
   family_id?: string;
   // Computed fields
   percentage: number;

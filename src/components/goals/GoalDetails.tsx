@@ -10,6 +10,8 @@ import {
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { goalsDataService } from './services/goalsDataService';
+import { GoalsErrorBoundary } from './components/GoalsErrorBoundary';
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
 import { Goal as GoalType, Transaction } from "../../types";
@@ -39,12 +41,7 @@ const GoalDetails: FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   
-  // Contribution modal states
-  const [showContributeModal, setShowContributeModal] = useState<boolean>(false);
-  const [contributionAmount, setContributionAmount] = useState<string>("");
-  const [isContributing, setIsContributing] = useState<boolean>(false);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>("default");
-  const [userAccounts, setUserAccounts] = useState<{id: string, account_name: string}[]>([]);
+
   
   // Family status states
   const [isFamilyMember, setIsFamilyMember] = useState<boolean>(false);
@@ -67,8 +64,9 @@ const GoalDetails: FC = () => {
   // For real-time subscriptions
   const [goalSubscription, setGoalSubscription] = useState<any>(null);
   const [transactionSubscription, setTransactionSubscription] = useState<any>(null);
+  const [contributionsSubscription, setContributionsSubscription] = useState<any>(null);
 
-  // Function to fetch goal data from Supabase
+  // Function to fetch goal data using robust data service
   const fetchGoalData = async () => {
     try {
       setLoading(true);
@@ -79,45 +77,53 @@ const GoalDetails: FC = () => {
         return;
       }
 
-      // Try fetching goal details from goal_details view
-      let goalData;
-      let goalError;
+      // Use robust data service to fetch all goals, then find the specific one
+      const { data: allGoals, error: goalsError } = await goalsDataService.fetchGoals(user.id);
       
-      try {
-        // First try from goal_details view
-        const result = await supabase
-          .from('goal_details')
-          .select('*')
-          .eq('id', id)
-          .single();
-          
-        goalData = result.data;
-        goalError = result.error;
-      } catch (err) {
-        // Fall back to direct goals table
-        console.log("Error with goal_details view, falling back to goals table");
-        const result = await supabase
+      if (goalsError) {
+        throw goalsError;
+      }
+      
+      if (!allGoals) {
+        throw new Error('No goals data received from service');
+      }
+      
+      // Find the specific goal by ID
+      let currentGoalData = allGoals.find(goal => goal.id === id);
+      
+      if (!currentGoalData) {
+        // Goal not found - might be a family goal, try alternative approach
+        console.log('Goal not found in user goals, checking if it exists in database...');
+        
+        // Try direct database query as last resort
+        const { data: directGoalData, error: directError } = await supabase
           .from('goals')
           .select('*')
           .eq('id', id)
           .single();
           
-        goalData = result.data;
-        goalError = result.error;
+        if (directError || !directGoalData) {
+          throw new Error('Goal not found or you do not have permission to view it');
+        }
+        
+        // Enhance the direct goal data with calculated fields
+        currentGoalData = {
+          ...directGoalData,
+          remaining_amount: Math.max(0, directGoalData.target_amount - directGoalData.current_amount),
+          percentage_complete: directGoalData.target_amount > 0 
+            ? Math.min((directGoalData.current_amount / directGoalData.target_amount) * 100, 100) 
+            : 0,
+          progress_status: directGoalData.current_amount >= directGoalData.target_amount 
+            ? 'completed' 
+            : directGoalData.current_amount / directGoalData.target_amount >= 0.75 
+              ? 'near_completion' 
+              : directGoalData.current_amount / directGoalData.target_amount >= 0.25 
+                ? 'in_progress' 
+                : 'getting_started'
+        };
       }
       
-      // If we have an error and no data, handle accordingly
-      if (goalError && !goalData) {
-        throw new Error(`Error fetching goal: ${goalError.message}`);
-      }
-      
-      if (!goalData) {
-        // Goal not found
-        setLoading(false);
-        return;
-      }
-
-      setGoal(goalData as unknown as GoalType);
+      setGoal(currentGoalData as unknown as GoalType);
       
       // Try fetching related transactions - first from transaction_details view
       let transactionsData;
@@ -162,7 +168,7 @@ const GoalDetails: FC = () => {
           .from('goal_contributions')
           .select('*')
           .eq('goal_id', id)
-          .order('date', { ascending: false });
+          .order('contribution_date', { ascending: false });
           
         if (contribError) {
           console.error("Error fetching goal contributions:", contribError.message);
@@ -175,8 +181,8 @@ const GoalDetails: FC = () => {
             goal_id: contribution.goal_id,
             user_id: contribution.user_id,
             amount: contribution.amount,
-            date: contribution.date,
-            notes: "Goal contribution",
+            date: contribution.contribution_date,
+            notes: contribution.notes || "Goal contribution",
             type: "expense",
             category: "Goal Contribution",
             created_at: contribution.created_at
@@ -199,23 +205,41 @@ const GoalDetails: FC = () => {
       // Sort the combined transactions by date (newest first)
       if (transactionsData && transactionsData.length > 0) {
         transactionsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        console.log(`Sorted transactions data (${transactionsData.length} items):`, transactionsData);
+      } else {
+        console.log('No transactions data to sort');
       }
 
       console.log(`Final transactions data (${transactionsData?.length || 0} items):`, transactionsData);
       setTransactions(transactionsData || []);
         
-        // Create chart configurations after data is loaded
-          createChartConfigs(
-        goalData as unknown as GoalType,
-        transactionsData || []
-          );
+      // Create chart configurations after data is loaded
+      if (currentGoalData) {
+        createChartConfigs(
+          currentGoalData as unknown as GoalType,
+          transactionsData || []
+        );
+      }
 
       setLoading(false);
       setHighchartsLoaded(true);
     } catch (err) {
       console.error("Error loading goal data:", err);
       const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
-      showErrorToast(`Failed to load goal details: ${errorMessage}`);
+      
+      // Provide user-friendly error messages based on error type
+      if (errorMessage.includes('schema cache') || errorMessage.includes('does not exist')) {
+        showErrorToast('Goals system is being updated. Please try again in a moment.');
+      } else if (errorMessage.includes('unauthorized') || errorMessage.includes('authentication')) {
+        showErrorToast('Session expired. Please sign in again.');
+        navigate('/login');
+      } else if (errorMessage.includes('not found') || errorMessage.includes('permission')) {
+        showErrorToast('Goal not found or you do not have permission to view it.');
+        navigate('/goals');
+      } else {
+        showErrorToast(`Failed to load goal details: ${errorMessage}`);
+      }
+      
       setError(errorMessage);
       setLoading(false);
     }
@@ -351,177 +375,9 @@ const GoalDetails: FC = () => {
     checkFamilyStatus();
   }, [user, goal, familyName, supabase]);
   
-  // Contribution handling functions
-  const openContributeModal = () => {
-    setContributionAmount("");
-    fetchUserAccounts();
-    setShowContributeModal(true);
-  };
-  
-  const closeContributeModal = () => {
-    setShowContributeModal(false);
-    setContributionAmount("");
-    setIsContributing(false);
-  };
 
-  // Function to fetch user accounts
-  const fetchUserAccounts = async () => {
-    try {
-      if (!user) return;
-      
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('id, account_name')
-        .eq('user_id', user.id)
-        .order('account_name');
-        
-      if (error) {
-        console.error('Error fetching user accounts:', error);
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        console.log('User accounts fetched:', data);
-        setUserAccounts(data);
-        // Set first account as default selection if available
-        setSelectedAccountId(data[0].id);
-      } else {
-        // If no accounts, use default
-        setUserAccounts([{ id: 'default', account_name: 'Default Account' }]);
-        setSelectedAccountId('default');
-      }
-    } catch (err) {
-      console.error('Error in fetchUserAccounts:', err);
-      // Set a default account if there's an error
-      setUserAccounts([{ id: 'default', account_name: 'Default Account' }]);
-      setSelectedAccountId('default');
-    }
-  };
   
-  const handleContribute = async () => {
-    if (!goal || !user) return;
-    
-    const amount = parseFloat(contributionAmount);
-    if (isNaN(amount) || amount <= 0) {
-      showErrorToast("Please enter a valid amount");
-      return;
-    }
-    
-    // Debug goal type and family information
-    console.log('Goal details before contribution:', {
-      id: goal.id,
-      name: goal.goal_name,
-      isSharedGoal,
-      familyId: goal.family_id,
-      currentAmount: goal.current_amount
-    });
-    
-    setIsContributing(true);
-    try {
-      // Create a contribution record
-      const contributionData = {
-        goal_id: goal.id,
-        user_id: user.id,
-        amount: amount,
-        date: new Date().toISOString(),
-        created_at: new Date().toISOString()
-      };
-      
-      // Note: family_id is not included in contribution data as that column doesn't exist
-      // We'll only add family_id to the transaction record
-      
-      console.log('Creating contribution with data:', contributionData);
-      
-      // Create the contribution record
-      const { data: contribution, error: contribError } = await supabase
-        .from('goal_contributions')
-        .insert(contributionData)
-        .select();
-        
-      if (contribError) {
-        console.error('Contribution insert error:', contribError);
-        throw contribError;
-      }
-      
-      console.log('Contribution created successfully:', contribution);
-      
-      // Update goal progress
-      const newAmount = goal.current_amount + amount;
-      const newStatus = newAmount >= goal.target_amount ? 'completed' : 'in_progress';
-      
-      console.log(`Updating goal ${goal.id} with new amount: ${newAmount}, new status: ${newStatus}`);
-      
-      const { error: updateError } = await supabase
-        .from('goals')
-        .update({
-          current_amount: newAmount,
-          status: newStatus
-        })
-        .eq('id', goal.id);
-        
-      if (updateError) {
-        console.error('Goal update error:', updateError);
-        throw updateError;
-      }
-      
-      console.log('Goal updated successfully');
-      
-      // Also create a transaction record to ensure it appears in transaction history
-      // Check if the transactions table has all required fields
-      const transactionData: any = {
-        user_id: user.id,
-        goal_id: goal.id,
-        amount: amount,
-        date: new Date().toISOString(),
-        type: 'expense',
-        account_id: selectedAccountId, // Use selected account
-        notes: `Contribution to goal: ${goal.goal_name}`,
-        category: 'Contribution', // Explicitly set as "Contribution"
-        category_id: 'contribution', // Set category_id for proper categorization
-        created_at: new Date().toISOString()
-      };
-      
-      // Add family_id for family goals
-      if (isSharedGoal && goal.family_id) {
-        transactionData.family_id = goal.family_id;
-      }
-      
-      console.log('Creating transaction record:', transactionData);
-      
-      try {
-        // Create the transaction record 
-        const { data: txData, error: txError } = await supabase
-          .from('transactions')
-          .insert(transactionData)
-          .select();
-          
-        if (txError) {
-          console.error('Transaction insert error:', txError);
-          // Don't throw error here, as the contribution itself succeeded
-          console.warn('Warning: Transaction record creation failed but contribution was successful');
-        } else {
-          console.log('Transaction record created successfully:', txData);
-        }
-      } catch (txErr) {
-        // If transaction insert fails completely, log it but don't fail the whole contribution
-        console.error('Transaction creation error (contribution still succeeded):', txErr);
-      }
-      
-      showSuccessToast(`Successfully contributed ${formatCurrency(amount)} to ${goal.goal_name}`);
-      
-      // Manually refresh data instead of relying just on subscription
-      await memoizedFetchGoalData();
-      
-      // Close the modal
-      closeContributeModal();
-    } catch (error) {
-      console.error("Error contributing to goal:", error);
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      showErrorToast(`Failed to contribute to goal: ${errorMessage}`);
-    } finally {
-      setIsContributing(false);
-    }
-  };
+
   
   // Set up real-time subscriptions
   useEffect(() => {
@@ -534,6 +390,10 @@ const GoalDetails: FC = () => {
     
     if (transactionSubscription) {
       supabase.removeChannel(transactionSubscription);
+    }
+    
+    if (contributionsSubscription) {
+      supabase.removeChannel(contributionsSubscription);
     }
     
     // Set up goal subscription
@@ -645,7 +505,7 @@ const GoalDetails: FC = () => {
       .subscribe();
     
     // Set up contributions subscription
-    const contributionsSubscription = supabase
+    const newContributionsSubscription = supabase
       .channel(`goal_${id}_contributions`)
       .on('postgres_changes', { 
         event: '*', 
@@ -663,13 +523,14 @@ const GoalDetails: FC = () => {
     // Save subscription references
     setGoalSubscription(newGoalSubscription);
     setTransactionSubscription(newTransactionSubscription);
+    setContributionsSubscription(newContributionsSubscription);
     
     // Clean up subscriptions on component unmount
     return () => {
       console.log("Cleaning up subscriptions");
       if (newGoalSubscription) supabase.removeChannel(newGoalSubscription);
       if (newTransactionSubscription) supabase.removeChannel(newTransactionSubscription);
-      if (contributionsSubscription) supabase.removeChannel(contributionsSubscription);
+      if (newContributionsSubscription) supabase.removeChannel(newContributionsSubscription);
     };
   }, [id, user]);
   
@@ -1001,14 +862,7 @@ const GoalDetails: FC = () => {
     });
   };
 
-  const openDeleteModal = (): void => {
-    setShowDeleteModal(true);
-  };
 
-  const closeDeleteModal = (): void => {
-    setShowDeleteModal(false);
-    setIsDeleting(false);
-  };
 
   const handleDelete = async (): Promise<void> => {
     try {
@@ -1017,7 +871,7 @@ const GoalDetails: FC = () => {
       if (!user) {
         showErrorToast("You must be signed in to delete goals");
         setIsDeleting(false);
-        closeDeleteModal();
+        setShowDeleteModal(false);
         return;
       }
       
@@ -1032,7 +886,7 @@ const GoalDetails: FC = () => {
       }
       
       showSuccessToast("Goal deleted successfully!");
-      closeDeleteModal();
+      setShowDeleteModal(false);
       navigate("/goals");
     } catch (err) {
       console.error("Error deleting goal:", err);
@@ -1173,133 +1027,7 @@ const GoalDetails: FC = () => {
 
   return (
     <div className="container-fluid animate__animated animate__fadeIn">
-      {/* Contribution Modal */}
-      {showContributeModal && goal && (
-        <>
-          <div className="modal fade show" style={{ display: 'block', zIndex: 1050 }} tabIndex={-1} role="dialog">
-            <div className="modal-dialog" role="document">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">Contribute to {goal.goal_name}</h5>
-                  <button type="button" className="close" onClick={closeContributeModal} disabled={isContributing}>
-                    <span aria-hidden="true">&times;</span>
-                  </button>
-                </div>
-                <div className="modal-body">
-                  {goal && (
-                    <>
-                      {/* Shared goal indicator in contribution modal */}
-                      {isSharedGoal && (
-                        <div className="alert alert-info mb-3 d-flex align-items-center">
-                          <i className="fas fa-users mr-2"></i>
-                          <div>
-                            <strong>Family Goal:</strong> This contribution will be visible to all family members.
-                            {familyName && <div className="small mt-1">Family: {familyName}</div>}
-                          </div>
-                        </div>
-                      )}
-                    
-                      {/* Calculate percentage if it's not available */}
-                      {(() => {
-                        const calculatedPercentage = goal.percentage ?? 
-                          (goal.target_amount > 0 ? (goal.current_amount / goal.target_amount * 100) : 0);
-                        
-                        return (
-                          <div className="progress mb-3" style={{height: '10px'}}>
-                            <div 
-                              className={`progress-bar ${
-                                calculatedPercentage >= 90 ? "bg-success" : 
-                                calculatedPercentage >= 50 ? "bg-info" : 
-                                calculatedPercentage >= 25 ? "bg-warning" : 
-                                "bg-danger"
-                              }`}
-                              role="progressbar" 
-                              style={{ width: `${Math.min(calculatedPercentage, 100)}%` }}
-                              aria-valuenow={Math.min(calculatedPercentage, 100)}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        );
-                      })()}
 
-                      <div className="d-flex justify-content-between mb-3">
-                        <div>Current: {formatCurrency(goal.current_amount)}</div>
-                        <div>Target: {formatCurrency(goal.target_amount)}</div>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="contributionAmount">Contribution Amount</label>
-                        <div className="input-group">
-                          <div className="input-group-prepend">
-                            <span className="input-group-text">{currencySymbol}</span>
-                          </div>
-                          <input 
-                            type="number" 
-                            className="form-control" 
-                            id="contributionAmount" 
-                            value={contributionAmount}
-                            onChange={(e) => setContributionAmount(e.target.value)}
-                            min="0.01"
-                            step="0.01"
-                            required
-                            disabled={isContributing}
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="form-group">
-                        <label htmlFor="accountSelect">Select Account</label>
-                        <select
-                          className="form-control"
-                          id="accountSelect"
-                          value={selectedAccountId}
-                          onChange={(e) => setSelectedAccountId(e.target.value)}
-                          disabled={isContributing}
-                        >
-                          {userAccounts.map(account => (
-                            <option key={account.id} value={account.id}>
-                              {account.account_name}
-                            </option>
-                          ))}
-                        </select>
-                        <small className="form-text text-muted">
-                          Choose the account from which to make this contribution.
-                        </small>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="modal-footer">
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary" 
-                    onClick={closeContributeModal}
-                    disabled={isContributing}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="button" 
-                    className="btn btn-primary"
-                    disabled={isContributing || !contributionAmount || parseFloat(contributionAmount) <= 0}
-                    onClick={handleContribute}
-                  >
-                    {isContributing ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-                        Contributing...
-                      </>
-                    ) : (
-                      'Contribute Now'
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="modal-backdrop fade show" style={{ zIndex: 1040 }}></div>
-        </>
-      )}
     
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
@@ -1308,7 +1036,7 @@ const GoalDetails: FC = () => {
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Confirm Deletion</h5>
-                <button type="button" className="close" onClick={closeDeleteModal} disabled={isDeleting}>
+                <button type="button" className="close" onClick={() => { setShowDeleteModal(false); setIsDeleting(false); }} disabled={isDeleting}>
                   <span aria-hidden="true">&times;</span>
                 </button>
               </div>
@@ -1331,7 +1059,7 @@ const GoalDetails: FC = () => {
                 <button 
                   type="button" 
                   className="btn btn-outline-secondary" 
-                  onClick={closeDeleteModal}
+                  onClick={() => { setShowDeleteModal(false); setIsDeleting(false); }}
                   disabled={isDeleting}
                 >
                   Cancel
@@ -1358,9 +1086,13 @@ const GoalDetails: FC = () => {
       <div className="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 className="h3 mb-0 text-gray-800">
           {goal ? goal.goal_name : "Goal Details"}
-          {isSharedGoal && (
+          {goal && goal.is_family_goal ? (
             <span className="badge badge-info ml-2">
-              <i className="fas fa-users mr-1"></i> Family Goal
+              <i className="fas fa-users mr-1"></i> Family
+            </span>
+          ) : (
+            <span className="badge badge-secondary ml-2">
+              <i className="fas fa-user mr-1"></i> Personal
             </span>
           )}
         </h1>
@@ -1368,28 +1100,36 @@ const GoalDetails: FC = () => {
           {/* Show contribution button for family shared goals or owner */}
           {goal && (
             <>
-              <button 
-                className="btn btn-success shadow-sm mr-2" 
-                onClick={openContributeModal}
-                disabled={goal.status === 'completed' || goal.status === 'cancelled'}
-              >
-                <i className="fas fa-plus-circle mr-2"></i> Contribute
-              </button>
+              {goal.status === 'completed' || goal.status === 'cancelled' ? (
+                <button 
+                  className="btn btn-success shadow-sm mr-2 d-flex align-items-center" 
+                  disabled
+                >
+                  <i className="fas fa-plus-circle mr-2"></i> Contribute
+                </button>
+              ) : (
+                <Link 
+                  to={`/goals/${id}/contribute`}
+                  className="btn btn-success shadow-sm mr-2 d-flex align-items-center"
+                >
+                  <i className="fas fa-plus-circle mr-2"></i> Contribute
+                </Link>
+              )}
               
               {(isGoalOwner && goal.status !== 'completed' && goal.status !== 'cancelled') && (
-                <Link to={`/goals/${id}/edit`} className="btn btn-primary shadow-sm mr-2">
+                <Link to={`/goals/${id}/edit`} className="btn btn-primary shadow-sm mr-2 d-flex align-items-center">
                   <i className="fas fa-edit mr-2"></i> Edit
                 </Link>
               )}
               
               {isGoalOwner && (
-                <button className="btn btn-danger shadow-sm mr-2" onClick={openDeleteModal}>
+                <button className="btn btn-danger shadow-sm mr-2 d-flex align-items-center" onClick={() => setShowDeleteModal(true)}>
                   <i className="fas fa-trash mr-2"></i> Delete
                 </button>
               )}
             </>
           )}
-          <Link to="/goals" className="btn btn-secondary shadow-sm">
+          <Link to="/goals" className="btn btn-secondary shadow-sm d-flex align-items-center">
             <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Goals
           </Link>
         </div>
@@ -1626,7 +1366,7 @@ const GoalDetails: FC = () => {
                       <span>Progress</span>
                       <span>{formatCurrency(goal.current_amount)} of {formatCurrency(goal.target_amount)}</span>
                     </div>
-                    <div className="progress mb-4">
+                    <div className="progress mb-4" style={{ height: '8px' }}>
                       <div
                         className={`progress-bar bg-${statusColor}`}
                         role="progressbar"
@@ -1681,9 +1421,6 @@ const GoalDetails: FC = () => {
                       style={{ cursor: "pointer" }}
                     ></i>
                   </div>
-                  </span>
-                  <span className="text-xs text-success">
-                    <i className="fas fa-sync text-xs mr-1"></i> Real-time updates
                   </span>
                 </h6>
                 {highchartsLoaded && timelineConfig && (
@@ -1830,9 +1567,6 @@ const GoalDetails: FC = () => {
             </div>
           </h6>
           <div className="d-flex align-items-center">
-            <span className="text-xs text-success mr-3">
-              <i className="fas fa-sync text-xs mr-1"></i> Real-time updates enabled
-            </span>
           <div className="dropdown no-arrow">
             <button className="btn btn-link btn-sm dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
               <i className="fas fa-ellipsis-v text-gray-400"></i>
@@ -1855,7 +1589,7 @@ const GoalDetails: FC = () => {
               <h4 className="text-gray-800 mb-2">No Transactions Yet</h4>
               <p className="text-gray-600">No contributions have been made towards this goal yet.</p>
               <div className="mt-4">
-                <Link to={`/goals/${id}/contribute`} className="btn btn-primary">
+                <Link to={`/goals/${id}/contribute`} className="btn btn-primary shadow-sm d-inline-flex align-items-center">
                   <i className="fas fa-plus-circle mr-2"></i> Make First Contribution
                 </Link>
               </div>
@@ -1880,7 +1614,7 @@ const GoalDetails: FC = () => {
                           to={`/transactions/${transaction.id}`}
                           className="font-weight-bold text-primary"
                         >
-                          {transaction.notes || "Contribution to goal"}
+                          {transaction.description || "Contribution to goal"}
                         </Link>
                       </td>
                       <td width="20%">
@@ -2032,4 +1766,11 @@ const GoalDetails: FC = () => {
   );
 };
 
-export default GoalDetails;
+// Wrap component with error boundary
+const GoalDetailsWithErrorBoundary = () => (
+  <GoalsErrorBoundary>
+    <GoalDetails />
+  </GoalsErrorBoundary>
+);
+
+export default GoalDetailsWithErrorBoundary;

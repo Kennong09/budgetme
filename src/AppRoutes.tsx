@@ -37,6 +37,7 @@ const CreateFamily = lazy(() => import("./components/family/CreateFamily"));
 const EditFamily = lazy(() => import("./components/family/EditFamily"));
 const JoinFamily = lazy(() => import("./components/family/JoinFamily"));
 const InviteFamilyMember = lazy(() => import("./components/family/InviteFamilyMember"));
+const NotificationsPage = lazy(() => import("./components/notifications/NotificationsPage"));
 
 // Auth components
 const AuthCallback = lazy(() => import("./components/auth/AuthCallback"));
@@ -259,6 +260,13 @@ const AppRoutes: React.FC = () => {
         <Layout title="Invite Family Member">
           <Suspense fallback={<LoadingFallback />}>
             <InviteFamilyMember />
+          </Suspense>
+        </Layout>
+      } />
+      <Route path="/notifications" element={
+        <Layout title="Notifications">
+          <Suspense fallback={<LoadingFallback />}>
+            <NotificationsPage />
           </Suspense>
         </Layout>
       } />

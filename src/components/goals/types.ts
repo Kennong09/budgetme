@@ -14,7 +14,7 @@ export interface Goal {
   created_at: string;
   updated_at: string;
   is_overdue: boolean;
-  is_shared?: boolean;  // Indicates if goal is shared with family
+  is_family_goal?: boolean;  // Indicates if goal is shared with family
   family_id?: string;   // ID of the family if shared
   shared_by?: string;   // User who shared the goal
   shared_by_name?: string; // Name of user who shared the goal

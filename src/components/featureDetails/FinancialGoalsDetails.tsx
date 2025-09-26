@@ -204,40 +204,6 @@ const FinancialGoalsDetails: React.FC = () => {
             </div>
           </div>
 
-          <div className="feature-section">
-            <h2>Advanced Goal Analytics</h2>
-            <p>
-              BudgetMe goes beyond basic progress tracking by providing detailed analytics that help you 
-              understand your saving patterns and optimize your approach to reaching your financial goals.
-              Our interactive charts and visualizations give you valuable insights into your progress.
-            </p>
-            <div className="feature-image">
-              <img src="/images/goal-analytics.png" alt="Goal Analytics Dashboard" />
-              <div className="image-caption">Interactive charts and detailed analytics for each goal</div>
-            </div>
-            <p>
-              Each goal includes multiple visualization types:
-            </p>
-            <ul className="feature-list-bullets">
-              <li>
-                <strong>Progress Gauge:</strong> Visual indicator showing percentage completion with color-coded status
-              </li>
-              <li>
-                <strong>Contribution History:</strong> Bar charts showing your contributions over time to identify patterns
-              </li>
-              <li>
-                <strong>Timeline Projections:</strong> Line graphs forecasting your progress toward the target date
-              </li>
-              <li>
-                <strong>Transaction Records:</strong> Detailed logs of all contributions with amounts and dates
-              </li>
-            </ul>
-            <p>
-              These analytics help you make data-driven decisions about adjusting contribution amounts, 
-              timelines, or priorities to optimize your financial planning strategy.
-            </p>
-          </div>
-
           <div className="feature-cta-section">
             <h2>Ready to Turn Your Financial Dreams into Reality?</h2>
             <p>
@@ -303,10 +269,6 @@ const FinancialGoalsDetails: React.FC = () => {
               <li>
                 <i className="fas fa-bullseye"></i>
                 <span>Smart Goal Setting</span>
-              </li>
-              <li>
-                <i className="fas fa-chart-line"></i>
-                <span>Progress Analytics</span>
               </li>
               <li>
                 <i className="fas fa-users"></i>

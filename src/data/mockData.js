@@ -208,6 +208,13 @@ export const expenseCategories = [
   {
     id: 13,
     user_id: 1,
+    category_name: "Contribution",
+    icon: "piggy-bank",
+    is_default: true,
+  },
+  {
+    id: 14,
+    user_id: 1,
     category_name: "Other Expenses",
     icon: "more-horizontal",
     is_default: true,

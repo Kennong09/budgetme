@@ -9,6 +9,9 @@ import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { Analytics } from '@vercel/analytics/react';
 
+// Import Supabase Rate Limiter Configuration
+import './config/supabaseRateLimitConfig';
+
 // Import SB Admin JS
 import "./utils/sbAdmin";
 

@@ -32,8 +32,8 @@ export const formatPercentage = (value: number): string => {
 
 // Get current month name and year
 export const getCurrentMonthYear = (): string => {
-  // Return June 2025 to match our mock data instead of current date
-  const date = new Date(2025, 5, 15); // June 15, 2025
+  // Return the actual current month and year
+  const date = new Date();
   return new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
@@ -45,9 +45,10 @@ export const getCurrentMonthDates = (): {
   firstDay: string;
   lastDay: string;
 } => {
-  // Return June 2025 dates to match our mock data instead of current month
-  const firstDay = new Date(2025, 5, 1); // June is month 5 (0-indexed)
-  const lastDay = new Date(2025, 5, 30);
+  // Return actual current month dates
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
   return {
     firstDay: firstDay.toISOString().split("T")[0],
@@ -152,11 +153,15 @@ export const calculateMonthlySavingsForGoal = (goal: {
   const today = new Date();
   const remainingAmount = goal.target_amount - goal.current_amount;
 
+  // If goal is already achieved or overpaid, return 0
+  if (remainingAmount <= 0) return 0;
+
   // Calculate months between today and target date
   const monthsDiff =
     (targetDate.getFullYear() - today.getFullYear()) * 12 +
     (targetDate.getMonth() - today.getMonth());
 
+  // If target date has passed or is current month, return remaining amount
   if (monthsDiff <= 0) return remainingAmount;
 
   return remainingAmount / monthsDiff;

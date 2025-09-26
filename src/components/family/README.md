@@ -65,7 +65,7 @@ This component provides a form interface for inviting new members to join a fami
 ### Key Features
 
 - **Email Lookup**: Verifies if the invited user has a BudgetMe account
-- **Role Assignment**: Allows setting the invited member as Admin or Viewer
+- **Role Assignment**: Allows setting the invited member as Admin, Member, or Viewer
 - **Personalized Message**: Custom invitation message field
 - **Multi-step Process**: Form and review steps before sending invitation
 - **Validation**: Checks for valid email, existing accounts, and duplicate invitations
@@ -115,7 +115,7 @@ interface FamilyMember {
   id: number;
   family_id: number;
   member_user_id: number;
-  role: "admin" | "viewer";
+  role: "admin" | "member" | "viewer";
   join_date: string;
   user?: User;
 }
@@ -125,7 +125,7 @@ interface FamilyMember {
 ```typescript
 interface InviteFormData {
   email: string;
-  role: "admin" | "viewer";
+  role: "admin" | "member" | "viewer";
   message: string;
 }
 ```

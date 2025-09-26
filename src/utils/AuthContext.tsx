@@ -9,9 +9,11 @@ import {
   getCurrentUser, 
   getCurrentSession,
   onAuthStateChange,
+  confirmEmailDelivered,
   AuthError
 } from './authService';
 import { useToast } from './ToastContext';
+import { notificationSystem } from '../integrations/notificationSystemIntegration';
 
 interface AuthContextType {
   user: User | null;
@@ -91,6 +93,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (currentUser) {
             setSignInSuccess(true);
             
+            // Initialize notification system for the authenticated user
+            try {
+              await notificationSystem.initialize(currentUser.id);
+              console.log('Notification system initialized for user:', currentUser.id);
+            } catch (error) {
+              console.error('Failed to initialize notification system:', error);
+            }
+            
             // If user is on login or signup page, redirect to dashboard
             const currentPath = window.location.pathname;
             if ((currentPath === '/login' || currentPath === '/signup' || currentPath === '/') && !currentPath.startsWith('/admin')) {
@@ -145,6 +155,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               toastsShown.current.signIn = true;
             }
             setSignInSuccess(true);
+            
+            // Initialize notification system for OAuth user
+            if (session?.user) {
+              notificationSystem.initialize(session.user.id)
+                .then(() => {
+                  console.log('Notification system initialized for OAuth user:', session.user.id);
+                })
+                .catch((error) => {
+                  console.error('Failed to initialize notification system for OAuth user:', error);
+                });
+            }
+            
             // Close verification modal if it was open
             if (showEmailVerificationModal) {
               setShowEmailVerificationModal(false);
@@ -163,6 +185,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
             setSignInSuccess(true);
             
+            // Initialize notification system for email user
+            if (session?.user) {
+              notificationSystem.initialize(session.user.id)
+                .then(() => {
+                  console.log('Notification system initialized for email user:', session.user.id);
+                })
+                .catch((error) => {
+                  console.error('Failed to initialize notification system for email user:', error);
+                });
+            }
+            
             // Redirect to dashboard after email sign-in, but don't redirect if coming from admin area
             const currentPath = window.location.pathname;
             if (!currentPath.startsWith('/admin')) {
@@ -172,6 +205,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else if (event === 'SIGNED_OUT') {
           showSuccessToast('Successfully Signed Out');
           setSignInSuccess(false);
+          
+          // Cleanup notification system on logout
+          if (sessionIdRef.current) {
+            // Get user ID before it's cleared
+            const userId = user?.id || session?.user?.id;
+            if (userId) {
+              try {
+                notificationSystem.cleanup(userId);
+                console.log('Notification system cleaned up for user:', userId);
+              } catch (error) {
+                console.error('Error cleaning up notification system:', error);
+              }
+            }
+          }
+          
           // Reset toast flags on sign out
           toastsShown.current = {
             signIn: false,
@@ -244,8 +292,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const handleAuthError = (error: AuthError | null) => {
     if (error) {
-      setError(error.message);
-      return error.message;
+      let errorMessage = error.message;
+      
+      // Provide more user-friendly messages for common errors
+      if (errorMessage.toLowerCase().includes('rate limit') || errorMessage.includes('Too many signup attempts')) {
+        // Keep the detailed rate limit message as it already includes wait time
+        errorMessage = error.message;
+      } else if (errorMessage.toLowerCase().includes('invalid login credentials')) {
+        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (errorMessage.toLowerCase().includes('email not confirmed')) {
+        errorMessage = 'Please check your email and click the verification link to activate your account.';
+      } else if (errorMessage.toLowerCase().includes('timeout') || errorMessage.toLowerCase().includes('timed out')) {
+        errorMessage = 'The request took too long. Please try again. If this persists, your account may have been created - check your email.';
+      } else if (errorMessage.toLowerCase().includes('server error') || 
+                 errorMessage.toLowerCase().includes('gateway') || 
+                 errorMessage.toLowerCase().includes('bad gateway') ||
+                 errorMessage.includes('504') || 
+                 errorMessage.includes('502')) {
+        errorMessage = 'Server is temporarily unavailable. Please try again in a moment. If the problem persists, your account may have been created - check your email.';
+      } else if (!errorMessage || errorMessage === '{}' || errorMessage.trim() === '') {
+        errorMessage = 'An unexpected error occurred. Please try again.';
+      }
+      
+      setError(errorMessage);
+      return errorMessage;
     }
     return null;
   };
@@ -270,6 +340,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setSignInSuccess(true);
         toastsShown.current.signIn = false; // Allow sign-in toast to show
         
+        // Initialize notification system for signed-in user
+        if (response.user) {
+          notificationSystem.initialize(response.user.id)
+            .then(() => {
+              console.log('Notification system initialized after sign-in:', response.user.id);
+            })
+            .catch((error) => {
+              console.error('Failed to initialize notification system after sign-in:', error);
+            });
+        }
+        
         // Redirect to dashboard after successful login
         window.location.href = '/dashboard';
       }
@@ -291,7 +372,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await signUpWithEmail(email, password, { full_name: fullName });
       
       if (response.error) {
-        handleAuthError(response.error);
+        const errorMessage = handleAuthError(response.error);
+        
+        // For rate limit errors, don't show the verification modal
+        if (errorMessage?.toLowerCase().includes('wait') && errorMessage.includes('seconds')) {
+          // This is a rate limit error, just show the error and return
+          return;
+        }
+        
+        // For timeout errors that suggest the account might have been created, 
+        // show a special message and potentially the verification modal
+        if (errorMessage?.toLowerCase().includes('account may have been created') || 
+            errorMessage?.toLowerCase().includes('check your email')) {
+          // Even though there was an error, the account might exist
+          // Show verification modal with the email in case they need to resend
+          setVerificationEmail(email);
+          setShowEmailVerificationModal(true);
+        }
       } else {
         // Always show verification modal first, regardless of email confirmation settings
         setVerificationEmail(email);

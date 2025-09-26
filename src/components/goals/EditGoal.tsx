@@ -9,6 +9,9 @@ import { useCurrency } from "../../utils/CurrencyContext";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { goalsDataService } from "./services/goalsDataService";
+import GoalErrorBoundary from "../common/GoalErrorBoundary";
+import { GoalNotificationService } from "../../services/database/goalNotificationService";
 
 // Import SB Admin CSS (already imported at the app level)
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -23,7 +26,7 @@ interface GoalFormData {
   notes: string;
   status?: "not_started" | "in_progress" | "completed" | "cancelled";
   share_with_family?: boolean;
-  is_shared?: boolean;
+  is_family_goal?: boolean;
   family_id?: string;
 }
 
@@ -145,50 +148,20 @@ const EditGoal: FC = () => {
           return;
         }
 
-        // Try fetching from goal_details view first
-        let goalData;
-        let goalError;
+        // Use enhanced data service with automatic fallback
+        const result = await goalsDataService.fetchGoalById(id, user.id);
         
-        try {
-          const result = await supabase
-            .from('goal_details')
-            .select('*')
-            .eq('id', id)
-            .single();
-            
-          goalData = result.data;
-          goalError = result.error;
-        } catch (err) {
-          // Fall back to direct goals table
-          console.log("Error with goal_details view, falling back to goals table");
-          const result = await supabase
-            .from('goals')
-            .select('*')
-            .eq('id', id)
-            .single();
-            
-          goalData = result.data;
-          goalError = result.error;
+        if (result.error) {
+          throw new Error(result.error.message);
         }
         
-        // If we have an error and no data, handle accordingly
-        if (goalError && !goalData) {
-          throw new Error(`Error fetching goal: ${goalError.message}`);
-        }
-        
-        if (!goalData) {
-          // Goal not found
+        if (!result.data) {
           showErrorToast("Goal not found");
           navigate("/goals");
           return;
         }
 
-        // Verify user has permission to edit this goal
-        if (goalData.user_id !== user.id) {
-          showErrorToast("You don't have permission to edit this goal");
-          navigate("/goals");
-          return;
-        }
+        const goalData = result.data;
 
         // Save the original goal data
         setOriginalGoal(goalData);
@@ -202,7 +175,7 @@ const EditGoal: FC = () => {
           priority: goalData.priority || "medium",
           notes: goalData.notes || "",
           status: goalData.status || "in_progress",
-          is_shared: !!goalData.family_id,
+          is_family_goal: !!goalData.family_id,
           family_id: goalData.family_id || undefined,
           share_with_family: !!goalData.family_id
         });
@@ -277,10 +250,10 @@ const EditGoal: FC = () => {
 
       // Handle sharing status changes
       if (isFamilyMember && userFamilyId) {
-        if (goal.share_with_family && !goal.is_shared) {
+        if (goal.share_with_family && !goal.is_family_goal) {
           // Goal is now being shared
           goalData.family_id = userFamilyId;
-        } else if (!goal.share_with_family && goal.is_shared) {
+        } else if (!goal.share_with_family && goal.is_family_goal) {
           // Goal is no longer being shared
           goalData.family_id = null;
         }
@@ -303,6 +276,17 @@ const EditGoal: FC = () => {
         
       if (error) {
         throw new Error(error.message);
+      }
+      
+      // Trigger goal update notifications
+      if (data) {
+        try {
+          await GoalNotificationService.getInstance().checkGoalMilestones(id);
+          console.log('Goal update notifications processed successfully');
+        } catch (notificationError) {
+          // Log notification error but don't fail the goal update
+          console.warn('Failed to process goal update notifications:', notificationError);
+        }
       }
       
       // Success! Show toast and redirect
@@ -757,26 +741,30 @@ const EditGoal: FC = () => {
                 {isFamilyMember && (
                   <div className="form-group">
                     <div className="card border-left-info shadow p-3 mb-3">
-                      <h5 className="font-weight-bold text-info mb-3">
-                        <i className="fas fa-users mr-2"></i>
-                        Family Goal Sharing
-                      </h5>
+                      <div className="mb-3">
+                        <h5 className="font-weight-bold text-info mb-0">
+                          <i className="fas fa-users mr-2"></i>
+                          Family Goal Sharing
+                        </h5>
+                      </div>
                       
-                      <div className="custom-control custom-checkbox">
-                        <input
-                          type="checkbox"
-                          className="custom-control-input"
-                          id="shareWithFamily"
-                          name="share_with_family"
-                          checked={goal.share_with_family}
-                          onChange={(e) => 
-                            setGoal({...goal, share_with_family: e.target.checked})
-                          }
-                        />
-                        <label className="custom-control-label font-weight-bold" htmlFor="shareWithFamily">
-                          Share this goal with my family
-                        </label>
-                        <div className="mt-2">
+                      <div className="row">
+                        <div className="col-md-8">
+                          <div className="d-flex align-items-center mb-3">
+                            <input
+                              type="checkbox"
+                              className="mr-2"
+                              id="shareWithFamily"
+                              name="share_with_family"
+                              checked={goal.share_with_family}
+                              onChange={(e) => 
+                                setGoal({...goal, share_with_family: e.target.checked})
+                              }
+                            />
+                            <label className="font-weight-bold text-nowrap mb-0" htmlFor="shareWithFamily">
+                              Share this goal with my family
+                            </label>
+                          </div>
                           <small className="form-text text-muted d-block">
                             <i className="fas fa-info-circle mr-1"></i>
                             When shared, this goal will appear in your family dashboard and family members can view and contribute to it.
@@ -785,7 +773,7 @@ const EditGoal: FC = () => {
                             <i className="fas fa-lock mr-1"></i>
                             If not shared, this will be a personal goal only visible to you.
                           </small>
-                          {goal.share_with_family !== goal.is_shared && (
+                          {goal.share_with_family !== goal.is_family_goal && (
                             <div className="alert alert-warning mt-2 py-2 mb-0">
                               <i className="fas fa-exclamation-triangle mr-1"></i>
                               {goal.share_with_family 
@@ -793,6 +781,8 @@ const EditGoal: FC = () => {
                                 : "This goal will no longer be shared with your family members."}
                             </div>
                           )}
+                        </div>
+                        <div className="col-md-4">
                         </div>
                       </div>
                     </div>
@@ -868,4 +858,10 @@ const EditGoal: FC = () => {
   );
 };
 
-export default EditGoal; 
+export default function EditGoalWithErrorBoundary() {
+  return (
+    <GoalErrorBoundary>
+      <EditGoal />
+    </GoalErrorBoundary>
+  );
+} 

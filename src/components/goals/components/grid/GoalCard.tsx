@@ -4,6 +4,7 @@ import { Goal } from '../../types';
 import { formatCurrency, formatDate, formatPercentage, getRemainingDays, calculateMonthlySavingsForGoal } from '../../../../utils/helpers';
 import { formatStatusName } from '../../utils/goalUtils';
 import { useAuth } from '../../../../utils/AuthContext';
+import GoalDebugInfo from '../../debug/GoalDebugInfo';
 
 interface GoalCardProps {
   goal: Goal;
@@ -14,7 +15,13 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onDeleteGoal }) => {
   const { user } = useAuth();
   const [hoveringGoalBar, setHoveringGoalBar] = useState<boolean>(false);
   
-  const progressPercentage = Math.min(goal.percentage, 100);
+  // Calculate percentage with fallback if not provided
+  const calculatePercentage = (current: number, target: number): number => {
+    if (!target || target <= 0) return 0;
+    return Math.min((current / target) * 100, 100);
+  };
+  
+  const progressPercentage = goal.percentage ?? calculatePercentage(goal.current_amount, goal.target_amount);
   const daysLeft = getRemainingDays(goal.target_date);
   const priorityClass = goal.priority === "high" ? "text-danger" : goal.priority === "medium" ? "text-warning" : "text-info";
   const statusClass = goal.status === "completed" ? "badge-success" : 
@@ -40,11 +47,11 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onDeleteGoal }) => {
 
   return (
     <div className="col-xl-4 col-md-6 mb-4">
-      <div className={`card shadow h-100 ${goal.is_shared ? 'border-left-info' : 'border-left-secondary'}`}>
+      <div className={`card shadow h-100 ${goal.is_family_goal ? 'border-left-info' : 'border-left-secondary'}`}>
         <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
           <h6 className="m-0 font-weight-bold text-primary">
             {goal.goal_name}
-            {goal.is_shared ? (
+            {goal.is_family_goal ? (
               <span className="badge badge-info ml-2">
                 <i className="fas fa-users mr-1"></i> Family
               </span>
@@ -63,7 +70,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onDeleteGoal }) => {
               <Link to={`/goals/${goal.id}`} className="dropdown-item">
                 <i className="fas fa-eye fa-fw mr-2 text-gray-400"></i>View Details
               </Link>
-              {!goal.is_shared && (
+              {!goal.is_family_goal && (
                 <>
                   <Link to={`/goals/${goal.id}/edit`} className="dropdown-item">
                     <i className="fas fa-edit fa-fw mr-2 text-gray-400"></i>Edit Goal
@@ -78,7 +85,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onDeleteGoal }) => {
                 </>
               )}
               {/* Allow editing shared goals if user is the owner */}
-              {goal.is_shared && goal.user_id === user?.id && (
+              {goal.is_family_goal && goal.user_id === user?.id && (
                 <>
                   <Link to={`/goals/${goal.id}/edit`} className="dropdown-item">
                     <i className="fas fa-edit fa-fw mr-2 text-gray-400"></i>Edit Goal
@@ -97,7 +104,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onDeleteGoal }) => {
         </div>
         <div className="card-body pt-2 d-flex flex-column">
           {/* Shared Goal Indicator */}
-          {goal.is_shared && (
+          {goal.is_family_goal && (
             <div className="mb-2">
               {goal.shared_by_name && (
                 <span className="badge badge-light ml-1">
@@ -149,7 +156,7 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onDeleteGoal }) => {
 
           <div className="d-flex justify-content-between mb-3">
             <small className="text-gray-600">{formatPercentage(progressPercentage)} Complete</small>
-            <small className="text-gray-600">{formatCurrency(goal.remaining)} left</small>
+            <small className="text-gray-600">{formatCurrency(goal.remaining ?? Math.max(0, goal.target_amount - goal.current_amount))} left</small>
           </div>
 
           {goal.status !== "completed" && goal.status !== "cancelled" && daysLeft > 0 && (
@@ -171,6 +178,9 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onDeleteGoal }) => {
               <i className="fas fa-eye mr-1"></i> View Details
             </Link>
           </div>
+          
+          {/* Debug info for development */}
+          <GoalDebugInfo goal={goal} />
         </div>
       </div>
     </div>

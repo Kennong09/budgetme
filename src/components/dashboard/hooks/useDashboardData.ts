@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../utils/AuthContext';
 import { useToast } from '../../../utils/ToastContext';
 import { supabase } from '../../../utils/supabaseClient';
+import { EnhancedTransactionService } from '../../../services/database/enhancedTransactionService';
 import { getCurrentMonthDates } from '../../../utils/helpers';
 import {
   UserData,
@@ -29,13 +30,27 @@ export const useDashboardData = () => {
   const [pendingInvites, setPendingInvites] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const fetchUserData = async () => {
+  // Request deduplication
+  const fetchInProgress = useRef(false);
+  const lastFetchTime = useRef(0);
+  const FETCH_COOLDOWN = 2000; // 2 seconds minimum between fetches
+
+  const fetchUserData = useCallback(async () => {
     if (!user) {
       navigate("/");
       return;
     }
 
+    // Prevent duplicate requests
+    const now = Date.now();
+    if (fetchInProgress.current || (now - lastFetchTime.current < FETCH_COOLDOWN)) {
+      console.log('Fetch request deduplication: skipping duplicate or too frequent request');
+      return;
+    }
+
     try {
+      fetchInProgress.current = true;
+      lastFetchTime.current = now;
       setLoading(true);
       
       // Fetch user's accounts
@@ -82,46 +97,99 @@ export const useDashboardData = () => {
         throw goalsError;
       }
       
-      // Fetch recent transactions (limited to 50)
-      const { data: transactionsData, error: transactionsError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false })
-        .limit(50);
+      // Fetch recent transactions using EnhancedTransactionService for proper category mapping
+      const transactionResult = await EnhancedTransactionService.fetchTransactionsWithMapping(
+        user.id,
+        { limit: 50 } // Get recent 50 transactions
+      );
       
-      if (transactionsError) {
-        console.error('Error fetching transactions:', transactionsError);
-        throw transactionsError;
+      if (!transactionResult.success) {
+        console.error('Error fetching transactions:', transactionResult.error);
+        throw new Error(transactionResult.error || 'Failed to fetch transactions');
       }
+      
+      const transactionsData = transactionResult.data || [];
 
-      // Fetch budget progress data
+      // Fetch budget progress data with improved error handling and multiple fallback patterns
       let budgetsData: BudgetData[] | null = null;
       let budgetsError = null;
       
+      // Try multiple different budget table structures and relationships
       try {
-        const result = await supabase
-          .from('budget_details')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('percentage', { ascending: false });
-        
-        budgetsData = result.data;
-        budgetsError = result.error;
-      } catch (err) {
-        console.error('Error in budget details query:', err);
-        
-        // Try alternative query if view doesn't exist
-        const fallbackResult = await supabase
+        // Attempt 1: Try budgets table with budget_categories relationship
+        const result1 = await supabase
           .from('budgets')
           .select(`
             *,
-            expense_categories!budgets_category_id_fkey(category_name)
+            budget_categories!budgets_category_id_fkey(category_name)
           `)
           .eq('user_id', user.id);
         
-        budgetsData = fallbackResult.data;
-        budgetsError = fallbackResult.error;
+        if (!result1.error && result1.data) {
+          budgetsData = result1.data;
+          console.log('Successfully fetched budgets from budgets table with budget_categories');
+        } else {
+          throw new Error('Budget_categories relationship not found');
+        }
+      } catch (err1) {
+        console.log('Attempt 1 failed, trying expense_categories relationship:', err1);
+        
+        try {
+          // Attempt 2: Try budgets table with expense_categories relationship (legacy)
+          const result2 = await supabase
+            .from('budgets')
+            .select(`
+              *,
+              expense_categories!budgets_category_id_fkey(category_name)
+            `)
+            .eq('user_id', user.id);
+          
+          if (!result2.error && result2.data) {
+            budgetsData = result2.data;
+            console.log('Successfully fetched budgets from budgets table with expense_categories');
+          } else {
+            throw new Error('Expense_categories relationship not found');
+          }
+        } catch (err2) {
+          console.log('Attempt 2 failed, trying budgets table without relationships:', err2);
+          
+          try {
+            // Attempt 3: Try budgets table without foreign key relationships
+            const result3 = await supabase
+              .from('budgets')
+              .select('*')
+              .eq('user_id', user.id);
+            
+            if (!result3.error && result3.data) {
+              budgetsData = result3.data;
+              console.log('Successfully fetched budgets from budgets table without relationships');
+            } else {
+              throw new Error('Budgets table not accessible');
+            }
+          } catch (err3) {
+            console.log('Attempt 3 failed, trying budget_details view:', err3);
+            
+            try {
+              // Attempt 4: Try budget_details view as fallback
+              const result4 = await supabase
+                .from('budget_details')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('percentage', { ascending: false });
+              
+              if (!result4.error && result4.data) {
+                budgetsData = result4.data;
+                console.log('Successfully fetched budgets from budget_details view');
+              } else {
+                throw new Error('Budget_details view not accessible');
+              }
+            } catch (err4) {
+              console.log('All budget query attempts failed, continuing without budget data:', err4);
+              budgetsData = [];
+              budgetsError = null; // Don't treat as error, just no data available
+            }
+          }
+        }
       }
       
       if (budgetsError) {
@@ -183,11 +251,12 @@ export const useDashboardData = () => {
       showErrorToast(error.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
+      fetchInProgress.current = false;
     }
-  };
+  }, [user, navigate, showErrorToast]);
 
-  // Helper function to fetch pending invitations
-  const fetchPendingInvitations = async (userId: string): Promise<Invitation[]> => {
+  // Memoized helper function to fetch pending invitations
+  const fetchPendingInvitations = useCallback(async (userId: string): Promise<Invitation[]> => {
     let formattedInvitations: Invitation[] = [];
     
     try {
@@ -252,10 +321,10 @@ export const useDashboardData = () => {
     }
     
     return formattedInvitations;
-  };
+  }, []);
 
-  // Helper function to format budget data
-  const formatBudgetData = (budgetsData: BudgetData[]): BudgetItem[] => {
+  // Memoized helper function to format budget data
+  const formatBudgetData = useCallback((budgetsData: BudgetData[]): BudgetItem[] => {
     return budgetsData.map(budget => {
       // Calculate status based on percentage
       let status: "success" | "warning" | "danger" = "success";
@@ -274,12 +343,24 @@ export const useDashboardData = () => {
         remaining = budget.remaining || 0;
         category = budget.category_name || '';
       } else {
-        // Data from budgets table with joined categories
+        // Data from budgets table with or without joined categories
         amount = budget.amount || 0;
         spent = budget.spent || 0;
         remaining = amount - spent;
         percentage = amount > 0 ? (spent / amount) * 100 : 0;
-        category = budget.expense_categories?.category_name || budget.name || '';
+        
+        // Try different category name sources based on available relationships
+        if (budget.budget_categories?.category_name) {
+          category = budget.budget_categories.category_name;
+        } else if (budget.expense_categories?.category_name) {
+          category = budget.expense_categories.category_name;
+        } else if (budget.category_name) {
+          category = budget.category_name;
+        } else if (budget.name) {
+          category = budget.name;
+        } else {
+          category = `Budget ${budget.id || 'Unknown'}`;
+        }
       }
       
       if (percentage >= 100) {
@@ -299,10 +380,10 @@ export const useDashboardData = () => {
         status: status
       };
     });
-  };
+  }, []);
 
-  // Handle invitation actions
-  const handleAcceptInvite = async (inviteId: number) => {
+  // Handle invitation actions with stable callbacks
+  const handleAcceptInvite = useCallback(async (inviteId: number) => {
     if (!user) {
       showErrorToast('You must be logged in to accept invitations');
       return;
@@ -338,15 +419,15 @@ export const useDashboardData = () => {
       if (memberError) throw memberError;
       
       // Update state
-      setPendingInvites(pendingInvites.filter(inv => inv.id !== inviteId));
+      setPendingInvites(current => current.filter(inv => inv.id !== inviteId));
       
     } catch (error: any) {
       console.error('Error accepting invitation:', error);
       showErrorToast(error.message || 'Failed to accept invitation');
     }
-  };
+  }, [user, showErrorToast]);
 
-  const handleRejectInvite = async (inviteId: number) => {
+  const handleRejectInvite = useCallback(async (inviteId: number) => {
     if (!user) {
       showErrorToast('You must be logged in to reject invitations');
       return;
@@ -362,13 +443,13 @@ export const useDashboardData = () => {
       if (error) throw error;
       
       // Update state
-      setPendingInvites(pendingInvites.filter(inv => inv.id !== inviteId));
+      setPendingInvites(current => current.filter(inv => inv.id !== inviteId));
       
     } catch (error: any) {
       console.error('Error rejecting invitation:', error);
       showErrorToast(error.message || 'Failed to reject invitation');
     }
-  };
+  }, [user, showErrorToast]);
 
   // Fetch data on mount
   useEffect(() => {

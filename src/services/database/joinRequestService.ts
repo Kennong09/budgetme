@@ -318,7 +318,7 @@ class JoinRequestService {
       const userIds = requests.map(req => req.user_id);
       const { data: users, error: usersError } = await supabase
         .from('profiles')
-        .select('id, email, user_metadata')
+        .select('id, email, full_name, avatar_url')
         .in('id', userIds);
 
       if (usersError) {
@@ -338,12 +338,11 @@ class JoinRequestService {
         return {
           ...request,
           family_name: family?.family_name,
-          user_name: user?.user_metadata?.username || 
-                    user?.user_metadata?.full_name || 
+          user_name: user?.full_name || 
                     user?.email?.split('@')[0] || 
                     'Unknown',
           user_email: user?.email,
-          user_avatar: user?.user_metadata?.avatar_url
+          user_avatar: user?.avatar_url
         };
       });
 

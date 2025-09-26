@@ -20,6 +20,7 @@ interface GoalsTabProps {
   fetchGoalContributions: (goalId: string) => void;
   toggleTip: (tipId: string, event?: React.MouseEvent) => void;
   getRemainingDays: (targetDate: string) => number;
+  onRefresh?: () => void; // Add refresh callback
 }
 
 const GoalsTab: React.FC<GoalsTabProps> = ({
@@ -36,7 +37,8 @@ const GoalsTab: React.FC<GoalsTabProps> = ({
   openContributeModal,
   fetchGoalContributions,
   toggleTip,
-  getRemainingDays
+  getRemainingDays,
+  onRefresh
 }) => {
   if (loadingFamilyGoals) {
     return (
@@ -54,8 +56,23 @@ const GoalsTab: React.FC<GoalsTabProps> = ({
   return (
     <div className="animate__animated animate__fadeIn">
       <div className="mb-4">
-        <h5 className="text-primary font-weight-bold">Family Goals Overview</h5>
-        <p className="text-muted">Track and contribute to shared financial goals</p>
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <h5 className="text-primary font-weight-bold mb-1">Family Goals Overview</h5>
+            <p className="text-muted mb-0">Track and contribute to shared financial goals</p>
+          </div>
+          {onRefresh && (
+            <button 
+              className="btn btn-sm btn-outline-primary"
+              onClick={onRefresh}
+              disabled={loadingFamilyGoals}
+              title="Refresh family goals"
+            >
+              <i className={`fas ${loadingFamilyGoals ? "fa-spinner fa-spin" : "fa-sync"} mr-1`}></i>
+              Refresh
+            </button>
+          )}
+        </div>
       </div>
 
       {familyGoals.length > 0 ? (

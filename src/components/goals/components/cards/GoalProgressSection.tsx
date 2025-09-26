@@ -60,6 +60,7 @@ const GoalProgressSection: React.FC<GoalProgressSectionProps> = ({
               </div>
               <div 
                 className="progress mb-4 position-relative"
+                style={{ height: '8px' }}
                 onMouseEnter={() => setHoveringBar(true)}
                 onMouseLeave={() => setHoveringBar(false)}
               >

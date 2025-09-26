@@ -419,7 +419,7 @@ export const prepareContributionChartData = (contributions: any[]): any => {
   // Group contributions by member
   const memberContributions = new Map<string, number>();
   contributions.forEach(c => {
-    const memberName = c.user?.user_metadata?.username || c.user?.user_metadata?.full_name || "Unknown";
+    const memberName = c.user?.full_name || c.user?.email || "Unknown";
     const current = memberContributions.get(memberName) || 0;
     memberContributions.set(memberName, current + c.amount);
   });
@@ -475,7 +475,7 @@ export const prepareContributionPieChartData = (contributions: any[]): any => {
   // Group contributions by member
   const memberContributions = new Map<string, number>();
   contributions.forEach(c => {
-    const memberName = c.user?.user_metadata?.username || c.user?.user_metadata?.full_name || "Unknown";
+    const memberName = c.user?.full_name || c.user?.email || "Unknown";
     const current = memberContributions.get(memberName) || 0;
     memberContributions.set(memberName, current + c.amount);
   });

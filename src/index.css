@@ -5,6 +5,7 @@
 
 /* Import base styles */
 @import './components/featureDetails/featureDetails.css';
+@import './assets/css/selector-components.css';
 
 :root {
   --primary-color: #6366f1; /* Indigo */
@@ -422,6 +423,7 @@ body {
 .transaction-list {
   display: flex;
   flex-direction: column;
+  background-color: #fff !important;
 }
 
 .transaction-item {
@@ -429,11 +431,14 @@ body {
   align-items: center;
   padding: 1rem;
   border-bottom: 1px solid var(--border-color);
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
+  background-color: #fff !important;
 }
 
 .transaction-item:hover {
-  background-color: rgba(99, 102, 241, 0.05);
+  background-color: #fff !important;
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+  transform: translateY(-2px);
 }
 
 .transaction-item:last-child {

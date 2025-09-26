@@ -4,6 +4,7 @@ import { formatCurrency, formatDate } from "../../utils/helpers";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { EnhancedTransactionService } from "../../services/database/enhancedTransactionService";
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
 import "animate.css";
@@ -12,8 +13,8 @@ interface Transaction {
   id: string;
   date: string;
   amount: number;
-  notes: string;
-  type: "income" | "expense";
+  description: string;
+  type: "income" | "expense" | "contribution";
   category_id?: string;
   account_id: string;
   goal_id?: string;
@@ -93,24 +94,17 @@ const TransactionDetails: FC = () => {
     try {
       setLoading(true);
 
-      // Fetch transaction details
-      const { data: transactionData, error: transactionError } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (transactionError) throw transactionError;
+      // Fetch transaction details using EnhancedTransactionService for proper category mapping
+      const transactionResult = await EnhancedTransactionService.fetchTransactionForEdit(id, user.id);
+      
+      if (!transactionResult.success) {
+        throw new Error(transactionResult.error || 'Failed to fetch transaction');
+      }
+      
+      const transactionData = transactionResult.data;
       
       if (!transactionData) {
         setLoading(false);
-        return;
-      }
-      
-      // Verify the user has permission to view this transaction
-      if (transactionData.user_id !== user.id) {
-        showErrorToast("You don't have permission to view this transaction");
-        navigate('/transactions');
         return;
       }
 
@@ -156,20 +150,22 @@ const TransactionDetails: FC = () => {
       if (goalsError) throw goalsError;
       setGoals(goalsData || []);
       
-      // Find related transactions (same category or account)
+      // Find related transactions (same category or account) using enhanced service
       if (transactionData.category_id) {
-        const { data: relatedData, error: relatedError } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('category_id', transactionData.category_id)
-          .eq('type', transactionData.type)
-          .neq('id', id)
-          .order('date', { ascending: false })
-          .limit(5);
+        const relatedResult = await EnhancedTransactionService.fetchTransactionsWithMapping(
+          user.id,
+          {
+            type: transactionData.type,
+            category_id: transactionData.category_id,
+            limit: 5
+          }
+        );
         
-        if (relatedError) throw relatedError;
-        setRelatedTransactions(relatedData || []);
+        if (relatedResult.success) {
+          // Filter out the current transaction from related results
+          const relatedData = (relatedResult.data || []).filter(tx => tx.id !== id);
+          setRelatedTransactions(relatedData);
+        }
       }
       
       // Create chart configurations with the fetched data
@@ -255,7 +251,9 @@ const TransactionDetails: FC = () => {
       : null;
     
     // Create category spending chart (pie chart)
-    const categoryName = category ? category.category_name : 'Uncategorized';
+    const categoryName = transaction.type === 'contribution' 
+      ? (transaction.goal_id ? 'Goal Contribution' : 'Contribution')
+      : (category ? category.category_name : 'Uncategorized');
     
     // For now, we'll use related transactions for category transactions
     const categoryTransactions = relatedTransactions.concat(transaction);
@@ -601,6 +599,11 @@ const TransactionDetails: FC = () => {
   const category = transaction.category_id
     ? categories[transaction.type === 'income' ? 'income' : 'expense'].find(c => c.id === transaction.category_id)
     : null;
+    
+  // Special handling for contribution transactions to ensure proper category display
+  const displayCategory = transaction.type === 'contribution' 
+    ? (transaction.goal_id ? 'Goal Contribution' : 'Contribution')
+    : (category ? category.category_name : 'Uncategorized');
   const account = accounts.find(a => a.id === transaction.account_id);
 
   // Get goal information if applicable
@@ -643,7 +646,7 @@ const TransactionDetails: FC = () => {
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
                   <div className={`text-xs font-weight-bold text-${colorClass} text-uppercase mb-1 d-flex align-items-center`}>
-                    {transaction.type === "income" ? "Income" : "Expense"} Amount
+                    {transaction.type === "income" ? "Income" : transaction.type === "contribution" ? "Contribution" : "Expense"} Amount
                     <div className="ml-2 position-relative">
                       <i 
                         className="fas fa-info-circle text-gray-400 cursor-pointer" 
@@ -681,7 +684,14 @@ const TransactionDetails: FC = () => {
                     </div>
                   </div>
                   <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {category ? category.category_name : "Uncategorized"}
+                    {category || transaction.type === 'contribution' ? (
+                      displayCategory
+                    ) : (
+                      <span className="text-warning">
+                        <i className="fas fa-exclamation-triangle mr-1"></i>
+                        Uncategorized
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="col-auto">
@@ -745,14 +755,18 @@ const TransactionDetails: FC = () => {
                   ></i>
                 </div>
               </h6>
-              <div className={`badge badge-${colorClass}`}>{transaction.type}</div>
+              <div className={`badge ${transaction.type === 'contribution' ? 'badge-info' : `badge-${colorClass}`}`}>{transaction.type}</div>
             </div>
             <div className="card-body">
               <div className="mb-4">
                 <div className="mb-2">
                   <h4 className="small font-weight-bold">Description</h4>
                   <div className="p-3 bg-light rounded">
-                    <p className="mb-0 text-gray-700">{transaction.notes}</p>
+                    {transaction.description && transaction.description.trim() ? (
+                      <p className="mb-0 text-gray-700">{transaction.description}</p>
+                    ) : (
+                      <p className="mb-0 text-muted font-italic">No description provided</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -822,7 +836,7 @@ const TransactionDetails: FC = () => {
                   </div>
                 </h6>
                 <p className="small text-gray-600 mb-3">
-                  How this {transaction.type === 'income' ? 'income' : 'expense'} compares to other transactions in the same category
+                  How this {transaction.type === 'income' ? 'income' : transaction.type === 'contribution' ? 'contribution' : 'expense'} compares to other transactions in the same category
                 </p>
                 {highchartsLoaded && impactChartOptions && (
                   <div className="chart-area">
@@ -866,7 +880,13 @@ const TransactionDetails: FC = () => {
                             <td className={tx.type === 'income' ? 'text-success' : 'text-danger'}>
                               {formatCurrency(tx.amount)}
                             </td>
-                            <td>{tx.notes}</td>
+                            <td>
+                              {tx.description && tx.description.trim() ? (
+                                tx.description
+                              ) : (
+                                <span className="text-muted font-italic">No description</span>
+                              )}
+                            </td>
                             <td>
                               <Link to={`/transactions/${tx.id}`} className="btn btn-sm btn-primary">
                                 <i className="fas fa-eye fa-sm"></i>
@@ -946,7 +966,7 @@ const TransactionDetails: FC = () => {
                 </div>
                 <div>
                   <div className="small text-gray-500">Transaction Type</div>
-                  <div className={`font-weight-bold text-${colorClass}`}>
+                  <div className={`font-weight-bold ${transaction.type === 'contribution' ? 'text-info' : `text-${colorClass}`}`}>
                     {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
                   </div>
                 </div>

@@ -23,7 +23,13 @@ export const applyTransactionFilters = (
 
   // Filter by category
   if (filter.categoryId !== "all") {
-    result = result.filter((tx) => tx.category_id && tx.category_id === filter.categoryId);
+    if (filter.categoryId === "uncategorized") {
+      // Show only transactions without a category_id or with invalid category_id
+      result = result.filter((tx) => !tx.category_id);
+    } else {
+      // Show only transactions with the specified category_id
+      result = result.filter((tx) => tx.category_id && tx.category_id === filter.categoryId);
+    }
   }
   
   // Filter by goal_id if provided
@@ -60,7 +66,7 @@ export const applyTransactionFilters = (
   if (filter.search.trim() !== "") {
     const searchLower = filter.search.toLowerCase();
     result = result.filter((tx) =>
-      tx.notes.toLowerCase().includes(searchLower)
+      tx.description.toLowerCase().includes(searchLower)
     );
   }
 
@@ -91,12 +97,19 @@ export const calculateSummaryMetrics = (transactions: Transaction[]) => {
     .filter(tx => tx.type === 'expense')
     .reduce((sum, tx) => sum + tx.amount, 0);
     
-  const netCashflow = totalIncome - totalExpenses;
-  const expensesRatio = totalIncome > 0 ? (totalExpenses / totalIncome) * 100 : 0;
+  const totalContributions = transactions
+    .filter(tx => tx.type === 'contribution')
+    .reduce((sum, tx) => sum + tx.amount, 0);
+    
+  // Contributions are effectively expenses but tracked separately for goal progress
+  const totalExpensesIncludingContributions = totalExpenses + totalContributions;
+  const netCashflow = totalIncome - totalExpensesIncludingContributions;
+  const expensesRatio = totalIncome > 0 ? (totalExpensesIncludingContributions / totalIncome) * 100 : 0;
 
   return {
     totalIncome,
-    totalExpenses,
+    totalExpenses: totalExpensesIncludingContributions,
+    totalContributions,
     netCashflow,
     expensesRatio
   };
@@ -124,7 +137,7 @@ export const getPeriodTitle = (filter: FilterState): string => {
  */
 export const getCategoryName = (
   categoryId?: string, 
-  type?: "income" | "expense", 
+  type?: "income" | "expense" | "contribution", 
   userData?: UserData | null
 ): string => {
   if (!categoryId || !userData) return "Uncategorized";
@@ -133,7 +146,8 @@ export const getCategoryName = (
   if (type === "income") {
     const category = userData.incomeCategories.find(c => c.id === categoryId);
     return category ? category.category_name : "Uncategorized";
-  } else if (type === "expense") {
+  } else if (type === "expense" || type === "contribution") {
+    // Both expense and contribution use expense categories
     const category = userData.expenseCategories.find(c => c.id === categoryId);
     return category ? category.category_name : "Uncategorized";
   }
@@ -163,8 +177,8 @@ export const getAccountName = (accountId: string, userData?: UserData | null): s
 export const getTransactionTypeFromCategory = (
   categoryId: string, 
   userData?: UserData | null,
-  currentType?: "income" | "expense" | "all"
-): "income" | "expense" | "all" => {
+  currentType?: "income" | "expense" | "contribution" | "all"
+): "income" | "expense" | "contribution" | "all" => {
   if (!userData) return "all";
   
   // Check both income and expense categories
@@ -174,7 +188,7 @@ export const getTransactionTypeFromCategory = (
   // Handle the case where the category ID exists in both income and expense categories
   if (incomeCategory && expenseCategory) {
     // Use the current filter type to resolve ambiguity
-    if (currentType === "income" || currentType === "expense") {
+    if (currentType === "income" || currentType === "expense" || currentType === "contribution") {
       return currentType;
     }
     
@@ -243,7 +257,7 @@ export const prepareChartData = (
         
         if (tx.type === 'income') {
           incomeData[day] += tx.amount;
-        } else {
+        } else if (tx.type === 'expense' || tx.type === 'contribution') {
           expenseData[day] += tx.amount;
         }
       }
@@ -266,7 +280,7 @@ export const prepareChartData = (
         
         if (tx.type === 'income') {
           incomeData[month] += tx.amount;
-        } else {
+        } else if (tx.type === 'expense' || tx.type === 'contribution') {
           expenseData[month] += tx.amount;
         }
       }
@@ -292,7 +306,7 @@ export const prepareChartData = (
         if (yearIndex >= 0) {
           if (tx.type === 'income') {
             incomeData[yearIndex] += tx.amount;
-          } else {
+          } else if (tx.type === 'expense' || tx.type === 'contribution') {
             expenseData[yearIndex] += tx.amount;
           }
         }
@@ -316,7 +330,7 @@ export const prepareChartData = (
       if (yearIndex >= 0) {
         if (tx.type === 'income') {
           incomeData[yearIndex] += tx.amount;
-        } else {
+        } else if (tx.type === 'expense' || tx.type === 'contribution') {
           expenseData[yearIndex] += tx.amount;
         }
       }
@@ -376,13 +390,20 @@ export const prepareChartData = (
   // Group transactions by category for the pie chart
   const expensesByCategory: {[key: string]: number} = {};
   txData.forEach(tx => {
-    if (tx.type === 'expense' && tx.category_id) {
+    if (tx.type === 'expense' || tx.type === 'contribution') {
       // Find category name using the category_id
       let categoryName = 'Uncategorized';
       
-      const category = userData.expenseCategories.find(cat => cat.id === tx.category_id);
-      if (category) {
-        categoryName = category.category_name;
+      if (tx.category_id) {
+        const category = userData.expenseCategories.find(cat => cat.id === tx.category_id);
+        if (category) {
+          categoryName = category.category_name;
+        }
+      }
+      
+      // Special handling for contribution transactions
+      if (tx.type === 'contribution') {
+        categoryName = tx.goal_id ? `Goal Contribution` : 'Contribution';
       }
       
       if (!expensesByCategory[categoryName]) {

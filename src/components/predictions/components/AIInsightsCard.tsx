@@ -158,7 +158,7 @@ const AIInsightsCard: FC<AIInsightsCardProps> = ({
         timeframe: timeframe === '3months' ? 'months_3' as const : 
                    timeframe === '6months' ? 'months_6' as const : 
                    'year_1' as const,
-        customPrompt: `Provide specific financial advice and recommendations for a user with the following profile. Focus on actionable insights about spending optimization, savings strategies, and investment opportunities. Use the OpenRouter API with openai/gpt-oss-20b:free model to generate personalized advice.`
+        customPrompt: `Provide specific financial advice and recommendations for a user with the following profile. Focus on actionable insights about spending optimization, savings strategies, and investment opportunities. Use the OpenRouter API with openai/gpt-oss-120b:free model to generate personalized advice.`
       };
       
       const response = await AIInsightsService.generateInsights(request);

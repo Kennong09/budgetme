@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { supabase } from '../../../utils/supabaseClient';
 import { Goal } from '../types';
 import { prepareSharedGoalPerformanceData, prepareSharedGoalBreakdownData } from '../utils/chartUtils';
@@ -19,6 +19,26 @@ export const useFamilyGoals = (showErrorToast: (message: string) => void): UseFa
   const [loadingFamilyGoals, setLoadingFamilyGoals] = useState<boolean>(false);
   const [sharedGoalPerformanceChartData, setSharedGoalPerformanceChartData] = useState<any | null>(null);
   const [sharedGoalBreakdownChartData, setSharedGoalBreakdownChartData] = useState<any | null>(null);
+
+  // Memoize processed goals to prevent unnecessary re-renders
+  const memoizedFamilyGoals = useMemo(() => {
+    return familyGoals.map(goal => ({
+      ...goal,
+      current_amount: goal.current_amount || 0,
+      target_amount: goal.target_amount || 0,
+      status: goal.status || 'active',
+      percentage: goal.target_amount > 0 ? Math.round((goal.current_amount || 0) / goal.target_amount * 100) : 0
+    }));
+  }, [familyGoals]);
+
+  // Memoize chart data to prevent unnecessary recalculations
+  const memoizedGoalPerformanceChartData = useMemo(() => {
+    return sharedGoalPerformanceChartData;
+  }, [sharedGoalPerformanceChartData]);
+
+  const memoizedGoalBreakdownChartData = useMemo(() => {
+    return sharedGoalBreakdownChartData;
+  }, [sharedGoalBreakdownChartData]);
 
   const fetchFamilyGoals = useCallback(async (familyId: string) => {
     if (!familyId) return;
@@ -61,10 +81,10 @@ export const useFamilyGoals = (showErrorToast: (message: string) => void): UseFa
   }, [showErrorToast]);
 
   return {
-    familyGoals,
+    familyGoals: memoizedFamilyGoals,
     loadingFamilyGoals,
-    sharedGoalPerformanceChartData,
-    sharedGoalBreakdownChartData,
+    sharedGoalPerformanceChartData: memoizedGoalPerformanceChartData,
+    sharedGoalBreakdownChartData: memoizedGoalBreakdownChartData,
     setSharedGoalPerformanceChartData,
     setSharedGoalBreakdownChartData,
     fetchFamilyGoals,

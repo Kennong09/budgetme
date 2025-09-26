@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import JoinFamily from './JoinFamily';
+import PendingInvitations from './PendingInvitations';
 
 interface NoFamilyHandlerProps {
   onJoinSuccess: () => void;
@@ -8,9 +9,9 @@ interface NoFamilyHandlerProps {
 
 const NoFamilyHandler: React.FC<NoFamilyHandlerProps> = ({ onJoinSuccess }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'create' | 'join'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'join' | 'invitations'>('create');
 
-  const handleTabChange = (tab: 'create' | 'join') => {
+  const handleTabChange = (tab: 'create' | 'join' | 'invitations') => {
     setActiveTab(tab);
   };
 
@@ -54,6 +55,15 @@ const NoFamilyHandler: React.FC<NoFamilyHandlerProps> = ({ onJoinSuccess }) => {
                 <i className="fas fa-sign-in-alt mr-1" /> Join Family
               </button>
             </li>
+            <li className="nav-item">
+              <button 
+                type="button"
+                className={`nav-link btn btn-link ${activeTab === "invitations" ? "active" : ""}`} 
+                onClick={() => handleTabChange("invitations")}
+              >
+                <i className="fas fa-envelope mr-1" /> Invitations
+              </button>
+            </li>
           </ul>
         </div>
         
@@ -64,6 +74,10 @@ const NoFamilyHandler: React.FC<NoFamilyHandlerProps> = ({ onJoinSuccess }) => {
           
           {activeTab === 'join' && (
             <JoinFamilyTab onJoinSuccess={onJoinSuccess} />
+          )}
+          
+          {activeTab === 'invitations' && (
+            <InvitationsTab onAcceptSuccess={onJoinSuccess} />
           )}
         </div>
       </div>
@@ -157,6 +171,15 @@ const JoinFamilyTab: React.FC<{ onJoinSuccess: () => void }> = ({ onJoinSuccess 
       </div>
       
       <JoinFamily onJoinSuccess={onJoinSuccess} />
+    </div>
+  );
+};
+
+// Invitations Tab Component
+const InvitationsTab: React.FC<{ onAcceptSuccess: () => void }> = ({ onAcceptSuccess }) => {
+  return (
+    <div>
+      <PendingInvitations onAcceptSuccess={onAcceptSuccess} />
     </div>
   );
 };

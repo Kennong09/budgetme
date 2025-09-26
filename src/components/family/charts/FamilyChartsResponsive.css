@@ -1,0 +1,162 @@
+/* Family Charts Responsive Styles */
+
+/* Mobile-first responsive design */
+@media (max-width: 767.98px) {
+  .responsive-chart-container {
+    height: 300px !important;
+    padding: 10px !important;
+    margin-bottom: 1rem;
+  }
+  
+  .responsive-kpi-card .card-body {
+    padding: 12px !important;
+  }
+  
+  .responsive-kpi-card h6 {
+    font-size: 12px !important;
+  }
+  
+  .responsive-kpi-card h4 {
+    font-size: 20px !important;
+  }
+  
+  .responsive-kpi-card .badge {
+    font-size: 8px !important;
+    padding: 2px 6px !important;
+  }
+  
+  .responsive-kpi-card small {
+    font-size: 10px !important;
+  }
+  
+  .responsive-kpi-card .fa-2x {
+    font-size: 1.5em !important;
+  }
+}
+
+/* Tablet optimization */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .responsive-chart-container {
+    height: 350px !important;
+    padding: 12px !important;
+  }
+  
+  .responsive-kpi-card .card-body {
+    padding: 14px !important;
+  }
+  
+  .responsive-kpi-card h6 {
+    font-size: 13px !important;
+  }
+  
+  .responsive-kpi-card h4 {
+    font-size: 22px !important;
+  }
+}
+
+/* Large screen optimization */
+@media (min-width: 1024px) {
+  .responsive-chart-container {
+    min-height: 400px;
+  }
+  
+  .responsive-kpi-card {
+    transition: transform 0.2s ease-in-out;
+  }
+  
+  .responsive-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+  }
+}
+
+/* Family dashboard specific styles */
+.family-dashboard-charts {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.family-dashboard-charts .card {
+  border: none;
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+  transition: all 0.3s;
+}
+
+.family-dashboard-charts .progress {
+  border-radius: 2px;
+  background-color: #e9ecef;
+}
+
+.family-dashboard-charts .progress-bar {
+  border-radius: 2px;
+}
+
+/* Animation for chart loading */
+.chart-loading {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Status badges consistency */
+.status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+/* Goal progress cards */
+.goal-progress-card {
+  transition: transform 0.2s ease-in-out;
+  border: none;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.goal-progress-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Connection status indicator */
+.connection-status {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Insights section */
+.insights-section {
+  background-color: #f8f9fc;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.insights-section h6 {
+  color: #5a5c69;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.insights-section .list-unstyled li {
+  margin-bottom: 0.5rem;
+  font-size: 13px;
+}
+
+/* Responsive font sizes */
+@media (max-width: 575.98px) {
+  .insights-section {
+    padding: 0.75rem;
+  }
+  
+  .insights-section h6 {
+    font-size: 14px;
+  }
+  
+  .insights-section .list-unstyled li {
+    font-size: 12px;
+  }
+}

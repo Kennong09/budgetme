@@ -198,7 +198,59 @@ h6 {
 
 /* Animated Icons */
 .fa-2x {
+  transition: transform 0.3s ease;
+}
+
+.fa-2x:hover {
+  transform: scale(1.1);
+}
+
+/* Financial Insights Animations */
+.insight-card {
   transition: all 0.3s ease;
+}
+
+.insight-card.refreshing {
+  animation: insightRefresh 0.6s ease;
+}
+
+@keyframes insightRefresh {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.refresh-btn {
+  transition: transform 0.2s ease;
+}
+
+.refresh-btn:hover {
+  transform: rotate(180deg);
+}
+
+.insight-action {
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: 0.5rem;
+  display: inline-block;
+  transition: color 0.2s ease;
+}
+
+.insight-action:hover {
+  color: var(--primary-dark, #4f46e5);
+  text-decoration: underline;
 }
 
 .card:hover .fa-2x {
@@ -418,23 +470,45 @@ a {
 }
 
 /* Transaction styles */
+.transaction-list {
+  background-color: #fff !important;
+}
+
+/* Recent transactions card specific styling */
+.recent-transactions .card-body {
+  background-color: #fff !important;
+  padding: 0;
+}
+
+.recent-transactions .transaction-list {
+  background-color: #fff !important;
+  padding: 0;
+}
+
 .transaction-item {
   display: flex;
   align-items: center;
   padding: 1rem;
-  margin-bottom: 0.5rem;
-  border-radius: 0.5rem;
-  background-color: #fff;
-  transition: background-color 0.2s;
+  margin-bottom: 0;
+  border-radius: 0;
+  background-color: #fff !important;
+  transition: all 0.2s ease;
   text-decoration: none;
   color: inherit;
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.transaction-item:last-child {
+  border-bottom: none;
 }
 
 .transaction-item:hover {
-  background-color: #f8f9fc;
+  background-color: #fff !important;
   text-decoration: none;
   color: inherit;
+  box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+  transform: translateY(-2px);
 }
 
 .transaction-icon {

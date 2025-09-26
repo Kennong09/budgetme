@@ -11,7 +11,7 @@ import "animate.css";
 
 interface InviteFormData {
   email: string;
-  role: "admin" | "viewer";
+  role: "admin" | "member" | "viewer";
   message: string;
 }
 
@@ -34,7 +34,7 @@ const InviteFamilyMember: FC = () => {
 
   const initialFormState: InviteFormData = {
     email: "",
-    role: "viewer",
+    role: "member",
     message: "You're invited to join our family on BudgetMe!",
   };
 
@@ -146,7 +146,7 @@ const InviteFamilyMember: FC = () => {
       await invitationService.sendInvitation(
         {
           family_id: userFamily.id,
-          invited_email: invite.email,
+          email: invite.email,
           role: invite.role,
           message: invite.message
         },
@@ -157,22 +157,65 @@ const InviteFamilyMember: FC = () => {
       navigate("/family");
     } catch (err) {
       console.error('Error sending invitation:', err);
-      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
       
-      // Provide more specific error messages
-      if (errorMessage.includes('already invited') || errorMessage.includes('duplicate')) {
-        setError('This user has already been invited to your family.');
-        showErrorToast('This user has already been invited to your family.');
-      } else if (errorMessage.includes('not found') || errorMessage.includes('invalid email')) {
-        setError('User not found. Please ensure the email address is correct and the user has an account.');
-        showErrorToast('User not found. Please ensure the email address is correct and the user has an account.');
-      } else if (errorMessage.includes('permission') || errorMessage.includes('not authorized')) {
-        setError('You do not have permission to invite members to this family.');
-        showErrorToast('You do not have permission to invite members to this family.');
+      // Enhanced error handling with classification
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
+      const classification = (err as any)?.classification;
+      
+      if (classification) {
+        console.log('Error classification:', classification);
+        
+        // Use classified error messages
+        setError(classification.userMessage);
+        
+        // Show appropriate toast based on error type
+        if (classification.canRetry) {
+          showErrorToast(`${classification.userMessage} ${classification.suggestedAction || ''}`);
+        } else {
+          showErrorToast(classification.userMessage);
+        }
+        
+        // Provide specific guidance based on error type
+        if (classification.type === 'USER_NOT_REGISTERED') {
+          setError('This email address is not registered with BudgetMe. Please ask them to create an account first, then you can send them an invitation.');
+        } else if (classification.type === 'USER_ALREADY_INVITED') {
+          setError('This user has already been invited to your family. Check your sent invitations or wait for them to respond.');
+        } else if (classification.type === 'USER_ALREADY_MEMBER') {
+          setError('This user is already a member of another family. Users can only belong to one family at a time.');
+        } else if (classification.type === 'PERMISSION_DENIED') {
+          setError('You do not have permission to invite members to this family. Contact a family admin.');
+        } else if (classification.type === 'VERIFICATION_FAILED') {
+          setError('There was an issue verifying the user. Please double-check the email address and try again.');
+        }
       } else {
-        setError(errorMessage);
-        showErrorToast(`Failed to send invitation: ${errorMessage}`);
+        // Fallback to legacy error handling for backwards compatibility
+        if (errorMessage.includes('not registered') || errorMessage.includes('create an account')) {
+          setError('This email address is not registered with BudgetMe. Please ask them to create an account first, then you can send them an invitation.');
+          showErrorToast('User not registered. Please ask them to create an account first.');
+        } else if (errorMessage.includes('already invited') || errorMessage.includes('already been sent')) {
+          setError('This user has already been invited to your family.');
+          showErrorToast('This user has already been invited to your family.');
+        } else if (errorMessage.includes('already part of a family') || errorMessage.includes('already a member')) {
+          setError('This user is already a member of another family. Users can only belong to one family at a time.');
+          showErrorToast('This user is already a member of another family.');
+        } else if (errorMessage.includes('not found') || errorMessage.includes('invalid email')) {
+          setError('User not found. Please ensure the email address is correct and the user has an account.');
+          showErrorToast('User not found. Please ensure the email address is correct and the user has an account.');
+        } else if (errorMessage.includes('permission') || errorMessage.includes('not authorized') || errorMessage.includes('admin')) {
+          setError('You do not have permission to invite members to this family.');
+          showErrorToast('You do not have permission to invite members to this family.');
+        } else if (errorMessage.includes('Unable to verify user registration status') || errorMessage.includes('try again in a moment')) {
+          setError('There was a temporary issue verifying the user. Please check the email address and try again in a moment.');
+          showErrorToast('Temporary verification issue. Please try again in a moment.');
+        } else if (errorMessage.includes('Internal Server Error') || errorMessage.includes('500')) {
+          setError('There was a server error. Please try again in a moment. If the issue persists, please contact support.');
+          showErrorToast('Server error. Please try again in a moment.');
+        } else {
+          setError(errorMessage);
+          showErrorToast(`Failed to send invitation: ${errorMessage}`);
+        }
       }
+      
       setViewMode("form");
     } finally {
       setIsSubmitting(false);
@@ -383,6 +426,8 @@ const InviteFamilyMember: FC = () => {
                   />
                   <small className="form-text text-muted">
                     Enter the email address of the person you want to invite to your family.
+                    <br/>
+                    <strong>Note:</strong> The person must already have a BudgetMe account to receive invitations.
                   </small>
                 </div>
 
@@ -398,11 +443,14 @@ const InviteFamilyMember: FC = () => {
                         className="form-control"
                         required
                     >
+                        <option value="member">Member</option>
                         <option value="viewer">Viewer</option>
                         <option value="admin">Admin</option>
                     </select>
                     <small className="form-text text-muted">
-                        Admins can manage family members and settings. Viewers can only see family data.
+                        <strong>Member:</strong> Standard privileges, can contribute to goals and view most data.<br/>
+                        <strong>Viewer:</strong> Limited read-only access to family data.<br/>
+                        <strong>Admin:</strong> Full management privileges including member and settings management.
                     </small>
                 </div>
 
@@ -451,6 +499,16 @@ const InviteFamilyMember: FC = () => {
             <div className="card-body">
               <div className="mb-3">
                 <div className="d-flex align-items-center mb-2">
+                  <div className="rounded-circle p-1 mr-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(220, 53, 69, 0.2)", width: "32px", height: "32px" }}>
+                    <i className="fas fa-user-check text-danger"></i>
+                  </div>
+                  <p className="font-weight-bold mb-0">Account Required</p>
+                </div>
+                <p className="text-sm ml-5 mb-0">The person must have a BudgetMe account before you can invite them</p>
+              </div>
+
+              <div className="mb-3">
+                <div className="d-flex align-items-center mb-2">
                   <div className="rounded-circle p-1 mr-3 d-flex align-items-center justify-content-center" style={{ backgroundColor: "rgba(78, 115, 223, 0.2)", width: "32px", height: "32px" }}>
                     <i className="fas fa-paper-plane text-primary"></i>
                   </div>
@@ -476,7 +534,7 @@ const InviteFamilyMember: FC = () => {
                   </div>
                   <p className="font-weight-bold mb-0">Assign Roles</p>
                 </div>
-                <p className="text-sm ml-5 mb-0">Choose viewer or admin permissions for each member</p>
+                <p className="text-sm ml-5 mb-0">Choose member, viewer, or admin permissions for each member</p>
               </div>
             </div>
           </div>

@@ -2,7 +2,7 @@ import React, { FC } from "react";
 import { Link } from "react-router-dom";
 import BudgetProgress from "../BudgetProgress";
 import RecentTransactions from "../RecentTransactions";
-import { BudgetItem, Transaction, Category, Account, Goal } from "../types";
+import { BudgetItem, Transaction, Category, Account, Goal, UserData } from "../types";
 
 interface BottomSectionProps {
   budgetProgress: BudgetItem[];
@@ -10,6 +10,7 @@ interface BottomSectionProps {
   expenseCategories?: Category[];
   accounts?: Account[];
   goals?: Goal[];
+  userData?: UserData;
   activeTip: string | null;
   onToggleTip: (tipId: string, event?: React.MouseEvent) => void;
   getFilteredUrlParams: () => string;
@@ -22,6 +23,7 @@ const BottomSection: FC<BottomSectionProps> = ({
   expenseCategories,
   accounts,
   goals,
+  userData,
   activeTip,
   onToggleTip,
   getFilteredUrlParams,
@@ -97,6 +99,7 @@ const BottomSection: FC<BottomSectionProps> = ({
               categories={expenseCategories} 
               accounts={accounts}
               goals={goals}
+              userData={userData}
             />
           </div>
         </div>

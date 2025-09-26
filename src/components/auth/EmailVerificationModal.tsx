@@ -1,6 +1,7 @@
 import React, { FC, useState, useRef, useEffect } from 'react';
 import { resendVerificationEmail } from '../../utils/authService';
 import { useToast } from '../../utils/ToastContext';
+import { EmailMonitoringService } from '../../services/emailMonitoringService';
 
 interface EmailVerificationModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
   const [resendLoading, setResendLoading] = useState<boolean>(false);
   const [resendError, setResendError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number>(0);
+  const [deliveryStatus, setDeliveryStatus] = useState<'checking' | 'delayed' | 'normal'>('normal');
   const toastShown = useRef<boolean>(false);
 
   useEffect(() => {
@@ -30,6 +32,30 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
       if (timer) clearTimeout(timer);
     };
   }, [countdown]);
+
+  // Check email delivery status
+  useEffect(() => {
+    if (email && isOpen) {
+      const checkDeliveryStatus = () => {
+        const status = EmailMonitoringService.getDeliveryStatus(email);
+        const isDelayed = EmailMonitoringService.isDeliveryDelayed(email);
+        
+        if (isDelayed) {
+          setDeliveryStatus('delayed');
+        } else if (status) {
+          setDeliveryStatus('checking');
+        }
+      };
+
+      // Check immediately
+      checkDeliveryStatus();
+      
+      // Check every 30 seconds
+      const interval = setInterval(checkDeliveryStatus, 30000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [email, isOpen]);
 
   if (!isOpen) return null;
 
@@ -43,24 +69,27 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
     console.log('Resending verification email to:', email);
     
     try {
-      const { error } = await resendVerificationEmail(email);
-      if (error) {
-        console.error('Resend error:', error);
-        // Show error in the modal instead of toast
-        setResendError(error.message);
-        showErrorToast(`Failed to resend: ${error.message}`);
+      const result = await resendVerificationEmail(email);
+      if (result.error) {
+        console.error('Resend error:', result.error);
+        if (result.rateLimited) {
+          setResendError(result.error.message);
+          setCountdown(30); // Set countdown for rate limit
+        } else {
+          setResendError(result.error.message);
+          showErrorToast(`Failed to resend: ${result.error.message}`);
+        }
       } else {
         console.log('Resend successful');
-        // Success toast is still fine
         if (!toastShown.current) {
           showSuccessToast('Verification email resent successfully! Check your inbox and spam folder.');
           toastShown.current = true;
         }
         setCountdown(60); // Set a 60-second cooldown
+        setDeliveryStatus('checking'); // Reset delivery status
       }
     } catch (err) {
       console.error('Resend exception:', err);
-      // Show error in the modal instead of toast
       if (err instanceof Error) {
         setResendError(err.message);
         showErrorToast(`Error: ${err.message}`);
@@ -122,6 +151,21 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
           <p className="text-center mb-4">
             We've sent a verification email to: <strong>{email}</strong>
           </p>
+          
+          {/* Delivery Status Indicator */}
+          {deliveryStatus === 'delayed' && (
+            <div className="auth-warning-message mb-4">
+              <i className="bx bx-time-five"></i>
+              <span>Email delivery is taking longer than usual. This is normal during high traffic periods.</span>
+            </div>
+          )}
+          
+          {deliveryStatus === 'checking' && (
+            <div className="auth-info-message mb-4">
+              <i className="bx bx-loader-alt bx-spin"></i>
+              <span>Monitoring email delivery status...</span>
+            </div>
+          )}
           
           <p className="text-center mb-4">
             Please check your inbox and click the link in the email to verify your account.

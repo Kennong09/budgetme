@@ -252,7 +252,7 @@ const AdminGoals: React.FC = () => {
           percentage: goal.target_amount > 0 ? (goal.current_amount / goal.target_amount) * 100 : 0,
           progress_status: getProgressStatus(percentage),
           is_overdue: new Date(goal.target_date) < new Date() && percentage < 100,
-          is_shared: !!goal.family_id,
+          is_family_goal: !!goal.family_id,
           family_id: goal.family_id
         };
         
@@ -590,7 +590,7 @@ const AdminGoals: React.FC = () => {
                     <h4 className="small font-weight-bold">High Priority <span className="float-right">({goalSummary?.goalsByPriority.high || 0} goals)</span></h4>
                     <span className="text-xs">{((goalSummary?.goalsByPriority.high || 0) / (goalSummary?.totalGoals || 1) * 100).toFixed(1)}%</span>
                   </div>
-                  <div className="progress mb-4">
+                  <div className="progress mb-4" style={{ height: '8px' }}>
                     <div
                       className="progress-bar bg-danger"
                       role="progressbar"
@@ -607,7 +607,7 @@ const AdminGoals: React.FC = () => {
                     <h4 className="small font-weight-bold">Medium Priority <span className="float-right">({goalSummary?.goalsByPriority.medium || 0} goals)</span></h4>
                     <span className="text-xs">{((goalSummary?.goalsByPriority.medium || 0) / (goalSummary?.totalGoals || 1) * 100).toFixed(1)}%</span>
                   </div>
-                  <div className="progress mb-4">
+                  <div className="progress mb-4" style={{ height: '8px' }}>
                     <div
                       className="progress-bar bg-warning"
                       role="progressbar"
@@ -624,7 +624,7 @@ const AdminGoals: React.FC = () => {
                     <h4 className="small font-weight-bold">Low Priority <span className="float-right">({goalSummary?.goalsByPriority.low || 0} goals)</span></h4>
                     <span className="text-xs">{((goalSummary?.goalsByPriority.low || 0) / (goalSummary?.totalGoals || 1) * 100).toFixed(1)}%</span>
                   </div>
-                  <div className="progress mb-4">
+                  <div className="progress mb-4" style={{ height: '8px' }}>
                     <div
                       className="progress-bar bg-info"
                       role="progressbar"
@@ -917,7 +917,7 @@ const AdminGoals: React.FC = () => {
                           <td>
                             <div className="d-flex align-items-center">
                               {goal.user_name}
-                              {goal.is_shared && (
+                              {goal.is_family_goal && (
                                 <span className="badge badge-info ml-2" title="Family Shared Goal">
                                   <i className="fas fa-users"></i>
                                 </span>

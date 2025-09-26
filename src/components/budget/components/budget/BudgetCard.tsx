@@ -29,7 +29,10 @@ const BudgetCard: FC<BudgetCardProps> = ({ budget, onDelete }) => {
     <div className="col-lg-4 col-md-6 mb-4">
       <div className="card border-0 shadow h-100 animate__animated animate__fadeIn">
         <div className="card-header bg-transparent border-0 d-flex justify-content-between align-items-center">
-          <h6 className="m-0 font-weight-bold text-primary">{budget.category_name}</h6>
+          <div>
+            <h6 className="m-0 font-weight-bold text-primary">{budget.budget_name || 'Unnamed Budget'}</h6>
+            <small className="text-muted">{budget.category_name || budget.display_category || 'Uncategorized'}</small>
+          </div>
           <span className={`badge badge-${getStatusColor(budget.status)}`}>
             {getStatusText(budget.status)}
           </span>
@@ -63,7 +66,7 @@ const BudgetCard: FC<BudgetCardProps> = ({ budget, onDelete }) => {
                 Remaining
               </div>
               <div className="h6 mb-0 font-weight-bold text-success">
-                {formatCurrency(budget.remaining)}
+                {formatCurrency(budget.remaining || 0)}
               </div>
             </div>
           </div>
@@ -74,15 +77,15 @@ const BudgetCard: FC<BudgetCardProps> = ({ budget, onDelete }) => {
                 Progress
               </span>
               <span className={`text-xs font-weight-bold text-${getStatusColor(budget.status)}`}>
-                {formatPercentage(budget.percentage)}
+                {formatPercentage(budget.percentage_used || 0)}
               </span>
             </div>
             <div className="progress" style={{ height: "8px" }}>
               <div
                 className={`progress-bar bg-${getStatusColor(budget.status)}`}
                 role="progressbar"
-                style={{ width: `${Math.min(budget.percentage, 100)}%` }}
-                aria-valuenow={budget.percentage}
+                style={{ width: `${Math.min(budget.percentage_used || 0, 100)}%` }}
+                aria-valuenow={budget.percentage_used || 0}
                 aria-valuemin={0}
                 aria-valuemax={100}
               ></div>

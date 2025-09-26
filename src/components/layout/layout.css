@@ -3,8 +3,8 @@
 /* Notification dot styling */
 .notification-dot {
   position: absolute;
-  top: 25px;
-  right: -1px;
+  top: 4px;
+  right: 4px;
   width: 8px;
   height: 8px;
   background-color: #e74a3b; /* danger color */
@@ -19,8 +19,82 @@
   position: relative;
   display: flex;
   align-items: center;
-  height: 100%;
-  padding: 0.75rem 1rem;
+  height: auto;
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+/* Notification dropdown positioning */
+.nav-item.dropdown {
+  position: relative;
+}
+
+.nav-item.dropdown .dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: -0.5rem;
+  left: auto;
+  margin-top: 0.5rem;
+  transform-origin: top right;
+}
+
+/* Ensure dropdown appears above other content */
+.nav-item.dropdown .dropdown-menu.show {
+  z-index: 1050;
+}
+
+/* Search results styling */
+.search-results .dropdown-item {
+  border: none;
+  border-radius: 0;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.search-results .dropdown-item:hover,
+.search-results .dropdown-item.bg-light {
+  background-color: #f8f9fa !important;
+}
+
+.search-results .icon-circle {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-results .dropdown-item:not(:last-child) {
+  border-bottom: 1px solid #e9ecef;
+}
+
+/* Search input focus styling */
+.navbar-search .form-control:focus {
+  box-shadow: 0 0 0 0.2rem rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+}
+
+/* Loading spinner in search */
+.search-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: #6c757d;
+}
+
+/* No results styling */
+.no-results {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #6c757d;
+}
+
+.no-results i {
+  opacity: 0.5;
+  margin-bottom: 1rem;
 }
 
 /* Subtle pulse animation for notification dot */

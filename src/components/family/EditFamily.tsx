@@ -4,6 +4,7 @@ import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
 import { familyService } from "../../services/database/familyService";
 import { refreshFamilyMembershipsView } from "../../utils/helpers";
+import { FamilyNotificationService } from "../../services/database/familyNotificationService";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -162,6 +163,22 @@ const EditFamily: FC = () => {
         },
         user.id
       );
+
+      // Trigger family update notifications
+      try {
+        await FamilyNotificationService.getInstance().handleFamilyUpdated({
+          family_id: originalFamily.id,
+          user_id: user.id,
+          family_name: familyData.family_name,
+          description: familyData.description,
+          is_public: familyData.is_public,
+          updated_at: new Date().toISOString()
+        });
+        console.log('Family update notifications processed successfully');
+      } catch (notificationError) {
+        // Log notification error but don't fail the family update
+        console.warn('Failed to process family update notifications:', notificationError);
+      }
 
       // Try to refresh the materialized view
       try {
@@ -464,32 +481,58 @@ const EditFamily: FC = () => {
                 </div>
 
                 <div className="form-group">
-                  <div className="custom-control custom-checkbox">
-                    <input
-                      type="checkbox"
-                      className="custom-control-input"
-                      id="is_public"
-                      name="is_public"
-                      checked={familyData.is_public}
-                      onChange={(e) => {
-                        setFamilyData(prev => ({
-                          ...prev,
-                          is_public: e.target.checked
-                        }));
-                      }}
-                    />
-                    <label className="custom-control-label" htmlFor="is_public">
-                      Make this family public
-                      <i 
-                        className="fas fa-info-circle ml-1 text-gray-400"
-                        style={{ cursor: 'pointer' }}
-                        onClick={(e) => toggleTip('visibility-option', e)}
-                      ></i>
-                    </label>
+                  <div className="card border-left-info shadow p-3 mb-3">
+                    <div className="mb-3">
+                      <h5 className="font-weight-bold text-info mb-0">
+                        <i className="fas fa-globe mr-2"></i>
+                        Family Visibility
+                      </h5>
+                    </div>
+                    
+                    <div className="row">
+                      <div className="col-md-8">
+                        <div className="d-flex align-items-center mb-3">
+                          <input
+                            type="checkbox"
+                            className="mr-2"
+                            id="is_public"
+                            name="is_public"
+                            checked={familyData.is_public}
+                            onChange={(e) => {
+                              setFamilyData(prev => ({
+                                ...prev,
+                                is_public: e.target.checked
+                              }));
+                            }}
+                          />
+                          <label className="font-weight-bold text-nowrap mb-0" htmlFor="is_public">
+                            Make this family public
+                            <i 
+                              className="fas fa-info-circle ml-1 text-gray-400"
+                              style={{ cursor: 'pointer' }}
+                              onClick={(e) => toggleTip('visibility-option', e)}
+                            ></i>
+                          </label>
+                        </div>
+                        <small className="form-text text-muted d-block">
+                          <i className="fas fa-info-circle mr-1"></i>
+                          When enabled, other users can discover and request to join your family.
+                        </small>
+                        <small className="form-text text-muted d-block mt-1">
+                          <i className="fas fa-lock mr-1"></i>
+                          If not enabled, only people you invite can join your family.
+                        </small>
+                        {familyData.is_public && (
+                          <div className="alert alert-info mt-2 py-2 mb-0">
+                            <i className="fas fa-globe mr-1"></i>
+                            This family will be discoverable by other users.
+                          </div>
+                        )}
+                      </div>
+                      <div className="col-md-4">
+                      </div>
+                    </div>
                   </div>
-                  <small className="form-text text-muted">
-                    When enabled, other users can discover and request to join your family.
-                  </small>
                 </div>
 
                 <hr className="my-4" />
