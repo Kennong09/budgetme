@@ -4,10 +4,12 @@ import { formatCurrency, formatDate } from "../../utils/helpers";
 import { supabase } from "../../utils/supabaseClient";
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
+import { TransactionAuditService } from "../../services/database/transactionAuditService";
 import { EnhancedTransactionService } from "../../services/database/enhancedTransactionService";
 import HighchartsReact from "highcharts-react-official";
 import Highcharts from "../../utils/highchartsInit";
 import "animate.css";
+import "./transactions.css";
 
 interface Transaction {
   id: string;
@@ -83,6 +85,9 @@ const TransactionDetails: FC = () => {
   // State for delete confirmation modal
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Mobile UI state for tabbed charts
+  const [mobileActiveChart, setMobileActiveChart] = useState<'breakdown' | 'impact'>('breakdown');
 
   // Function to fetch transaction details
   const fetchTransactionData = async () => {
@@ -431,9 +436,19 @@ const TransactionDetails: FC = () => {
       
       // When deleting a transaction, we need to:
       // 1. Get transaction details (account, type, amount, goal)
-      // 2. Delete the transaction
-      // 3. Update account balance
-      // 4. Update goal progress if applicable
+      // 2. Log audit activity before deletion
+      // 3. Delete the transaction
+      // 4. Update account balance
+      // 5. Update goal progress if applicable
+      
+      // Capture transaction data for audit log before deletion
+      const auditData = TransactionAuditService.extractTransactionAuditData(
+        transaction,
+        accounts?.find(acc => acc.id === transaction.account_id),
+        categories.income?.find(cat => cat.id === transaction.category_id) ||
+        categories.expense?.find(cat => cat.id === transaction.category_id),
+        goals?.find(goal => goal.id === transaction.goal_id)
+      );
       
       // Calculate balance adjustment
       // If it was income, subtract from balance; if expense, add to balance
@@ -446,6 +461,17 @@ const TransactionDetails: FC = () => {
         .eq('id', transaction.id);
         
       if (deleteError) throw deleteError;
+      
+      // Log transaction deletion to audit history (async, don't block on failure)
+      TransactionAuditService.logTransactionDeleted(
+        user.id,
+        auditData,
+        'User deleted transaction',
+        navigator.userAgent
+      ).catch(error => {
+        console.error('Failed to log transaction deletion to audit:', error);
+        // Don't show error to user as this shouldn't interrupt their flow
+      });
       
       // Show success message and navigate immediately
       showSuccessToast("Transaction deleted successfully!");
@@ -568,7 +594,20 @@ const TransactionDetails: FC = () => {
   if (loading) {
     return (
       <div className="container-fluid">
-        <div className="text-center my-5">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">Loading transaction details...</p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="text-center my-5 hidden md:block">
           <div className="spinner-border text-primary" role="status">
             <span className="sr-only">Loading...</span>
           </div>
@@ -581,7 +620,26 @@ const TransactionDetails: FC = () => {
   if (!transaction) {
     return (
       <div className="container-fluid">
-        <div className="text-center my-5 animate__animated animate__fadeIn">
+        {/* Mobile Not Found State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center text-center px-4">
+            <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+              <i className="fas fa-exclamation-triangle text-amber-500 text-2xl"></i>
+            </div>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Transaction not found</h2>
+            <p className="text-sm text-gray-500 mb-4">The transaction you're looking for does not exist or has been deleted.</p>
+            <Link 
+              to="/transactions" 
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors"
+            >
+              <i className="fas fa-arrow-left text-xs"></i>
+              Back to Transactions
+            </Link>
+          </div>
+        </div>
+
+        {/* Desktop Not Found State */}
+        <div className="text-center my-5 animate__animated animate__fadeIn hidden md:block">
           <div className="error-icon mb-4">
             <i className="fas fa-exclamation-triangle fa-4x text-warning"></i>
           </div>
@@ -621,15 +679,312 @@ const TransactionDetails: FC = () => {
 
   return (
     <div className="container-fluid">
-      {/* Page Heading */}
-      <div className="d-sm-flex align-items-center justify-content-between mb-4 animate__animated animate__fadeInDown">
+      {/* Mobile Page Heading - Floating action buttons */}
+      <div className="block md:hidden mb-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-bold text-gray-800">Transaction Details</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openDeleteModal}
+              className="w-9 h-9 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+              aria-label="Delete transaction"
+            >
+              <i className="fas fa-trash text-xs"></i>
+            </button>
+            <Link
+              to={`/transactions/${id}/edit`}
+              className="w-9 h-9 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+              aria-label="Edit transaction"
+            >
+              <i className="fas fa-edit text-xs"></i>
+            </Link>
+            <Link
+              to="/transactions"
+              className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+              aria-label="Back to transactions"
+            >
+              <i className="fas fa-arrow-left text-xs"></i>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Transaction Summary Card */}
+      <div className="block md:hidden mb-4">
+        <div className={`bg-gradient-to-br ${
+          transaction.type === 'income' ? 'from-emerald-500 via-teal-500 to-cyan-500' :
+          transaction.type === 'contribution' ? 'from-blue-500 via-indigo-500 to-purple-500' :
+          'from-rose-500 via-red-500 to-orange-500'
+        } rounded-2xl p-4 shadow-lg`}>
+          <div className="flex items-center justify-between mb-3">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+              transaction.type === 'income' ? 'bg-white/20 text-white' :
+              transaction.type === 'contribution' ? 'bg-white/20 text-white' :
+              'bg-white/20 text-white'
+            }`}>
+              {transaction.type === 'income' ? 'Income' : transaction.type === 'contribution' ? 'Contribution' : 'Expense'}
+            </span>
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <i className={`fas fa-${transaction.type === 'income' ? 'arrow-up' : transaction.type === 'contribution' ? 'flag' : 'arrow-down'} text-white text-sm`}></i>
+            </div>
+          </div>
+          <div className="text-white text-2xl font-bold mb-1">
+            {formatCurrency(transaction.amount)}
+          </div>
+          <div className="text-white/70 text-xs">
+            {formatDate(transaction.date)}
+          </div>
+        </div>
+
+        {/* Mobile Details Grid */}
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center mb-2">
+              <i className="fas fa-wallet text-blue-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Account</p>
+            <p className="text-[11px] font-bold text-gray-800 truncate">{account?.account_name || 'Unknown'}</p>
+          </div>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center mb-2">
+              <i className="fas fa-tag text-amber-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Category</p>
+            <p className="text-[11px] font-bold text-gray-800 truncate">{displayCategory}</p>
+          </div>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center mb-2">
+              <i className="fas fa-calendar text-indigo-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Date</p>
+            <p className="text-[11px] font-bold text-gray-800 truncate">{new Date(transaction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+          </div>
+        </div>
+
+        {/* Mobile Description Card */}
+        {transaction.description && transaction.description.trim() && (
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mt-2">
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide mb-1">Description</p>
+            <p className="text-xs text-gray-700">{transaction.description}</p>
+          </div>
+        )}
+
+        {/* Mobile Goal Card */}
+        {goal && (
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mt-2">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <i className="fas fa-bullseye text-emerald-500 text-xs"></i>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Related Goal</p>
+                <p className="text-xs font-bold text-gray-800 truncate">{goal.goal_name}</p>
+              </div>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+              <div
+                className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${goal.target_amount > 0 ? Math.min(100, (goal.current_amount / goal.target_amount) * 100) : 0}%` }}
+              ></div>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-gray-500">
+                {((goal.current_amount / goal.target_amount) * 100).toFixed(1)}% complete
+              </p>
+              <Link
+                to={`/goals/${transaction.goal_id}`}
+                className="text-[10px] text-indigo-500 font-medium"
+              >
+                View Goal →
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Charts - Tabbed interface like Dashboard */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mt-3">
+          {/* Tab header */}
+          <div className="flex bg-slate-50">
+            <button
+              onClick={() => setMobileActiveChart('breakdown')}
+              className={`flex-1 py-3.5 text-sm font-semibold transition-all relative ${
+                mobileActiveChart === 'breakdown'
+                  ? 'text-indigo-600 bg-white'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <i className="fas fa-chart-pie mr-2 text-xs"></i>
+              Breakdown
+              {mobileActiveChart === 'breakdown' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+              )}
+            </button>
+            <button
+              onClick={() => setMobileActiveChart('impact')}
+              className={`flex-1 py-3.5 text-sm font-semibold transition-all relative ${
+                mobileActiveChart === 'impact'
+                  ? 'text-indigo-600 bg-white'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <i className="fas fa-chart-bar mr-2 text-xs"></i>
+              Impact
+              {mobileActiveChart === 'impact' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+              )}
+            </button>
+          </div>
+
+          {/* Chart content */}
+          <div className="p-4">
+            {mobileActiveChart === 'breakdown' ? (
+              highchartsLoaded && categoryChartOptions ? (
+                <div className="animate__animated animate__fadeIn">
+                  <HighchartsReact
+                    highcharts={Highcharts}
+                    options={{
+                      ...categoryChartOptions,
+                      chart: {
+                        ...categoryChartOptions.chart,
+                        height: 250,
+                      },
+                      plotOptions: {
+                        ...categoryChartOptions.plotOptions,
+                        pie: {
+                          ...categoryChartOptions.plotOptions?.pie,
+                          dataLabels: { enabled: false },
+                          showInLegend: true,
+                          size: '70%',
+                          innerSize: '50%',
+                          center: ['50%', '40%'],
+                        },
+                      },
+                      legend: {
+                        enabled: true,
+                        layout: 'horizontal',
+                        align: 'center',
+                        verticalAlign: 'bottom',
+                        itemStyle: { 
+                          fontSize: '11px',
+                          fontWeight: 'normal',
+                          color: '#374151',
+                        },
+                        symbolRadius: 2,
+                        symbolHeight: 10,
+                        symbolWidth: 10,
+                        itemMarginTop: 8,
+                        itemMarginBottom: 4,
+                        padding: 0,
+                      },
+                      title: { text: null },
+                    }}
+                    ref={categoryChartRef}
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                    <i className="fas fa-chart-pie text-gray-400 text-2xl"></i>
+                  </div>
+                  <p className="text-sm text-gray-500">No category data available</p>
+                </div>
+              )
+            ) : (
+              highchartsLoaded && impactChartOptions ? (
+                <div className="animate__animated animate__fadeIn">
+                  <HighchartsReact
+                    highcharts={Highcharts}
+                    options={{
+                      ...impactChartOptions,
+                      chart: {
+                        ...impactChartOptions.chart,
+                        height: 250,
+                      },
+                      xAxis: {
+                        ...impactChartOptions.xAxis,
+                        labels: {
+                          ...impactChartOptions.xAxis?.labels,
+                          style: { fontSize: '10px', color: '#6b7280' },
+                        },
+                      },
+                      yAxis: {
+                        ...impactChartOptions.yAxis,
+                        labels: {
+                          ...impactChartOptions.yAxis?.labels,
+                          style: { fontSize: '10px', color: '#6b7280' },
+                        },
+                      },
+                    }}
+                    ref={impactChartRef}
+                  />
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                    <i className="fas fa-chart-bar text-gray-400 text-2xl"></i>
+                  </div>
+                  <p className="text-sm text-gray-500">No impact data available</p>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+
+        {/* Mobile Related Transactions */}
+        {relatedTransactions.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden mt-3 mb-4">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <h6 className="text-xs font-bold text-gray-800 flex items-center gap-2">
+                <i className="fas fa-list text-indigo-500 text-[10px]"></i>
+                Related Transactions
+                <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full text-[9px]">
+                  {relatedTransactions.length}
+                </span>
+              </h6>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {relatedTransactions.slice(0, 3).map((tx) => (
+                <Link
+                  key={tx.id}
+                  to={`/transactions/${tx.id}`}
+                  className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      tx.type === 'income' ? 'bg-emerald-100' : 'bg-rose-100'
+                    }`}>
+                      <i className={`fas fa-${tx.type === 'income' ? 'arrow-up' : 'arrow-down'} text-xs ${
+                        tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'
+                      }`}></i>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-800">{formatCurrency(tx.amount)}</p>
+                      <p className="text-[10px] text-gray-500">{formatDate(tx.date)}</p>
+                    </div>
+                  </div>
+                  <i className="fas fa-chevron-right text-gray-400 text-[10px]"></i>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Transaction Info */}
+        <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mb-4">
+          <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide mb-1">Transaction ID</p>
+          <p className="text-[10px] text-gray-600 font-mono truncate">{transaction.id}</p>
+        </div>
+      </div>
+
+      {/* Desktop Page Heading */}
+      <div className="d-none d-md-flex align-items-center justify-content-between mb-4 animate__animated animate__fadeInDown">
         <h1 className="h3 mb-0 text-gray-800">Transaction Details</h1>
         <div className="d-flex">
           <button onClick={openDeleteModal} className="btn btn-primary btn-sm shadow-sm mr-2" style={{ backgroundColor: "#e74a3b", borderColor: "#e74a3b" }}>
             <i className="fas fa-trash fa-sm mr-2"></i> Delete Transaction
           </button>
           <Link to={`/transactions/${id}/edit`} className="btn btn-primary btn-sm mr-2 shadow-sm">
-            <i className="fas fa-edit fa-sm mr-2"></i> Edit Transaction
+            <i className="fas fa-edit fa-sm" style={{ marginLeft: '0.125rem', marginRight: '0.5rem' }}></i> Edit Transaction
           </Link>
           <Link to="/transactions" className="btn btn-sm btn-secondary shadow-sm">
             <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Transactions
@@ -637,17 +992,18 @@ const TransactionDetails: FC = () => {
         </div>
       </div>
 
-      {/* Transaction Overview Row */}
-      <div className="row">
+      {/* Desktop Transaction Overview Row */}
+      <div className="row d-none d-md-flex">
         {/* Transaction Amount Card */}
-        <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.1s" }}>
+        <div className="col-xl-4 col-md-6 col-6 mb-3 mb-md-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.1s" }}>
           <div className={`card border-left-${colorClass} shadow h-100 py-2`}>
-            <div className="card-body">
+            <div className="card-body p-3">
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
-                  <div className={`text-xs font-weight-bold text-${colorClass} text-uppercase mb-1 d-flex align-items-center`}>
-                    {transaction.type === "income" ? "Income" : transaction.type === "contribution" ? "Contribution" : "Expense"} Amount
-                    <div className="ml-2 position-relative">
+                  <div className={`text-xs font-weight-bold text-${colorClass} text-uppercase mb-1 d-flex align-items-center`} style={{ fontSize: '0.6rem' }}>
+                    <span className="d-none d-md-inline">{transaction.type === "income" ? "Income" : transaction.type === "contribution" ? "Contribution" : "Expense"} Amount</span>
+                    <span className="d-inline d-md-none">Amt</span>
+                    <div className="ml-2 position-relative d-none d-md-block">
                       <i 
                         className="fas fa-info-circle text-gray-400 cursor-pointer" 
                         onClick={(e) => toggleTip('amountInfo', e)}
@@ -655,11 +1011,11 @@ const TransactionDetails: FC = () => {
                       ></i>
                     </div>
                   </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
+                  <div className="h5 h6-mobile mb-0 font-weight-bold text-gray-800">
                     {formatCurrency(transaction.amount)}
                   </div>
                 </div>
-                <div className="col-auto">
+                <div className="col-auto d-none d-md-block">
                   <i className={`fas fa-${iconClass} fa-2x text-gray-300`}></i>
                 </div>
               </div>
@@ -668,14 +1024,15 @@ const TransactionDetails: FC = () => {
         </div>
 
         {/* Category Card */}
-        <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
+        <div className="col-xl-4 col-md-6 col-6 mb-3 mb-md-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
           <div className="card border-left-info shadow h-100 py-2">
-            <div className="card-body">
+            <div className="card-body p-3">
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-info text-uppercase mb-1 d-flex align-items-center">
-                    Category
-                    <div className="ml-2 position-relative">
+                  <div className="text-xs font-weight-bold text-info text-uppercase mb-1 d-flex align-items-center" style={{ fontSize: '0.6rem' }}>
+                    <span className="d-none d-md-inline">Category</span>
+                    <span className="d-inline d-md-none">Cat</span>
+                    <div className="ml-2 position-relative d-none d-md-block">
                       <i 
                         className="fas fa-info-circle text-gray-400 cursor-pointer" 
                         onClick={(e) => toggleTip('categoryInfo', e)}
@@ -683,18 +1040,20 @@ const TransactionDetails: FC = () => {
                       ></i>
                     </div>
                   </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
+                  <div className="h5 h6-mobile mb-0 font-weight-bold text-gray-800">
                     {category || transaction.type === 'contribution' ? (
-                      displayCategory
+                      <span className="d-none d-md-inline">{displayCategory}</span>
                     ) : (
                       <span className="text-warning">
-                        <i className="fas fa-exclamation-triangle mr-1"></i>
-                        Uncategorized
+                        <i className="fas fa-exclamation-triangle mr-1 d-none d-md-inline"></i>
+                        <span className="d-none d-md-inline">Uncategorized</span>
+                        <span className="d-inline d-md-none">Uncat.</span>
                       </span>
                     )}
+                    <span className="d-inline d-md-none">{displayCategory.length > 12 ? displayCategory.substring(0, 12) + '...' : displayCategory}</span>
                   </div>
                 </div>
-                <div className="col-auto">
+                <div className="col-auto d-none d-md-block">
                   <i className="fas fa-tag fa-2x text-gray-300"></i>
                 </div>
               </div>
@@ -703,14 +1062,15 @@ const TransactionDetails: FC = () => {
         </div>
 
         {/* Account Card */}
-        <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.3s" }}>
+        <div className="col-xl-4 col-md-6 col-12 mb-3 mb-md-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.3s" }}>
           <div className="card border-left-primary shadow h-100 py-2">
-            <div className="card-body">
+            <div className="card-body p-3">
               <div className="row no-gutters align-items-center">
                 <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-primary text-uppercase mb-1 d-flex align-items-center">
-                    Account
-                    <div className="ml-2 position-relative">
+                  <div className="text-xs font-weight-bold text-primary text-uppercase mb-1 d-flex align-items-center" style={{ fontSize: '0.6rem' }}>
+                    <span className="d-none d-md-inline">Account</span>
+                    <span className="d-inline d-md-none">Acct</span>
+                    <div className="ml-2 position-relative d-none d-md-block">
                       <i 
                         className="fas fa-info-circle text-gray-400 cursor-pointer" 
                         onClick={(e) => toggleTip('accountInfo', e)}
@@ -718,20 +1078,21 @@ const TransactionDetails: FC = () => {
                       ></i>
                     </div>
                   </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {account ? account.account_name : "Unknown Account"}
+                  <div className="h5 h6-mobile mb-0 font-weight-bold text-gray-800">
+                    <span className="d-none d-md-inline">{account ? account.account_name : "Unknown Account"}</span>
+                    <span className="d-inline d-md-none">{account ? (account.account_name.length > 15 ? account.account_name.substring(0, 15) + '...' : account.account_name) : "Unknown"}</span>
                     {account && (
                       <Link 
                         to={`/accounts/${account.id}`} 
-                        className="btn btn-sm btn-outline-primary ml-2" 
-                        style={{ fontSize: '0.7rem', padding: '0.15rem 0.5rem' }}
+                        className="btn btn-sm btn-outline-primary ml-2 d-none d-md-inline-block" 
+                        style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
                       >
-                        <i className="fas fa-external-link-alt"></i>
+                        <i className="fas fa-external-link-alt" style={{ fontSize: '0.6rem' }}></i>
                       </Link>
                     )}
                   </div>
                 </div>
-                <div className="col-auto">
+                <div className="col-auto d-none d-md-block">
                   <i className="fas fa-wallet fa-2x text-gray-300"></i>
                 </div>
               </div>
@@ -740,13 +1101,14 @@ const TransactionDetails: FC = () => {
         </div>
       </div>
 
-      <div className="row">
+      <div className="row d-none d-md-flex">
         {/* Transaction Details Card */}
         <div className="col-lg-8 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.4s" }}>
           <div className="card shadow">
             <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-              <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
-                Transaction Details
+              <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center" style={{ fontSize: '0.75rem' }}>
+                <span className="d-none d-md-inline">Transaction Details</span>
+                <span className="d-inline d-md-none">Details</span>
                 <div className="ml-2 position-relative">
                   <i 
                     className="fas fa-info-circle text-gray-400 cursor-pointer" 
@@ -755,17 +1117,17 @@ const TransactionDetails: FC = () => {
                   ></i>
                 </div>
               </h6>
-              <div className={`badge ${transaction.type === 'contribution' ? 'badge-info' : `badge-${colorClass}`}`}>{transaction.type}</div>
+              <div className={`badge ${transaction.type === 'contribution' ? 'badge-info' : `badge-${colorClass}`}`} style={{ fontSize: '0.6rem' }}>{transaction.type}</div>
             </div>
             <div className="card-body">
               <div className="mb-4">
                 <div className="mb-2">
-                  <h4 className="small font-weight-bold">Description</h4>
+                  <h4 className="small font-weight-bold" style={{ fontSize: '0.7rem' }}>Description</h4>
                   <div className="p-3 bg-light rounded">
                     {transaction.description && transaction.description.trim() ? (
-                      <p className="mb-0 text-gray-700">{transaction.description}</p>
+                      <p className="mb-0 text-gray-700" style={{ fontSize: '0.75rem' }}>{transaction.description}</p>
                     ) : (
-                      <p className="mb-0 text-muted font-italic">No description provided</p>
+                      <p className="mb-0 text-muted font-italic" style={{ fontSize: '0.7rem' }}>No description provided</p>
                     )}
                   </div>
                 </div>
@@ -773,22 +1135,22 @@ const TransactionDetails: FC = () => {
 
               <div className="row mb-4">
                 <div className="col-md-6">
-                  <h4 className="small font-weight-bold">Transaction Date</h4>
+                  <h4 className="small font-weight-bold" style={{ fontSize: '0.7rem' }}>Transaction Date</h4>
                   <div className="d-flex align-items-center">
                     <div className="p-2 rounded mr-2" style={{ backgroundColor: "rgba(78, 115, 223, 0.15)" }}>
-                      <i className="fas fa-calendar text-primary"></i>
+                      <i className="fas fa-calendar text-primary" style={{ fontSize: '0.75rem' }}></i>
                     </div>
-                    <span className="text-gray-800">{formatDate(transaction.date)}</span>
+                    <span className="text-gray-800" style={{ fontSize: '0.75rem' }}>{formatDate(transaction.date)}</span>
                   </div>
                 </div>
                 {transaction.created_at && (
                   <div className="col-md-6">
-                    <h4 className="small font-weight-bold">Created At</h4>
+                    <h4 className="small font-weight-bold" style={{ fontSize: '0.7rem' }}>Created At</h4>
                     <div className="d-flex align-items-center">
                       <div className="p-2 rounded mr-2" style={{ backgroundColor: "rgba(246, 194, 62, 0.15)" }}>
-                        <i className="fas fa-clock text-warning"></i>
+                        <i className="fas fa-clock text-warning" style={{ fontSize: '0.75rem' }}></i>
                       </div>
-                      <span className="text-gray-800">{formatDate(transaction.created_at)}</span>
+                      <span className="text-gray-800" style={{ fontSize: '0.75rem' }}>{formatDate(transaction.created_at)}</span>
                     </div>
                   </div>
                 )}
@@ -797,16 +1159,16 @@ const TransactionDetails: FC = () => {
               {/* Transaction Goal Section */}
               {goal && (
                 <div className="mb-4">
-                  <h4 className="small font-weight-bold">Related Goal</h4>
+                  <h4 className="small font-weight-bold" style={{ fontSize: '0.7rem' }}>Related Goal</h4>
                   <div className="d-flex align-items-center">
                     <div className="p-2 rounded mr-2" style={{ backgroundColor: "rgba(28, 200, 138, 0.15)" }}>
-                      <i className="fas fa-bullseye text-success"></i>
+                      <i className="fas fa-bullseye text-success" style={{ fontSize: '0.75rem' }}></i>
                     </div>
                     <div>
-                      <span className="text-gray-800">
+                      <span className="text-gray-800" style={{ fontSize: '0.75rem' }}>
                         This transaction contributes to <strong>{goal.goal_name}</strong>
                       </span>
-                      <div className="small text-gray-600 mt-1">
+                      <div className="small text-gray-600 mt-1" style={{ fontSize: '0.65rem' }}>
                         Progress: {formatCurrency(goal.current_amount)} of {formatCurrency(goal.target_amount)} 
                         ({((goal.current_amount / goal.target_amount) * 100).toFixed(1)}%)
                       </div>
@@ -814,8 +1176,11 @@ const TransactionDetails: FC = () => {
                         <Link
                           to={`/goals/${transaction.goal_id}`}
                           className="btn btn-sm btn-outline-primary"
+                          style={{ fontSize: '0.65rem', padding: '0.2rem 0.4rem' }}
                         >
-                          <i className="fas fa-eye mr-1"></i> View Goal Details
+                          <i className="fas fa-eye mr-1" style={{ fontSize: '0.6rem' }}></i>
+                          <span className="d-none d-md-inline">View Goal Details</span>
+                          <span className="d-inline d-md-none">View Goal</span>
                         </Link>
                       </div>
                     </div>
@@ -824,10 +1189,11 @@ const TransactionDetails: FC = () => {
               )}
 
               {/* Transaction Impact Visualization */}
-              <div className="mt-4">
-                <h6 className="font-weight-bold text-primary mb-3 d-flex align-items-center">
-                  Transaction Impact Analysis
-                  <div className="ml-2 position-relative">
+              <div className="mt-4 impact-analysis-section">
+                <h6 className="font-weight-bold text-primary mb-3 d-flex align-items-center" style={{ fontSize: '0.75rem' }}>
+                  <span className="d-none d-md-inline">Transaction Impact Analysis</span>
+                  <span className="d-inline d-md-none">Impact</span>
+                  <div className="ml-2 position-relative d-none d-md-block">
                     <i 
                       className="fas fa-info-circle text-gray-400 cursor-pointer" 
                       onClick={(e) => toggleTip('impactAnalysis', e)}
@@ -835,7 +1201,7 @@ const TransactionDetails: FC = () => {
                     ></i>
                   </div>
                 </h6>
-                <p className="small text-gray-600 mb-3">
+                <p className="small text-gray-600 mb-3 d-none d-md-block" style={{ fontSize: '0.65rem' }}>
                   How this {transaction.type === 'income' ? 'income' : transaction.type === 'contribution' ? 'contribution' : 'expense'} compares to other transactions in the same category
                 </p>
                 {highchartsLoaded && impactChartOptions && (
@@ -854,8 +1220,9 @@ const TransactionDetails: FC = () => {
               {relatedTransactions.length > 0 && (
                 <div className="mt-4">
                   <h6 className="font-weight-bold text-primary mb-3 d-flex align-items-center">
-                    Related Transactions
-                    <div className="ml-2 position-relative">
+                    <span className="d-none d-md-inline">Related Transactions</span>
+                    <span className="d-inline d-md-none">Related</span>
+                    <div className="ml-2 position-relative d-none d-md-block">
                       <i 
                         className="fas fa-info-circle text-gray-400 cursor-pointer" 
                         onClick={(e) => toggleTip('relatedTransactions', e)}
@@ -863,24 +1230,24 @@ const TransactionDetails: FC = () => {
                       ></i>
                     </div>
                   </h6>
-                  <div className="table-responsive">
+                  <div className="table-responsive related-transactions-table">
                     <table className="table table-bordered table-hover" id="dataTable" width="100%" cellSpacing="0">
                       <thead className="bg-light">
                         <tr>
-                          <th>Date</th>
+                          <th className="d-none d-md-table-cell">Date</th>
                           <th>Amount</th>
-                          <th>Description</th>
+                          <th className="d-none d-lg-table-cell">Description</th>
                           <th>Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {relatedTransactions.map((tx) => (
                           <tr key={tx.id}>
-                            <td>{formatDate(tx.date)}</td>
+                            <td className="d-none d-md-table-cell">{formatDate(tx.date)}</td>
                             <td className={tx.type === 'income' ? 'text-success' : 'text-danger'}>
                               {formatCurrency(tx.amount)}
                             </td>
-                            <td>
+                            <td className="d-none d-lg-table-cell">
                               {tx.description && tx.description.trim() ? (
                                 tx.description
                               ) : (
@@ -888,8 +1255,12 @@ const TransactionDetails: FC = () => {
                               )}
                             </td>
                             <td>
-                              <Link to={`/transactions/${tx.id}`} className="btn btn-sm btn-primary">
-                                <i className="fas fa-eye fa-sm"></i>
+                              <Link 
+                                to={`/transactions/${tx.id}`} 
+                                className="btn btn-sm btn-primary"
+                                style={{ fontSize: '0.65rem', padding: '0.2rem 0.4rem' }}
+                              >
+                                <i className="fas fa-eye fa-sm" style={{ fontSize: '0.65rem' }}></i>
                               </Link>
                             </td>
                           </tr>
@@ -972,8 +1343,14 @@ const TransactionDetails: FC = () => {
                 </div>
               </div>
               
-              <Link to={`/transactions/${id}/edit`} className="btn btn-primary btn-block">
-                <i className="fas fa-edit mr-1"></i> Edit Transaction
+              <Link 
+                to={`/transactions/${id}/edit`} 
+                className="btn btn-primary btn-block"
+                style={{ fontSize: '0.65rem', padding: '0.25rem 0.4rem' }}
+              >
+                <i className="fas fa-edit mr-1" style={{ fontSize: '0.65rem' }}></i>
+                <span className="d-none d-md-inline">Edit Transaction</span>
+                <span className="d-inline d-md-none">Edit</span>
               </Link>
             </div>
           </div>

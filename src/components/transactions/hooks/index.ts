@@ -4,6 +4,7 @@ import { supabase } from '../../../utils/supabaseClient';
 import { useAuth } from '../../../utils/AuthContext';
 import { useToast } from '../../../utils/ToastContext';
 import { EnhancedTransactionService } from '../../../services/database/enhancedTransactionService';
+import { TransactionAuditService } from '../../../services/database/transactionAuditService';
 import { 
   Transaction, 
   UserData, 
@@ -171,7 +172,16 @@ export const useTransactionFilters = (
   const queryParams = new URLSearchParams(location.search);
   const [filter, setFilter] = useState<FilterState>(createDefaultFilter(queryParams));
   
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  const [allFilteredTransactions, setAllFilteredTransactions] = useState<Transaction[]>([]);
+  
+  // Calculate pagination metadata
+  const totalItems = allFilteredTransactions.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / filter.pageSize));
+  const startIndex = (filter.currentPage - 1) * filter.pageSize;
+  const endIndex = Math.min(startIndex + filter.pageSize, totalItems);
+  
+  // Get paginated transactions for table display
+  const paginatedTransactions = allFilteredTransactions.slice(startIndex, endIndex);
 
   // Apply filters with loading indicator
   const applyFilters = useCallback(() => {
@@ -181,7 +191,7 @@ export const useTransactionFilters = (
     
     setTimeout(() => {
       const result = applyTransactionFilters(transactions, filter, userData?.transactions[0]?.user_id);
-      setFilteredTransactions(result);
+      setAllFilteredTransactions(result);
       setIsFiltering(false);
     }, 300);
   }, [transactions, filter, userData]);
@@ -223,6 +233,15 @@ export const useTransactionFilters = (
     }
   }, [filter.categoryId, userData, filter.type]);
 
+  // Pagination update functions
+  const updatePage = useCallback((page: number) => {
+    setFilter(prev => ({ ...prev, currentPage: page }));
+  }, []);
+  
+  const updatePageSize = useCallback((size: number) => {
+    setFilter(prev => ({ ...prev, pageSize: size, currentPage: 1 }));
+  }, []);
+
   const handleFilterChange = useCallback((
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -234,23 +253,25 @@ export const useTransactionFilters = (
       setFilter(prev => ({
         ...prev,
         type: value as "all" | "income" | "expense" | "contribution",
-        categoryId: "all"
+        categoryId: "all",
+        currentPage: 1 // Reset to first page
       }));
     } else if (name === "categoryId") {
       if (value === "all") {
-        setFilter(prev => ({ ...prev, categoryId: value }));
+        setFilter(prev => ({ ...prev, categoryId: value, currentPage: 1 }));
       } else if (userData) {
         const transactionType = getTransactionTypeFromCategory(value, userData, filter.type as "income" | "expense" | "contribution" | "all");
         setFilter(prev => ({ 
           ...prev,
           categoryId: value,
+          currentPage: 1,
           ...(transactionType !== "all" ? { type: transactionType } : {})
         }));
       } else {
-        setFilter(prev => ({ ...prev, [name]: value }));
+        setFilter(prev => ({ ...prev, [name]: value, currentPage: 1 }));
       }
     } else {
-      setFilter(prev => ({ ...prev, [name]: value }));
+      setFilter(prev => ({ ...prev, [name]: value, currentPage: 1 }));
     }
   }, [userData, filter.type]);
 
@@ -271,7 +292,9 @@ export const useTransactionFilters = (
       sortBy: "date",
       sortOrder: "desc",
       scope: "all",
-      goal_id: undefined
+      goal_id: undefined,
+      currentPage: 1,
+      pageSize: 10
     });
     
     navigate('', { replace: true });
@@ -280,10 +303,19 @@ export const useTransactionFilters = (
   return {
     filter,
     setFilter,
-    filteredTransactions,
+    filteredTransactions: allFilteredTransactions, // Complete filtered data for charts and summary
+    paginatedTransactions, // Subset for table display
     isFiltering,
     handleFilterChange,
-    resetFilters
+    resetFilters,
+    currentPage: filter.currentPage,
+    pageSize: filter.pageSize,
+    totalPages,
+    totalItems,
+    startIndex,
+    endIndex,
+    updatePage,
+    updatePageSize
   };
 };
 
@@ -415,6 +447,15 @@ export const useDeleteTransaction = () => {
         throw new Error("You do not have permission to delete this transaction");
       }
       
+      // Capture transaction data for audit log before deletion
+      const auditData = TransactionAuditService.extractTransactionAuditData(
+        txData,
+        userData?.accounts?.find(acc => acc.id === txData.account_id),
+        userData?.incomeCategories?.find(cat => cat.id === txData.income_category_id) ||
+        userData?.expenseCategories?.find(cat => cat.id === txData.expense_category_id),
+        userData?.goals?.find(goal => goal.id === txData.goal_id)
+      );
+      
       // Calculate balance adjustment
       const balanceChange = txData.type === 'income' ? -txData.amount : txData.amount;
       
@@ -425,6 +466,17 @@ export const useDeleteTransaction = () => {
         .eq('id', transactionToDelete);
         
       if (deleteError) throw deleteError;
+      
+      // Log transaction deletion to audit history (async, don't block on failure)
+      TransactionAuditService.logTransactionDeleted(
+        user.id,
+        auditData,
+        'User deleted transaction from transactions list',
+        navigator.userAgent
+      ).catch(error => {
+        console.error('Failed to log transaction deletion to audit:', error);
+        // Don't show error to user as this shouldn't interrupt their flow
+      });
       
       // Update account balance
       const { error: accountError } = await supabase.rpc('update_account_balance', {

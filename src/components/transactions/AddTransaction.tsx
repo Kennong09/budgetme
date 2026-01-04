@@ -7,7 +7,6 @@ import { useFamilyGoalPermissions } from "../../hooks/useFamilyPermissions";
 import PermissionErrorModal from "../common/PermissionErrorModal";
 import { UserOnboardingService } from "../../services/userOnboardingService";
 import { AccountService } from "../../services/database/accountService";
-import TransactionNotificationService from "../../services/database/transactionNotificationService";
 import BudgetSelector from "../budget/BudgetSelector";
 import { BudgetItem } from "../../services/database/budgetService";
 import { CentavoInput } from "../common/CentavoInput";
@@ -15,6 +14,7 @@ import { formatCurrency, sanitizeBudgetName, roundToCentavo } from "../../utils/
 import AccountSelector from "./components/AccountSelector";
 import CategorySelector from "./components/CategorySelector";
 import GoalSelector from "./components/GoalSelector";
+import { TransactionAuditService } from "../../services/database/transactionAuditService";
 import type { Goal } from "./components/GoalSelector";
 import { Account as AccountType } from "../settings/types";
 import { Account } from "../settings/types";
@@ -22,6 +22,9 @@ import ErrorBoundary from "../common/ErrorBoundary";
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
+
+// Import Transaction CSS
+import "./transactions.css";
 
 interface Category {
   id: string;
@@ -304,6 +307,13 @@ const AddTransaction: FC<{}> = () => {
   };
 
   const handleCategorySelect = (category: Category | null) => {
+    console.log('🏷️ AddTransaction: Category selected', {
+      category,
+      transactionType: transaction.type,
+      previousCategoryId: transaction.category_id,
+      newCategoryId: category?.id || ""
+    });
+    
     setSelectedCategory(category);
     setTransaction(prev => ({
       ...prev,
@@ -315,68 +325,110 @@ const AddTransaction: FC<{}> = () => {
       ...prev,
       budget_id: ''
     }));
+    
+    console.log('🔄 AddTransaction: After category selection, transaction state will be:', {
+      type: transaction.type,
+      category_id: category?.id || "",
+      budget_id: "",
+      previousBudgetCleared: true
+    });
   };
 
   const handleBudgetSelect = (budget: BudgetItem | null) => {
+    console.log('💰 AddTransaction: Budget selected', {
+      budgetId: budget?.id,
+      budgetName: budget?.budget_name,
+      categoryId: budget?.category_id,
+      categoryName: budget?.category_name
+    });
+    
     setSelectedBudget(budget);
     setTransaction((prev) => ({
       ...prev,
       budget_id: budget?.id || '',
     }));
+    
+    // Note: Category auto-selection is handled by handleCategoryAutoSelect 
+    // which is called by BudgetSelector component after this function
   };
+  
+  const handleCategoryAutoSelect = useCallback((categoryId: string, categoryName?: string) => {
+    console.log('🎁 AddTransaction: Auto-selecting category from budget', {
+      categoryId,
+      categoryName,
+      currentCategoryId: transaction.category_id,
+      forceSelection: true,
+      usingNameFallback: !categoryId && !!categoryName
+    });
+    
+    // Force auto-select category when budget is selected (remove the condition check)
+    const categories = transaction.type === 'income' ? userData.incomeCategories : userData.expenseCategories;
+    
+    // Try to find by ID first, then fall back to name matching
+    let category: Category | undefined;
+    if (categoryId) {
+      category = categories.find(cat => cat.id === categoryId);
+    } else if (categoryName) {
+      // Fallback: match by category name
+      category = categories.find(cat => cat.category_name === categoryName);
+    }
+    
+    if (category) {
+      console.log('✨ AddTransaction: Force auto-selecting category from budget', {
+        categoryId: category.id,
+        categoryName: category.category_name,
+        previousCategoryId: transaction.category_id,
+        replacingExisting: !!transaction.category_id,
+        matchedBy: categoryId ? 'ID' : 'Name'
+      });
+      
+      // Use setTimeout to ensure state updates happen in the next tick
+      // This gives React time to process the budget selection first
+      const selectedCat = category;
+      setTimeout(() => {
+        setSelectedCategory(selectedCat || null);
+        if (selectedCat) {
+        setTransaction(prev => ({
+          ...prev,
+            category_id: selectedCat.id
+        }));
+        }
+      }, 0);
+    } else {
+      console.warn('⚠️ AddTransaction: Category not found for auto-selection', { 
+        categoryId,
+        categoryName,
+        searchMethod: categoryId ? 'ID' : 'Name',
+        availableCategories: categories.map(cat => ({ id: cat.id, name: cat.category_name }))
+      });
+    }
+  }, [transaction.type, transaction.category_id, userData.incomeCategories, userData.expenseCategories]);
 
   const handleGoalSelect = (goal: Goal | null) => {
-    console.log('Goal selected:', goal);
     setSelectedGoal(goal);
     
-    // Auto-set "Contribution" category for contribution transactions
-    if (transaction.type === 'contribution' && goal) {
-      const contributionCategory = userData.expenseCategories.find(cat => 
-        cat.category_name === 'Contribution'
+    // Auto-set "Contribution" category for contribution transactions or expense transactions with goals
+    if (goal && (transaction.type === 'contribution' || transaction.type === 'expense')) {
+      // Try to find existing contribution category
+      let contributionCategory = userData.expenseCategories.find(cat => 
+        cat.category_name.toLowerCase() === 'contribution'
       );
       
-      console.log('Looking for Contribution category for contribution type:', contributionCategory);
-      console.log('Available expense categories:', userData.expenseCategories.map(cat => cat.category_name));
-      
-      if (contributionCategory) {
-        console.log('Auto-setting Contribution category for contribution type:', contributionCategory);
-        setSelectedCategory(contributionCategory);
-        setTransaction((prev) => ({
-          ...prev,
-          goal_id: goal.id || "",
-          category_id: contributionCategory.id
-        }));
-        
-        // Clear any budget assignment since this is now a contribution
-        setSelectedBudget(null);
-        setTransaction(prev => ({
-          ...prev,
-          budget_id: ''
-        }));
-      } else {
-        // If no Contribution category found, just set the goal without changing category
-        setTransaction((prev) => ({
-          ...prev,
-          goal_id: goal.id || "",
-        }));
+      // If no exact match, try to find other common goal-related category names
+      if (!contributionCategory) {
+        contributionCategory = userData.expenseCategories.find(cat => 
+          cat.category_name.toLowerCase().includes('goal') ||
+          cat.category_name.toLowerCase().includes('saving') ||
+          cat.category_name.toLowerCase().includes('investment')
+        );
       }
-    }
-    // Legacy logic: If a goal is selected and it's an expense transaction, automatically set it to "Contribution" category
-    else if (goal && transaction.type === 'expense') {
-      const contributionCategory = userData.expenseCategories.find(cat => 
-        cat.category_name === 'Contribution'
-      );
-      
-      console.log('Looking for Contribution category:', contributionCategory);
-      console.log('Available expense categories:', userData.expenseCategories.map(cat => cat.category_name));
       
       if (contributionCategory) {
-        console.log('Auto-setting Contribution category:', contributionCategory);
         setSelectedCategory(contributionCategory);
         setTransaction((prev) => ({
           ...prev,
           goal_id: goal.id || "",
-          category_id: contributionCategory.id
+          category_id: contributionCategory?.id || ""
         }));
         
         // Clear any budget assignment since this is now a contribution
@@ -386,15 +438,20 @@ const AddTransaction: FC<{}> = () => {
           budget_id: ''
         }));
       } else {
-        console.log('No Contribution category found, just setting goal');
-        // If no Contribution category found, just set the goal without changing category
+        // If no suitable category found, just set the goal without requiring a specific category
+        // For contribution transactions, we'll allow them to proceed without a category
         setTransaction((prev) => ({
           ...prev,
           goal_id: goal.id || "",
+          category_id: transaction.type === 'contribution' ? '' : prev.category_id // Clear category for contribution type
         }));
+        
+        // Clear category selection for contribution type
+        if (transaction.type === 'contribution') {
+          setSelectedCategory(null);
+        }
       }
     } else {
-      console.log('No goal selected or income transaction, just updating goal_id');
       // If no goal selected or income transaction, just update goal_id
       setTransaction((prev) => ({
         ...prev,
@@ -422,8 +479,8 @@ const AddTransaction: FC<{}> = () => {
       return;
     }
 
-    // Mandatory category validation for all transaction types
-    if (!transaction.category_id) {
+    // Category validation - mandatory for income and expense, optional for contribution
+    if (!transaction.category_id && transaction.type !== 'contribution') {
       showErrorToast("Please select a category");
       return;
     }
@@ -436,8 +493,12 @@ const AddTransaction: FC<{}> = () => {
     if (isIncome) {
       categoryExists = userData.incomeCategories.some(cat => cat.id === transaction.category_id);
     } else if (isContribution) {
-      // For contribution type, category should be from expense categories
-      categoryExists = userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+      // For contribution type, category is optional but if provided should be from expense categories
+      if (transaction.category_id) {
+        categoryExists = userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+      } else {
+        categoryExists = true; // Allow no category for contribution type
+      }
     } else {
       categoryExists = userData.expenseCategories.some(cat => cat.id === transaction.category_id);
     }
@@ -544,8 +605,12 @@ const AddTransaction: FC<{}> = () => {
         if (isIncome) {
           categoryExists = userData.incomeCategories.some(cat => cat.id === transaction.category_id);
         } else if (isContribution) {
-          // For contribution type, category should be from expense categories
-          categoryExists = userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+          // For contribution type, category is optional but if provided should be from expense categories
+          if (transaction.category_id) {
+            categoryExists = userData.expenseCategories.some(cat => cat.id === transaction.category_id);
+          } else {
+            categoryExists = true; // Allow no category for contribution type
+          }
         } else {
           categoryExists = userData.expenseCategories.some(cat => cat.id === transaction.category_id);
         }
@@ -609,10 +674,7 @@ const AddTransaction: FC<{}> = () => {
         transactionData.expense_category_id = transaction.category_id || null;
       }
       
-      // TODO: Add budget tracking after resolving database format string issue
-      // if (selectedBudget && transaction.type === 'expense') {
-      //   transactionData.tags = [`budget_id_${selectedBudget.id}`, `category_id_${selectedBudget.category_id}`];
-      // }
+
       
       const { data: insertedTransaction, error: transactionError } = await supabase
         .from('transactions')
@@ -633,36 +695,10 @@ const AddTransaction: FC<{}> = () => {
       
       console.log('Transaction inserted successfully:', insertedTransaction);
       
-      // 2. Update the account balance
-      // For income, add to balance; for expenses and contributions, subtract from balance
-      const balanceChange = transaction.type === 'income' ? amount : -amount;
+      // NOTE: Account balance is automatically updated by the database trigger 'trigger_update_account_balance'
+      // No manual update needed here to avoid duplicate updates
       
-      const { error: accountError } = await supabase.rpc('update_account_balance', { 
-        p_account_id: accountId,
-        p_amount_change: balanceChange
-      });
-      
-      if (accountError) {
-        // If RPC fails, fall back to direct update
-        const { data: accountData, error: fetchError } = await supabase
-          .from('accounts')
-          .select('balance')
-          .eq('id', accountId)
-          .single();
-          
-        if (fetchError) throw fetchError;
-        
-        const newBalance = accountData.balance + balanceChange;
-        
-        const { error: updateError } = await supabase
-          .from('accounts')
-          .update({ balance: newBalance })
-          .eq('id', accountId);
-          
-        if (updateError) throw updateError;
-      }
-      
-      // 3. Update goal progress if applicable
+      // 2. Update goal progress if applicable
       if (transaction.goal_id) {
         const { error: goalError } = await supabase.rpc('update_goal_progress', {
           p_goal_id: transaction.goal_id,
@@ -694,36 +730,29 @@ const AddTransaction: FC<{}> = () => {
         }
       }
 
-      // 4. Trigger transaction notifications
-      if (insertedTransaction && insertedTransaction[0]) {
-        try {
-          const createdTransaction = insertedTransaction[0];
+      // Log transaction creation to audit history (async, don't block on failure)
+      try {
+        if (insertedTransaction && insertedTransaction[0]) {
+          const auditData = TransactionAuditService.extractTransactionAuditData(
+            insertedTransaction[0],
+            selectedAccount,
+            selectedCategory,
+            selectedGoal
+          );
           
-          // Prepare transaction data for notification service
-          const transactionDataForNotification = {
-            id: createdTransaction.id,
-            user_id: createdTransaction.user_id,
-            account_id: createdTransaction.account_id,
-            category_id: transaction.type === 'income' ? createdTransaction.income_category_id : createdTransaction.expense_category_id,
-            goal_id: createdTransaction.goal_id,
-            amount: createdTransaction.amount,
-            transaction_type: createdTransaction.type,
-            description: createdTransaction.description || '',
-            transaction_date: createdTransaction.date,
-            currency: 'PHP',
-            family_id: null,
-            is_recurring: false,
-            recurring_frequency: null
-          };
-          
-          // Trigger notification processing
-          await TransactionNotificationService.getInstance().handleTransactionCreated(transactionDataForNotification);
-          
-          console.log('Transaction notifications processed successfully');
-        } catch (notificationError) {
-          // Log notification error but don't fail the transaction
-          console.warn('Failed to process transaction notifications:', notificationError);
+          // Log audit activity (don't await to avoid blocking user flow)
+          TransactionAuditService.logTransactionCreated(
+            user.id,
+            auditData,
+            navigator.userAgent
+          ).catch(error => {
+            console.error('Failed to log transaction creation to audit:', error);
+            // Don't show error to user as this shouldn't interrupt their flow
+          });
         }
+      } catch (auditError) {
+        console.error('Error preparing transaction audit log:', auditError);
+        // Don't show error to user as this shouldn't interrupt their flow
       }
 
       showSuccessToast("Transaction added successfully!");
@@ -770,7 +799,22 @@ const AddTransaction: FC<{}> = () => {
   if (loading) {
     return (
       <div className="container-fluid">
-        <div className="text-center my-5">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">
+              {setupInProgress ? 'Setting up your account...' : 'Loading transaction form...'}
+            </p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="text-center my-5 hidden md:block">
           <div className="spinner-border text-primary" role="status">
             <span className="sr-only">Loading...</span>
           </div>
@@ -794,8 +838,11 @@ const AddTransaction: FC<{}> = () => {
       <div className="container-fluid">
         <div className="d-sm-flex align-items-center justify-content-between mb-4">
           <h1 className="h3 mb-0 text-gray-800">Add Transaction</h1>
-          <Link to="/transactions" className="btn btn-sm btn-secondary shadow-sm">
-            <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Transactions
+          <Link 
+            to="/transactions" 
+            className="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-xs md:text-sm font-medium rounded shadow-sm transition-colors"
+          >
+            <i className="fas fa-arrow-left text-xs mr-1"></i> Back to Transactions
           </Link>
         </div>
       
@@ -822,12 +869,10 @@ const AddTransaction: FC<{}> = () => {
                   </p>
                   <button 
                     onClick={() => window.location.reload()}
-                    className="btn btn-warning btn-icon-split"
+                    className="inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-2.5 bg-[#f6c23e] hover:bg-[#dda20a] text-white text-sm md:text-base font-medium rounded shadow-sm transition-colors"
                   >
-                    <span className="icon text-white-50">
-                      <i className="fas fa-sync-alt"></i>
-                    </span>
-                    <span className="text">Refresh Page</span>
+                    <i className="fas fa-sync-alt text-xs mr-2"></i>
+                    Refresh Page
                   </button>
                   <div className="mt-3">
                     <small className="text-muted">
@@ -858,15 +903,161 @@ const AddTransaction: FC<{}> = () => {
     
     return (
       <div className="container-fluid animate__animated animate__fadeIn">
-        {/* Page Heading */}
-        <div className="d-sm-flex align-items-center justify-content-between mb-4">
+        {/* Mobile Page Heading - Floating action buttons */}
+        <div className="block md:hidden mb-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-base font-bold text-gray-800">Review Transaction</h1>
+            <Link
+              to="/transactions"
+              className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+              aria-label="Cancel"
+            >
+              <i className="fas fa-times text-xs"></i>
+            </Link>
+          </div>
+        </div>
+
+        {/* Desktop Page Heading */}
+        <div className="d-none d-md-flex align-items-center justify-content-between mb-4">
           <h1 className="h3 mb-0 text-gray-800">Review Transaction</h1>
-          <Link to="/transactions" className="btn btn-sm btn-secondary shadow-sm">
-            <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
+          <Link 
+            to="/transactions" 
+            className="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-xs md:text-sm font-medium rounded shadow-sm transition-colors"
+          >
+            <i className="fas fa-arrow-left text-xs mr-1"></i> Cancel
           </Link>
         </div>
 
-        <div className="row">
+        {/* Mobile Review Summary Card */}
+        <div className="block md:hidden mb-4">
+          <div className={`bg-gradient-to-br ${
+            transaction.type === 'income' ? 'from-emerald-500 via-teal-500 to-cyan-500' :
+            transaction.type === 'contribution' ? 'from-blue-500 via-indigo-500 to-purple-500' :
+            'from-rose-500 via-red-500 to-orange-500'
+          } rounded-2xl p-4 shadow-lg`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-white/80 text-xs font-medium">
+                {transaction.type === 'income' ? 'Income' : transaction.type === 'contribution' ? 'Contribution' : 'Expense'}
+              </span>
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                <i className={`fas fa-${transaction.type === 'income' ? 'plus' : transaction.type === 'contribution' ? 'flag' : 'minus'} text-white text-sm`}></i>
+              </div>
+            </div>
+            <div className="text-white text-2xl font-bold mb-1">
+              {formatCurrency(transaction.amount)}
+            </div>
+            <div className="text-white/70 text-xs">
+              {new Date(transaction.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+            </div>
+          </div>
+
+          {/* Mobile Details Grid */}
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center mb-2">
+                <i className="fas fa-university text-blue-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Account</p>
+              <p className="text-xs font-bold text-gray-800 truncate">{selectedAccount?.account_name || 'N/A'}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center mb-2">
+                <i className="fas fa-tag text-amber-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Category</p>
+              <p className="text-xs font-bold text-gray-800 truncate">{selectedCategory?.category_name || 'N/A'}</p>
+            </div>
+          </div>
+
+          {/* Mobile Goal Card */}
+          {selectedGoal && (
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+                  <i className="fas fa-flag text-indigo-500 text-xs"></i>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Goal</p>
+                  <p className="text-xs font-bold text-gray-800 truncate">{selectedGoal.goal_name}</p>
+                </div>
+                {selectedGoal.is_family_goal && (
+                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 text-[9px] font-semibold">Family</span>
+                )}
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+                <div
+                  className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${selectedGoal.target_amount > 0 ? Math.min(100, (selectedGoal.current_amount / selectedGoal.target_amount) * 100) : 0}%` }}
+                ></div>
+              </div>
+              <p className="text-[10px] text-gray-500">
+                {selectedGoal.target_amount > 0 ? ((selectedGoal.current_amount / selectedGoal.target_amount) * 100).toFixed(1) : 0}% complete
+              </p>
+            </div>
+          )}
+
+          {/* Mobile Budget Card */}
+          {selectedBudget && (
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <i className="fas fa-wallet text-emerald-500 text-xs"></i>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Budget</p>
+                  <p className="text-xs font-bold text-gray-800 truncate">{selectedBudget.budget_name}</p>
+                </div>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+                <div
+                  className={`h-1.5 rounded-full transition-all duration-500 ${
+                    ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.9 ? 'bg-rose-500' :
+                    ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.8 ? 'bg-amber-500' :
+                    'bg-emerald-500'
+                  }`}
+                  style={{ width: `${Math.min(100, ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount * 100)}%` }}
+                ></div>
+              </div>
+              <p className="text-[10px] text-gray-500">
+                {(((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount * 100).toFixed(1)}% after this transaction
+              </p>
+            </div>
+          )}
+
+          {/* Mobile Description */}
+          {transaction.description && (
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mt-2">
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide mb-1">Description</p>
+              <p className="text-xs text-gray-700">{transaction.description}</p>
+            </div>
+          )}
+
+          {/* Mobile Action Buttons */}
+          <div className="flex gap-2 mt-4">
+            <button 
+              onClick={() => setViewMode("form")} 
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <i className="fas fa-arrow-left text-xs"></i>
+              Edit
+            </button>
+            <button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting}
+              className={`flex-1 py-3 ${
+                transaction.type === 'income' ? 'bg-emerald-500 hover:bg-emerald-600' :
+                transaction.type === 'contribution' ? 'bg-indigo-500 hover:bg-indigo-600' :
+                'bg-rose-500 hover:bg-rose-600'
+              } text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50`}
+            >
+              <i className={`${isSubmitting ? "fas fa-spinner fa-spin" : "fas fa-check"} text-xs`}></i>
+              {isSubmitting ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+
+        {/* Desktop Review Section */}
+        <div className="row d-none d-md-flex">
           <div className="col-lg-8 mx-auto">
             <div className="card shadow mb-4">
               <div className="card-header py-3 d-flex align-items-center">
@@ -890,7 +1081,7 @@ const AddTransaction: FC<{}> = () => {
                               Amount
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {formatCurrency(transaction.amount, 'PHP')}
+                              {formatCurrency(transaction.amount)}
                             </div>
                           </div>
                           <div className="col-auto">
@@ -1044,22 +1235,165 @@ const AddTransaction: FC<{}> = () => {
                 )}
 
                 {selectedBudget && (
-                  <div className="card bg-success text-white shadow mb-4">
+                  <div className="card bg-white border-left-primary shadow mb-4">
                     <div className="card-body">
                       <div className="row no-gutters align-items-center">
                         <div className="col mr-2">
-                          <div className="text-xs font-weight-bold text-white text-uppercase mb-1">
+                          <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
                             Assigned Budget
+                            <span className="badge badge-primary ml-2">
+                              <i className="fas fa-wallet mr-1"></i> Budget Tracking
+                            </span>
                           </div>
-                          <div className="h5 mb-0 font-weight-bold text-white">
+                          <div className="h5 mb-0 font-weight-bold text-gray-800 d-flex align-items-center">
                             {selectedBudget.budget_name}
+                            {selectedBudget.category_name && (
+                              <span className="badge badge-secondary ml-2">
+                                <i className="fas fa-tag mr-1"></i> {selectedBudget.category_name}
+                              </span>
+                            )}
                           </div>
-                          <div className="text-sm text-white-50">
-                            ₱{((selectedBudget.amount - (selectedBudget.spent || 0)) - transaction.amount).toFixed(2)} remaining after transaction
+                          
+                          {/* Enhanced Budget Progress Bar */}
+                          <div className="mt-3 mb-3">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <span className="text-sm font-weight-medium text-gray-700">Budget Utilization (After Transaction)</span>
+                              <span className={`font-weight-bold text-sm ${
+                                ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.9
+                                  ? 'text-danger'
+                                  : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.8
+                                  ? 'text-warning'
+                                  : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.6
+                                  ? 'text-info'
+                                  : 'text-success'
+                              }`}>
+                                {(((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount * 100).toFixed(1)}%
+                              </span>
+                            </div>
+                            <div className="position-relative">
+                              <div 
+                                className="progress" 
+                                style={{ 
+                                  height: '12px', 
+                                  borderRadius: '6px',
+                                  backgroundColor: '#f1f3f4',
+                                  boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.1)'
+                                }}
+                              >
+                                {/* Current spending */}
+                                <div
+                                  className="progress-bar bg-secondary"
+                                  style={{ 
+                                    width: `${Math.min(100, (selectedBudget.spent || 0) / selectedBudget.amount * 100)}%`,
+                                    borderRadius: '6px 0 0 6px'
+                                  }}
+                                ></div>
+                                {/* Transaction impact */}
+                                <div
+                                  className={`progress-bar ${
+                                    ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.9
+                                      ? 'bg-danger'
+                                      : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.8
+                                      ? 'bg-warning'
+                                      : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.6
+                                      ? 'bg-info'
+                                      : 'bg-success'
+                                  }`}
+                                  role="progressbar"
+                                  style={{ 
+                                    width: `${Math.min(100, (transaction.amount / selectedBudget.amount * 100))}%`,
+                                    borderRadius: '0 6px 6px 0',
+                                    transition: 'width 0.6s ease-in-out, background-color 0.3s ease',
+                                    background: ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.9
+                                      ? 'linear-gradient(45deg, #dc3545, #c82333)'
+                                      : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.8
+                                      ? 'linear-gradient(45deg, #ffc107, #e0a800)'
+                                      : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.6
+                                      ? 'linear-gradient(45deg, #17a2b8, #138496)'
+                                      : 'linear-gradient(45deg, #28a745, #218838)',
+                                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+                                  }}
+                                  aria-valuenow={Math.min(100, ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount * 100)}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-label={`Budget utilization after transaction: ${(((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount * 100).toFixed(1)}% of ${selectedBudget.budget_name}`}
+                                >
+                                  {/* Animated stripes for warning/critical states */}
+                                  {((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.8 && (
+                                    <div 
+                                      className="progress-bar-striped progress-bar-animated" 
+                                      style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        height: '100%',
+                                        width: '100%',
+                                        background: 'linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.2) 75%, transparent 75%, transparent)',
+                                        backgroundSize: '1rem 1rem',
+                                        animation: 'progress-bar-stripes 1s linear infinite'
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                              {/* Usage indicator markers */}
+                              <div className="position-absolute d-flex justify-content-between w-100" style={{ top: '-2px', fontSize: '10px' }}>
+                                <div className="text-muted" style={{ marginLeft: '60%' }}>60%</div>
+                                <div className="text-muted" style={{ marginRight: '20%' }}>80%</div>
+                              </div>
+                            </div>
+                            {/* Status indicator */}
+                            <div className="mt-2 d-flex align-items-center justify-content-between">
+                              <div className="d-flex align-items-center">
+                                <i className={`fas fa-circle mr-2 ${
+                                  ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.9
+                                    ? 'text-danger'
+                                    : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.8
+                                    ? 'text-warning'
+                                    : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.6
+                                    ? 'text-info'
+                                    : 'text-success'
+                                }`} style={{ fontSize: '8px' }}></i>
+                                <span className="text-xs text-muted">
+                                  {((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.9
+                                    ? 'Critical: Near budget limit'
+                                    : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.8
+                                    ? 'Warning: Approaching budget limit'
+                                    : ((selectedBudget.spent || 0) + transaction.amount) / selectedBudget.amount >= 0.6
+                                    ? 'Moderate: Good progress'
+                                    : 'Healthy: Well within budget'
+                                  }
+                                </span>
+                              </div>
+                              <span className="text-xs font-weight-bold text-primary">
+                                +₱{transaction.amount.toFixed(2)} this transaction
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="row text-sm mt-3">
+                            <div className="col-4 text-center">
+                              <div className="font-weight-bold text-gray-800">₱{selectedBudget.amount.toFixed(2)}</div>
+                              <div className="text-muted">Total Budget</div>
+                            </div>
+                            <div className="col-4 text-center">
+                              <div className="font-weight-bold text-gray-600">₱{(selectedBudget.spent || 0).toFixed(2)}</div>
+                              <div className="text-muted">Current Spent</div>
+                            </div>
+                            <div className="col-4 text-center">
+                              <div className={`font-weight-bold ${
+                                (selectedBudget.amount - (selectedBudget.spent || 0) - transaction.amount) < 0 
+                                  ? 'text-danger' 
+                                  : 'text-success'
+                              }`}>
+                                ₱{((selectedBudget.amount - (selectedBudget.spent || 0)) - transaction.amount).toFixed(2)}
+                              </div>
+                              <div className="text-muted">After Transaction</div>
+                            </div>
                           </div>
                         </div>
                         <div className="col-auto">
-                          <i className="fas fa-wallet fa-2x text-white-50"></i>
+                          <i className="fas fa-wallet fa-2x text-gray-300"></i>
                         </div>
                       </div>
                     </div>
@@ -1076,21 +1410,21 @@ const AddTransaction: FC<{}> = () => {
                 </div>
 
                 <div className="text-center mt-4">
-                  <button onClick={() => setViewMode("form")} className="btn btn-light btn-icon-split mr-2">
-                    <span className="icon text-gray-600">
-                      <i className="fas fa-arrow-left"></i>
-                    </span>
-                    <span className="text">Back to Edit</span>
+                  <button 
+                    onClick={() => setViewMode("form")} 
+                    className="inline-flex items-center justify-center px-3 py-2 md:px-4 md:py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-xs md:text-sm font-medium rounded shadow-sm transition-colors mr-2"
+                  >
+                    <i className="fas fa-arrow-left text-xs mr-1"></i>
+                    <span className="d-none d-md-inline">Back to Edit</span>
+                    <span className="d-inline d-md-none">Back</span>
                   </button>
                   <button 
                     onClick={handleSubmit} 
                     disabled={isSubmitting}
-                    className="btn btn-success btn-icon-split"
+                    className="inline-flex items-center justify-center px-3 py-2 md:px-4 md:py-2 bg-[#1cc88a] hover:bg-[#17a673] text-white text-xs md:text-sm font-medium rounded shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="icon text-white-50">
-                      <i className={isSubmitting ? "fas fa-spinner fa-spin" : "fas fa-check"}></i>
-                    </span>
-                    <span className="text">{isSubmitting ? "Saving..." : "Save Transaction"}</span>
+                    <i className={`${isSubmitting ? "fas fa-spinner fa-spin" : "fas fa-check"} text-xs mr-1`}></i>
+                    {isSubmitting ? "Saving..." : "Save Transaction"}
                   </button>
                 </div>
               </div>
@@ -1103,11 +1437,371 @@ const AddTransaction: FC<{}> = () => {
 
   return (
     <div className="container-fluid animate__animated animate__fadeIn">
-      {/* Page Heading */}
-      <div className="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 className="h3 mb-0 text-gray-800">Add Transaction</h1>
-        <Link to="/transactions" className="btn btn-sm btn-secondary shadow-sm">
-          <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Transactions
+      {/* Mobile Page Heading - Floating action buttons */}
+      <div className="block md:hidden mb-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-bold text-gray-800">Add Transaction</h1>
+          <Link
+            to="/transactions"
+            className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+            aria-label="Back to transactions"
+          >
+            <i className="fas fa-arrow-left text-xs"></i>
+          </Link>
+        </div>
+      </div>
+
+      {/* ===== MOBILE FORM VIEW ===== */}
+      <div className="block md:hidden mb-4">
+        <form onSubmit={handleReview}>
+          {/* Mobile Transaction Type Selector */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-exchange-alt text-indigo-500 text-[10px]"></i>
+                Transaction Type
+                <span className="text-red-500">*</span>
+              </h6>
+            </div>
+            <div className="p-3">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransaction((prev) => ({...prev, type: 'income', category_id: '', budget_id: '', goal_id: ''}));
+                    setSelectedCategory(null);
+                    setSelectedBudget(null);
+                    setSelectedGoal(null);
+                  }}
+                  className={`py-3 rounded-xl text-center transition-all active:scale-95 ${
+                    transaction.type === 'income' 
+                      ? 'bg-emerald-500 text-white shadow-md' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <i className="fas fa-plus-circle text-lg mb-1 block"></i>
+                  <span className="text-[10px] font-semibold">Income</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransaction((prev) => ({...prev, type: 'expense', category_id: '', budget_id: '', goal_id: ''}));
+                    setSelectedCategory(null);
+                    setSelectedBudget(null);
+                    setSelectedGoal(null);
+                  }}
+                  className={`py-3 rounded-xl text-center transition-all active:scale-95 ${
+                    transaction.type === 'expense' 
+                      ? 'bg-rose-500 text-white shadow-md' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <i className="fas fa-minus-circle text-lg mb-1 block"></i>
+                  <span className="text-[10px] font-semibold">Expense</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransaction((prev) => ({...prev, type: 'contribution', category_id: '', budget_id: '', goal_id: ''}));
+                    setSelectedCategory(null);
+                    setSelectedBudget(null);
+                    setSelectedGoal(null);
+                    setTimeout(() => {
+                      const contributionCategory = userData.expenseCategories.find(cat => cat.category_name === 'Contribution');
+                      if (contributionCategory) {
+                        setSelectedCategory(contributionCategory);
+                        setTransaction(prev => ({...prev, category_id: contributionCategory.id}));
+                      }
+                    }, 100);
+                  }}
+                  className={`py-3 rounded-xl text-center transition-all active:scale-95 ${
+                    transaction.type === 'contribution' 
+                      ? 'bg-blue-500 text-white shadow-md' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <i className="fas fa-flag text-lg mb-1 block"></i>
+                  <span className="text-[10px] font-semibold">Contribute</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Amount & Date Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-peso-sign text-indigo-500 text-[10px]"></i>
+                Amount & Date
+              </h6>
+            </div>
+            <div className="p-3 space-y-3">
+              <div>
+                <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1 block">
+                  Amount <span className="text-red-500">*</span>
+                </label>
+                <CentavoInput
+                  value={transaction.amount}
+                  onChange={handleAmountChange}
+                  currency="PHP"
+                  placeholder="0.00"
+                  required={true}
+                  min={0.01}
+                  max={99999999999.99}
+                  className="mobile-amount-input"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1 block">
+                  Date <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  name="date"
+                  value={transaction.date}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Account & Category Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-university text-indigo-500 text-[10px]"></i>
+                Account & Category
+              </h6>
+            </div>
+            <div className="p-3 space-y-3">
+              <AccountSelector
+                selectedAccountId={transaction.account_id}
+                onAccountSelect={handleAccountSelect}
+                required={true}
+                label="Account"
+                showBalance={true}
+                showAccountType={true}
+                autoSelectDefault={true}
+                className="mobile-selector"
+              />
+              {transaction.type !== 'contribution' ? (
+                <CategorySelector
+                  selectedCategoryId={transaction.category_id}
+                  onCategorySelect={handleCategorySelect}
+                  transactionType={transaction.type}
+                  incomeCategories={userData.incomeCategories}
+                  expenseCategories={userData.expenseCategories}
+                  required={true}
+                  label="Category"
+                  showIcons={true}
+                  className="mobile-selector"
+                />
+              ) : (
+                <div>
+                  <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1 block">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-blue-500 text-white rounded-lg">
+                    <i className="fas fa-flag text-sm"></i>
+                    <span className="text-sm font-semibold">Contribution</span>
+                    <span className="ml-auto px-2 py-0.5 bg-white/20 rounded text-[9px] font-medium">Auto</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile Contribution Info Card */}
+          {transaction.type === 'contribution' && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl shadow-sm border border-blue-100 overflow-hidden mb-3">
+              <div className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
+                    <i className="fas fa-flag text-white text-sm"></i>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-blue-700">Contribution Transaction</p>
+                    <p className="text-[10px] text-blue-500">Category auto-assigned to goal</p>
+                  </div>
+                </div>
+                {selectedGoal && transaction.amount > 0 && (
+                  <>
+                    <div className="flex justify-between items-center text-[10px] text-gray-600 mb-1">
+                      <span className="font-semibold uppercase tracking-wide">Goal Progress Impact</span>
+                      <span className="font-bold text-blue-600">+₱{transaction.amount.toFixed(2)}</span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-1.5 mb-1">
+                      <div
+                        className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                        style={{ width: `${selectedGoal.target_amount > 0 ? Math.min(100, ((selectedGoal.current_amount + transaction.amount) / selectedGoal.target_amount) * 100) : 0}%` }}
+                      ></div>
+                    </div>
+                    <div className="flex justify-between text-[9px] text-gray-500">
+                      <span>{selectedGoal.target_amount > 0 ? (((selectedGoal.current_amount + transaction.amount) / selectedGoal.target_amount) * 100).toFixed(1) : 0}% of {selectedGoal.goal_name}</span>
+                      <span>₱{Math.max(0, selectedGoal.target_amount - selectedGoal.current_amount - transaction.amount).toFixed(2)} remaining</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Budget Selector (Expense only) */}
+          {transaction.type === 'expense' && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+              <div className="px-3 py-2.5 border-b border-gray-100">
+                <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                  <i className="fas fa-wallet text-indigo-500 text-[10px]"></i>
+                  Budget Assignment
+                  <span className="text-[9px] text-gray-400 font-normal">(Optional)</span>
+                </h6>
+              </div>
+              <div className="p-3">
+                <BudgetSelector
+                  selectedBudgetId={transaction.budget_id}
+                  selectedCategoryId={transaction.category_id}
+                  transactionAmount={transaction.amount || 0}
+                  transactionType={transaction.type}
+                  onBudgetSelect={handleBudgetSelect}
+                  onCategoryAutoSelect={handleCategoryAutoSelect}
+                  className="mobile-budget-selector"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Goal Selector */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-flag text-indigo-500 text-[10px]"></i>
+                {transaction.type === 'contribution' ? 'Goal' : 'Goal Assignment'}
+                {transaction.type === 'contribution' && <span className="text-red-500">*</span>}
+                {transaction.type !== 'contribution' && <span className="text-[9px] text-gray-400 font-normal">(Optional)</span>}
+              </h6>
+            </div>
+            <div className="p-3">
+              {hasGoals === false ? (
+                <div className="text-center py-4">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-indigo-100 flex items-center justify-center mb-3">
+                    <i className="fas fa-flag text-indigo-500 text-lg"></i>
+                  </div>
+                  <p className="text-xs font-medium text-gray-600 mb-2">No Goals Available</p>
+                  <p className="text-[10px] text-gray-400 mb-3">
+                    {transaction.type === 'contribution' 
+                      ? 'Create a goal to make contributions.'
+                      : 'Create goals to track your progress.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/goals/create')}
+                    className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    <i className="fas fa-plus mr-1"></i>
+                    Create Goal
+                  </button>
+                </div>
+              ) : (
+                <GoalSelector
+                  selectedGoal={selectedGoal}
+                  onGoalSelect={handleGoalSelect}
+                  className="mobile-goal-selector"
+                  required={transaction.type === 'contribution'}
+                  label=""
+                  isContributionType={transaction.type === 'contribution'}
+                  showValidationError={transaction.type === 'contribution' && !selectedGoal}
+                  onGoalsLoaded={setHasGoals}
+                  validateFamilyGoalAccess={true}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Mobile Selected Goal Preview */}
+          {selectedGoal && transaction.type !== 'contribution' && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+              <div className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                    <i className="fas fa-flag text-indigo-500 text-sm"></i>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-gray-800 truncate">{selectedGoal.goal_name}</p>
+                    <p className="text-[10px] text-gray-500">
+                      {selectedGoal.is_family_goal ? 'Family Goal' : 'Personal Goal'}
+                    </p>
+                  </div>
+                  {selectedGoal.is_family_goal && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 text-[9px] font-semibold">Family</span>
+                  )}
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+                  <div
+                    className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
+                    style={{ width: `${selectedGoal.target_amount > 0 ? Math.min(100, (selectedGoal.current_amount / selectedGoal.target_amount) * 100) : 0}%` }}
+                  ></div>
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-500">
+                  <span>{selectedGoal.target_amount > 0 ? ((selectedGoal.current_amount / selectedGoal.target_amount) * 100).toFixed(1) : 0}% complete</span>
+                  <span>₱{(selectedGoal.target_amount - selectedGoal.current_amount).toFixed(2)} remaining</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Description Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-pen text-indigo-500 text-[10px]"></i>
+                Description
+                <span className="text-red-500">*</span>
+              </h6>
+            </div>
+            <div className="p-3">
+              <textarea
+                name="description"
+                value={transaction.description}
+                onChange={handleChange}
+                className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none resize-none"
+                rows={3}
+                placeholder="Enter a description for this transaction"
+                required
+              ></textarea>
+            </div>
+          </div>
+
+          {/* Mobile Submit Button */}
+          <button 
+            type="submit"
+            className={`w-full py-3.5 rounded-xl text-white text-sm font-semibold shadow-lg transition-all active:scale-98 flex items-center justify-center gap-2 ${
+              transaction.type === 'income' ? 'bg-emerald-500 hover:bg-emerald-600' :
+              transaction.type === 'contribution' ? 'bg-blue-500 hover:bg-blue-600' :
+              'bg-rose-500 hover:bg-rose-600'
+            }`}
+          >
+            <i className="fas fa-arrow-right text-xs"></i>
+            Continue to Review
+          </button>
+        </form>
+      </div>
+      {/* ===== END MOBILE FORM VIEW ===== */}
+
+      {/* Desktop Page Heading */}
+      <div className="d-none d-md-flex align-items-center justify-content-between mb-2 mb-md-4 flex-wrap">
+        <h1 className="h5 h-md-3 mb-1 mb-md-0 text-gray-800" style={{ fontSize: '0.95rem' }}>
+          <span className="d-none d-md-inline">Add Transaction</span>
+          <span className="d-inline d-md-none">Add</span>
+        </h1>
+        <Link 
+          to="/transactions" 
+          className="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-xs md:text-sm font-medium rounded shadow-sm transition-colors"
+        >
+          <i className="fas fa-arrow-left text-xs mr-1"></i>
+          <span className="d-none d-md-inline">Back to Transactions</span>
+          <span className="d-inline d-md-none">Back</span>
         </Link>
       </div>
       
@@ -1139,12 +1833,14 @@ const AddTransaction: FC<{}> = () => {
         </div>
       )}
 
-      <div className="row">
+      {/* Desktop Form View */}
+      <div className="row d-none d-md-flex">
         <div className="col-lg-8 mx-auto">
-          <div className="card shadow mb-4">
+          <div className="card shadow mb-4 transaction-form">
             <div className="card-header py-3">
               <h6 className="m-0 font-weight-bold text-primary">
-                Transaction Details
+                <span className="d-none d-md-inline">Transaction Details</span>
+                <span className="d-inline d-md-none">Details</span>
                 <i 
                   className="fas fa-info-circle ml-1 text-gray-400"
                   style={{ cursor: 'pointer' }}
@@ -1165,7 +1861,6 @@ const AddTransaction: FC<{}> = () => {
                         className={`card ${transaction.type === 'income' ? 'bg-success text-white' : 'bg-light'} py-3 text-center shadow-sm`}
                         style={{ cursor: 'pointer' }}
                         onClick={() => {
-                          // Use a more controlled state update for transaction type change
                           setTransaction((prev) => ({
                             ...prev,
                             type: 'income',
@@ -1178,7 +1873,7 @@ const AddTransaction: FC<{}> = () => {
                           setSelectedGoal(null);
                         }}
                       >
-                        <div className="card-body p-3">
+                        <div className="card-body transaction-type-card">
                           <i className="fas fa-plus-circle fa-2x mb-2"></i>
                           <h5 className="mb-0">Income</h5>
                         </div>
@@ -1189,7 +1884,6 @@ const AddTransaction: FC<{}> = () => {
                         className={`card ${transaction.type === 'expense' ? 'bg-danger text-white' : 'bg-light'} py-3 text-center shadow-sm`}
                         style={{ cursor: 'pointer' }}
                         onClick={() => {
-                          // Use a more controlled state update for transaction type change
                           setTransaction((prev) => ({
                             ...prev,
                             type: 'expense',
@@ -1202,7 +1896,7 @@ const AddTransaction: FC<{}> = () => {
                           setSelectedGoal(null);
                         }}
                       >
-                        <div className="card-body p-3">
+                        <div className="card-body transaction-type-card">
                           <i className="fas fa-minus-circle fa-2x mb-2"></i>
                           <h5 className="mb-0">Expense</h5>
                         </div>
@@ -1241,7 +1935,7 @@ const AddTransaction: FC<{}> = () => {
                           }, 100);
                         }}
                       >
-                        <div className="card-body p-3">
+                        <div className="card-body transaction-type-card">
                           <i className="fas fa-flag fa-2x mb-2"></i>
                           <h5 className="mb-0">Contribute</h5>
                         </div>
@@ -1409,19 +2103,29 @@ const AddTransaction: FC<{}> = () => {
 
                 {/* Budget Assignment - Only show for expense type */}
                 {transaction.type === 'expense' && (
-                  <BudgetSelector
-                    selectedBudgetId={transaction.budget_id}
-                    selectedCategoryId={transaction.category_id}
-                    transactionAmount={transaction.amount || 0}
-                    transactionType={transaction.type}
-                    onBudgetSelect={handleBudgetSelect}
-                    className="mb-4"
-                  />
+                  <>                    
+                    {console.log('📄 AddTransaction: Rendering BudgetSelector with props:', {
+                      selectedBudgetId: transaction.budget_id,
+                      selectedCategoryId: transaction.category_id,
+                      transactionAmount: transaction.amount || 0,
+                      transactionType: transaction.type,
+                      selectedCategory: selectedCategory
+                    })}
+                    <BudgetSelector
+                      selectedBudgetId={transaction.budget_id}
+                      selectedCategoryId={transaction.category_id}
+                      transactionAmount={transaction.amount || 0}
+                      transactionType={transaction.type}
+                      onBudgetSelect={handleBudgetSelect}
+                      onCategoryAutoSelect={handleCategoryAutoSelect}
+                      className="mb-4"
+                    />
+                  </>
                 )}
 
                 {/* Goal Assignment - Always show but required for contribution type OR Goal Creation Button if no goals */}
                 {hasGoals === false ? (
-                  // Show goal creation button when no goals are available
+                  // Show goal creation section when no goals are available
                   <div className="mb-4">
                     <label className="font-weight-bold text-gray-800">
                       {transaction.type === 'contribution' ? 'Goal *' : 'Goal Assignment (Optional)'}
@@ -1437,25 +2141,10 @@ const AddTransaction: FC<{}> = () => {
                         </p>
                         <button
                           type="button"
-                          className="btn btn-primary btn-lg"
-                          onClick={() => {
-                            // Check family goal creation permission before navigating
-                            familyGoalPermissions.validateFamilyGoalCreation().then(validation => {
-                              if (validation.canCreate) {
-                                navigate('/goals/create');
-                              } else {
-                                setPermissionErrorModal({
-                                  isOpen: true,
-                                  title: validation.errorTitle || 'Permission Denied',
-                                  message: validation.errorMessage || 'You cannot create family goals.',
-                                  suggestedActions: validation.suggestedActions || ['Contact your family admin for assistance'],
-                                  userRole: validation.userRole
-                                });
-                              }
-                            });
-                          }}
+                          className="inline-flex items-center justify-center px-4 py-2.5 md:px-6 md:py-3 bg-[#4e73df] hover:bg-[#2e59d9] text-white text-sm md:text-base font-medium rounded shadow-sm transition-colors"
+                          onClick={() => navigate('/goals/create')}
                         >
-                          <i className="fas fa-plus mr-2"></i>
+                          <i className="fas fa-plus text-xs mr-2"></i>
                           Create Your First Goal
                         </button>
                         {transaction.type === 'contribution' && (
@@ -1567,11 +2256,13 @@ const AddTransaction: FC<{}> = () => {
                 <hr className="my-4" />
 
                 <div className="text-center">
-                  <button type="submit" className="btn btn-primary btn-icon-split">
-                    <span className="icon text-white-50">
-                      <i className="fas fa-arrow-right"></i>
-                    </span>
-                    <span className="text">Continue to Review</span>
+                  <button 
+                    type="submit" 
+                    className="inline-flex items-center justify-center px-3 py-2 md:px-4 md:py-2 bg-[#4e73df] hover:bg-[#2e59d9] text-white text-xs md:text-sm font-medium rounded shadow-sm transition-colors"
+                  >
+                    <i className="fas fa-arrow-right text-xs mr-1"></i>
+                    <span className="d-none d-md-inline">Continue to Review</span>
+                    <span className="d-inline d-md-none">Review</span>
                   </button>
                 </div>
               </form>
@@ -1641,7 +2332,7 @@ const AddTransactionWithErrorBoundary: FC<{}> = () => {
               <p>There was an error loading the transaction form. Please try refreshing the page.</p>
               <button 
                 onClick={() => window.location.reload()}
-                className="btn btn-primary"
+                className="inline-flex items-center justify-center px-4 py-2 bg-[#4e73df] hover:bg-[#2e59d9] text-white text-sm font-medium rounded shadow-sm transition-colors"
               >
                 Refresh Page
               </button>

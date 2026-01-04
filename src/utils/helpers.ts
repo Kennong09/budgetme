@@ -143,6 +143,41 @@ export const truncateText = (text: string, maxLength: number = 20): string => {
   return `${text.substring(0, maxLength)}...`;
 };
 
+// Truncate large numbers with K, M, B suffixes
+export const truncateNumber = (num: number): string => {
+  if (num >= 1000000000) {
+    return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+  }
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  }
+  return num.toString();
+};
+
+// Format currency with truncation for large amounts
+export const formatCurrencyTruncated = (amount: number): string => {
+  const absAmount = Math.abs(amount);
+  const sign = amount < 0 ? '-' : '';
+  
+  if (absAmount >= 1000000000) {
+    return sign + '₱' + (absAmount / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+  }
+  if (absAmount >= 1000000) {
+    return sign + '₱' + (absAmount / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (absAmount >= 10000) {
+    return sign + '₱' + (absAmount / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  }
+  return sign + '₱' + new Intl.NumberFormat("en-US", {
+    style: "decimal",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(absAmount);
+};
+
 // Calculate monthly savings needed to reach a goal
 export const calculateMonthlySavingsForGoal = (goal: {
   target_amount: number;

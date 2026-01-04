@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import React, { FC, memo, useMemo } from "react";
 import { formatPercentage } from "../../../../utils/helpers";
 
 interface ProgressBarProps {
@@ -8,25 +8,28 @@ interface ProgressBarProps {
   label?: string;
 }
 
-const ProgressBar: FC<ProgressBarProps> = ({
+const ProgressBar: FC<ProgressBarProps> = memo(({
   percentage,
   status,
   showTooltip = true,
   label
 }) => {
-  const colorClass = status === "danger" ? "danger" : status === "warning" ? "warning" : "success";
+  const colorClass = useMemo(() => 
+    status === "danger" ? "danger" : status === "warning" ? "warning" : "success",
+    [status]
+  );
 
   return (
-    <div className="mb-4">
+    <div className="mb-3 md:mb-4">
       {label && (
-        <div className="d-flex justify-content-between align-items-center mb-2">
-          <h4 className="small font-weight-bold mb-0">{label}</h4>
-          <span className={`font-weight-bold text-${colorClass}`}>
+        <div className="d-flex justify-content-between align-items-center mb-1 md:mb-2">
+          <h4 className="text-xs md:text-sm font-weight-bold mb-0">{label}</h4>
+          <span className={`font-weight-bold text-${colorClass} text-xs md:text-sm`}>
             {formatPercentage(percentage)}
           </span>
         </div>
       )}
-      <div className="progress mb-4 position-relative">
+      <div className="progress mb-3 md:mb-4 position-relative" style={{ height: window.innerWidth < 768 ? '0.5rem' : '0.7rem' }}>
         <div
           className={`progress-bar bg-${colorClass}`}
           role="progressbar"
@@ -46,6 +49,8 @@ const ProgressBar: FC<ProgressBarProps> = ({
       </div>
     </div>
   );
-};
+});
+
+ProgressBar.displayName = 'ProgressBar';
 
 export default ProgressBar;

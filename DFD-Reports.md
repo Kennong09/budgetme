@@ -1,7 +1,35 @@
 # DFD - Reports and Analysis Module (6.0): BudgetMe Financial Management System
 
 ## Overview
-This Data Flow Diagram details the Reports and Analysis Module (Process 6.0) located at `src/components/reports/`. This module provides comprehensive financial reporting, analytics, visualization, and export capabilities for individual and family financial data.
+
+The Reports and Analysis Module (Process 6.0) delivers comprehensive financial reporting, analytics, and visualization capabilities, implemented in `src/components/reports/` with AI-enhanced insights integration. This module aggregates data from transactions, budgets, goals, and predictions to provide users with actionable financial intelligence through interactive dashboards, scheduled reports, and exportable documents.
+
+### Core Responsibilities
+
+- **Dashboard Generation**: Real-time financial dashboards with customizable widgets and KPI tracking
+- **Custom Report Builder**: User-defined reports with flexible data selection, filtering, and visualization options
+- **Scheduled Reporting**: Automated report generation and delivery via email (daily/weekly/monthly)
+- **Trend Analysis**: Historical spending patterns, income trends, and financial health tracking
+- **Comparative Analysis**: Period-over-period comparisons, category benchmarking, and variance analysis
+- **AI-Powered Insights**: Integration with AI Prediction and AI Insights modules for intelligent recommendations
+- **Export Capabilities**: PDF, Excel, CSV, and DOCX export with professional formatting
+
+### Key Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `ai_reports` | Cached AI-generated report insights with timeframe and report type |
+| `dashboard_layouts` | User dashboard configurations and widget placements |
+| `dashboard_insights` | Generated insights with priority and validity tracking |
+| `widget_data_cache` | Performance-optimized widget data caching |
+
+### Report Types
+
+- **Spending Reports**: Category breakdown, trend visualization, top merchants
+- **Income/Expense Reports**: Cash flow analysis, net worth tracking
+- **Budget Performance**: Utilization rates, overspending patterns, category analysis
+- **Goal Progress**: Achievement tracking, contribution history, timeline projections
+- **AI Insights Reports**: Personalized recommendations, risk assessments, opportunity identification
 
 ## Reports and Analysis Module Data Flow Diagram
 
@@ -51,13 +79,13 @@ graph TB
         AUTH[1.0 Authentication]
     end
     
-    subgraph "Data Stores"
-        D1[(D1<br/>Report Cache)]
-        D2[(D2<br/>Report Templates)]
-        D3[(D3<br/>Analytics Cache)]
-        D4[(D4<br/>Export History)]
-        D5[(D5<br/>Visualization Config)]
-        D6[(D6<br/>Scheduled Jobs)]
+    subgraph "Data Stores (Supabase)"
+        D1[(ai_reports<br/>AI-generated insights)]
+        D2[(dashboard_layouts<br/>dashboard_insights)]
+        D3[(user_widget_instances<br/>widget_data_cache)]
+        D4[(transactions<br/>budgets<br/>goals)]
+        D5[(user_preferences_cache)]
+        D6[(profiles<br/>user_settings)]
     end
     
     %% Data Collection
@@ -201,49 +229,90 @@ graph TB
 - **Processing**: Print layout optimization, page formatting, quality assurance
 - **Outputs**: Print-ready reports, optimized layouts, high-quality output
 
-## Data Store Specifications
+## Data Store Specifications (Actual Supabase Tables)
 
-### D1 - Report Cache
-- Cached report results for performance optimization
-- User-specific cached dashboards and reports
-- Cache expiration and refresh management
-- Performance metrics and optimization data
+### D1 - ai_reports
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique report identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `report_type` | TEXT | "spending", "income-expense", "savings", "trends", "goals", "predictions" |
+| `timeframe` | TEXT | "week", "month", "quarter", "year", "custom" |
+| `insights` | JSONB | AI-generated insights content |
+| `recommendations` | JSONB | Actionable recommendations array |
+| `summary` | TEXT | Executive summary text |
+| `ai_service` | TEXT | AI provider (default: "openrouter") |
+| `ai_model` | TEXT | Model used (default: "anthropic/claude-3.5-sonnet") |
+| `generation_time_ms` | INTEGER | Time to generate report |
+| `token_usage` | JSONB | Token consumption tracking |
+| `confidence_level` | NUMERIC | Confidence score (default: 0.8) |
+| `generated_at` | TIMESTAMPTZ | Report generation timestamp |
+| `expires_at` | TIMESTAMPTZ | Cache expiration (default: 7 days) |
+| `access_count` | INTEGER | Number of times report accessed |
 
-### D2 - Report Templates
-- Pre-built report template definitions
-- Template customization parameters
-- Template usage statistics and effectiveness
-- Template versioning and update history
+### D2 - dashboard_layouts
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique layout identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `name` | TEXT | Layout display name |
+| `layout` | JSONB | Widget positioning and sizing configuration |
+| `is_default` | BOOLEAN | Whether this is user's default layout |
+| `created_at` | TIMESTAMPTZ | Layout creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
 
-### D3 - Analytics Cache
-- Cached analysis results and calculations
-- Statistical computation results
-- Trend analysis cache for performance
-- Analytical model outputs and predictions
+### D3 - dashboard_insights
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique insight identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `insight_type` | TEXT | "spending_alert", "goal_progress", "budget_status", "trend" |
+| `title` | TEXT | Insight headline |
+| `content` | TEXT | Insight detail text |
+| `priority` | TEXT | "low", "medium", "high", "critical" |
+| `is_dismissed` | BOOLEAN | Whether user dismissed insight |
+| `valid_from` | TIMESTAMPTZ | Insight validity start |
+| `valid_until` | TIMESTAMPTZ | Insight validity end |
+| `created_at` | TIMESTAMPTZ | Insight creation timestamp |
 
-### D4 - Export History
-- Export request logs and history
-- File generation tracking and status
-- Export performance metrics
-- User export preferences and patterns
+### D4 - user_widget_instances
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique widget instance identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `layout_id` | UUID FK | References dashboard_layouts(id) |
+| `widget_type` | TEXT | "spending_chart", "budget_progress", "goal_tracker", "transactions" |
+| `position_x` | INTEGER | X coordinate on dashboard grid |
+| `position_y` | INTEGER | Y coordinate on dashboard grid |
+| `width` | INTEGER | Widget width in grid units |
+| `height` | INTEGER | Widget height in grid units |
+| `config` | JSONB | Widget-specific configuration |
+| `is_visible` | BOOLEAN | Whether widget is currently visible |
 
-### D5 - Visualization Config
-- Chart and visualization configurations
-- User customization preferences
-- Visualization performance settings
-- Mobile optimization parameters
+### D5 - widget_data_cache
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique cache entry identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `widget_type` | TEXT | Type of widget data cached |
+| `cache_key` | TEXT | Unique cache identifier |
+| `data` | JSONB | Cached widget data |
+| `generated_at` | TIMESTAMPTZ | Cache generation timestamp |
+| `expires_at` | TIMESTAMPTZ | Cache expiration timestamp |
 
-### D6 - Scheduled Jobs
-- Scheduled report definitions and parameters
-- Job execution history and status
-- Delivery tracking and confirmations
-- Schedule optimization and management
+### D6 - transactions / budgets / goals (Source Data)
+| Table | Purpose |
+|-------|---------|
+| `transactions` | Source data for spending reports and trend analysis |
+| `budgets` | Budget performance data for variance reporting |
+| `goals` | Goal progress tracking for achievement reports |
+| `accounts` | Account balances for net worth and cash flow reports |
 
 ## Integration Points
 
 - **Transaction Module**: Core transaction data for all reporting
 - **Budget Module**: Budget performance and variance analysis
-- **Goals Module**: Goal progress tracking and achievement reporting
+- **Goals Module**: Goal progress tracking for achievement reports
 - **Family Module**: Family-wide reporting and collaborative analytics
 - **AI Prediction**: Predictive analytics and forecasting integration
 - **Authentication**: User-based report access and personalization

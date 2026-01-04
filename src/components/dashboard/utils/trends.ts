@@ -112,10 +112,13 @@ export const calculateTransactionTrends = (
     }
     
     const monthData = monthlySpending.get(monthKey)!;
-    if (tx.category_id) {
+    // Fix: Use expense_category_id instead of category_id for expense transactions
+    const categoryId = (tx as any).expense_category_id || tx.category_id || (tx as any).category || 'uncategorized';
+    
+    if (categoryId) {
       const amount = parseFloat(tx.amount.toString()) || 0;
-      const current = monthData.get(tx.category_id) || 0;
-      monthData.set(tx.category_id, current + amount);
+      const current = monthData.get(categoryId) || 0;
+      monthData.set(categoryId, current + amount);
     }
   });
 
@@ -151,7 +154,7 @@ export const calculateTransactionTrends = (
     
     // Find category name
     const category = expenseCategories.find(c => c.id === categoryId);
-    const categoryName = category ? category.category_name : 'Other';
+    const categoryName = category ? category.category_name : (categoryId === 'uncategorized' ? 'Uncategorized' : 'Other');
     
     // Calculate percentage change
     let change = 0;

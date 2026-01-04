@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Transaction, UserData, FilterState, DateFilterType, TypeFilterType } from '../types';
 
 /**
@@ -11,8 +11,11 @@ export const useFilteredData = (userData: UserData | null) => {
   const [typeFilter, setTypeFilter] = useState<TypeFilterType>('all');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+  // Initialize with empty array - will be populated by effect
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [filteredUserData, setFilteredUserData] = useState<UserData | null>(null);
+  // Track if initial data has been set
+  const initialDataSetRef = useRef(false);
 
   // Stable memoized filter values to prevent unnecessary recalculations
   const stableDateFilter = useMemo(() => dateFilter, [dateFilter]);
@@ -38,33 +41,60 @@ export const useFilteredData = (userData: UserData | null) => {
               return false;
             }
             break;
-          case 'last-3-months':
-            const threeMonthsAgo = new Date();
-            threeMonthsAgo.setMonth(currentDate.getMonth() - 3);
-            if (txDate < threeMonthsAgo) {
-              return false;
-            }
-            break;
-          case 'last-6-months':
-            const sixMonthsAgo = new Date();
-            sixMonthsAgo.setMonth(currentDate.getMonth() - 6);
-            if (txDate < sixMonthsAgo) {
-              return false;
-            }
-            break;
-          case 'last-year':
-            const oneYearAgo = new Date();
-            oneYearAgo.setFullYear(currentDate.getFullYear() - 1);
-            if (txDate < oneYearAgo) {
-              return false;
-            }
-            break;
+        case 'last-3-months':
+          const threeMonthsAgo = new Date();
+          threeMonthsAgo.setMonth(currentDate.getMonth() - 2); // -2 to include current month
+          threeMonthsAgo.setDate(1); // Start from first day of that month
+          threeMonthsAgo.setHours(0, 0, 0, 0); // Reset time to midnight for accurate comparison
+          if (txDate < threeMonthsAgo) {
+            return false;
+          }
+          break;
+        case 'last-6-months':
+          const sixMonthsAgo = new Date();
+          sixMonthsAgo.setMonth(currentDate.getMonth() - 5); // -5 to include current month
+          sixMonthsAgo.setDate(1); // Start from first day of that month
+          sixMonthsAgo.setHours(0, 0, 0, 0); // Reset time to midnight for accurate comparison
+          if (txDate < sixMonthsAgo) {
+            return false;
+          }
+          break;
+        case 'last-year':
+          // Filter for previous calendar year (e.g., 2024 if current year is 2025)
+          const previousYear = currentDate.getFullYear() - 1;
+          if (txDate.getFullYear() !== previousYear) {
+            return false;
+          }
+          break;
           case 'custom':
-            if (stableCustomStartDate && txDate < new Date(stableCustomStartDate)) {
-              return false;
-            }
-            if (stableCustomEndDate && txDate > new Date(stableCustomEndDate)) {
-              return false;
+            // Validate custom dates exist and are valid
+            if (stableCustomStartDate && stableCustomEndDate) {
+              const startDate = new Date(stableCustomStartDate);
+              const endDate = new Date(stableCustomEndDate);
+              
+              // Check if dates are valid and start <= end
+              if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+                if (startDate > endDate) {
+                  // Invalid range: start date after end date
+                  return false;
+                }
+                // Filter: transaction must be within the range (inclusive)
+                if (txDate < startDate || txDate > endDate) {
+                  return false;
+                }
+              }
+            } else if (stableCustomStartDate) {
+              // Only start date provided: filter transactions from start date onwards
+              const startDate = new Date(stableCustomStartDate);
+              if (!isNaN(startDate.getTime()) && txDate < startDate) {
+                return false;
+              }
+            } else if (stableCustomEndDate) {
+              // Only end date provided: filter transactions up to end date
+              const endDate = new Date(stableCustomEndDate);
+              if (!isNaN(endDate.getTime()) && txDate > endDate) {
+                return false;
+              }
             }
             break;
         }
@@ -75,9 +105,13 @@ export const useFilteredData = (userData: UserData | null) => {
         return false;
       }
       
-      // Category filter
-      if (stableCategoryFilter !== 'all' && transaction.category_id !== stableCategoryFilter) {
-        return false;
+      // Category filter - check both category_id (mapped) and raw expense/income_category_id fields
+      if (stableCategoryFilter !== 'all') {
+        const rawTx = transaction as typeof transaction & { expense_category_id?: string; income_category_id?: string };
+        const txCategoryId = transaction.category_id || rawTx.expense_category_id || rawTx.income_category_id;
+        if (txCategoryId !== stableCategoryFilter) {
+          return false;
+        }
       }
       
       return true;
@@ -197,8 +231,32 @@ export const useFilteredData = (userData: UserData | null) => {
     };
   }, [memoizedFilteredTransactions]);
 
-  // Debounced effect to update filtered data (300ms delay)
+  // Debounced effect to update filtered data (300ms delay for filter changes, immediate for initial load)
   useEffect(() => {
+    // Set initial data immediately without debounce
+    if (!initialDataSetRef.current && stableUserData?.transactions && stableUserData.transactions.length > 0) {
+      initialDataSetRef.current = true;
+      setFilteredTransactions(memoizedFilteredTransactions);
+      setFilteredUserData({
+        ...stableUserData,
+        summaryData: memoizedSummaryData
+      });
+      return;
+    }
+    
+    // Also update immediately if we have data but filteredTransactions is empty
+    if (memoizedFilteredTransactions.length > 0 && filteredTransactions.length === 0) {
+      setFilteredTransactions(memoizedFilteredTransactions);
+      if (stableUserData) {
+        setFilteredUserData({
+          ...stableUserData,
+          summaryData: memoizedSummaryData
+        });
+      }
+      return;
+    }
+    
+    // Debounce subsequent filter changes
     const timeoutId = setTimeout(() => {
       setFilteredTransactions(memoizedFilteredTransactions);
       

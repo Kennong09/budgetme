@@ -2,7 +2,6 @@ import React, { FC } from 'react';
 import { Account } from '../../types';
 import { getCurrencySymbol } from '../../utils/currencyHelpers';
 
-// Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
 import "animate.css";
 
@@ -12,7 +11,9 @@ interface AccountsListProps {
   onDelete: (accountId: string) => void;
   onSetAsDefault?: (accountId: string) => void;
   onDefaultAccountClick?: (currentDefaultId: string) => void;
+  onViewHistory?: (accountId: string, accountName: string) => void;
   isFormVisible: boolean;
+  isInlineFormVisible?: boolean;
 }
 
 const AccountsList: FC<AccountsListProps> = ({ 
@@ -21,9 +22,10 @@ const AccountsList: FC<AccountsListProps> = ({
   onDelete, 
   onSetAsDefault,
   onDefaultAccountClick,
-  isFormVisible 
+  onViewHistory,
+  isFormVisible,
+  isInlineFormVisible = false
 }) => {
-  // Helper function to get account type icon
   const getAccountTypeIcon = (type: string) => {
     switch (type) {
       case 'checking': return 'fas fa-university';
@@ -36,29 +38,16 @@ const AccountsList: FC<AccountsListProps> = ({
     }
   };
 
-  // Helper function to format balance with appropriate styling
   const formatBalance = (balance: number, accountType: string) => {
     const formattedAmount = `${getCurrencySymbol('PHP')}${Math.abs(balance).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     
     if (accountType === 'credit') {
       if (balance < 0) {
-        return (
-          <span className="text-danger font-weight-bold">
-            -{formattedAmount}
-          </span>
-        );
+        return <span className="text-danger font-weight-bold">-{formattedAmount}</span>;
       } else if (balance === 0) {
-        return (
-          <span className="text-success font-weight-bold">
-            {formattedAmount}
-          </span>
-        );
+        return <span className="text-success font-weight-bold">{formattedAmount}</span>;
       } else {
-        return (
-          <span className="text-warning font-weight-bold">
-            +{formattedAmount}
-          </span>
-        );
+        return <span className="text-warning font-weight-bold">+{formattedAmount}</span>;
       }
     } else {
       return (
@@ -69,223 +58,344 @@ const AccountsList: FC<AccountsListProps> = ({
     }
   };
 
+  const totalAssets = accounts
+    .filter(acc => acc.account_type !== 'credit')
+    .reduce((sum, acc) => sum + (acc.balance > 0 ? acc.balance : 0), 0);
+
+  const totalDebt = Math.abs(accounts
+    .filter(acc => acc.account_type === 'credit')
+    .reduce((sum, acc) => sum + (acc.balance < 0 ? acc.balance : 0), 0));
+
+  // Empty state for both mobile and desktop
   if (accounts.length === 0) {
     return (
-      <div className="card shadow-sm animate__animated animate__fadeIn">
-        <div className="card-body text-center py-5">
-          <div className="mb-3">
-            <i className="fas fa-bank fa-3x text-gray-300"></i>
+      <>
+        {/* Mobile Empty State */}
+        <div className="block md:hidden text-center py-8">
+          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+            <i className="fas fa-bank text-gray-400 text-2xl"></i>
           </div>
-          <h5 className="text-gray-800 mb-2">No Accounts Found</h5>
-          <p className="text-gray-600 mb-0">
-            You haven't added any accounts yet. Click the "Add Account" button to get started.
+          <h3 className="text-sm font-semibold text-gray-800 mb-2">No Accounts Found</h3>
+          <p className="text-xs text-gray-500 mb-0 max-w-md mx-auto">
+            {!isFormVisible && !isInlineFormVisible 
+              ? "Add your first account to get started."
+              : "Complete the form above to create your first account."
+            }
           </p>
         </div>
-      </div>
+
+        {/* Desktop Empty State */}
+        <div className="hidden md:block text-center py-5">
+          <i className="fas fa-bank text-gray-300" style={{ fontSize: '4rem' }}></i>
+          <h4 className="mt-3 text-gray-700">No Accounts Found</h4>
+          <p className="text-muted">
+            {!isFormVisible && !isInlineFormVisible 
+              ? "Add your first account to get started."
+              : "Complete the form above to create your first account."
+            }
+          </p>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="card shadow-sm animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
-      <div className="card-header py-3">
-        <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
-          <div>
-            <i className="fas fa-list mr-2"></i>
-            Your Accounts
-            <span className="badge badge-light ml-2">{accounts.length}</span>
+    <>
+      {/* Mobile View */}
+      <div className="block md:hidden w-full">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-6 h-6 rounded-lg bg-indigo-100 flex items-center justify-center mb-1.5">
+              <i className="fas fa-wallet text-indigo-500 text-[10px]"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase">Accounts</p>
+            <p className="text-sm font-bold text-gray-800">{accounts.length}</p>
           </div>
-        </h6>
-      </div>
-      <div className="card-body p-0">
-        <div className="table-responsive">
-          <table className="table table-hover mb-0">
-            <thead className="thead-light">
-              <tr>
-                <th className="border-0 font-weight-bold text-gray-700">
-                  <i className="fas fa-tag mr-1"></i>
-                  Account Name
-                </th>
-                <th className="border-0 font-weight-bold text-gray-700">
-                  <i className="fas fa-layer-group mr-1"></i>
-                  Type
-                </th>
-                <th className="border-0 font-weight-bold text-gray-700 text-right">
-                  <i className="fas fa-peso-sign mr-1"></i>
-                  Balance
-                </th>
-                <th className="border-0 font-weight-bold text-gray-700 text-center">
-                  <i className="fas fa-cogs mr-1"></i>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {accounts.map((account, index) => (
-                <tr 
-                  key={account.id} 
-                  className={`animate__animated animate__fadeIn`}
-                  style={{ animationDelay: `${(index + 1) * 0.1}s` }}
-                >
-                  <td className="align-middle">
-                    <div className="d-flex align-items-center">
-                      <div 
-                        className="account-color-indicator rounded-circle mr-3 d-flex align-items-center justify-content-center position-relative"
-                        style={{ 
-                          backgroundColor: account.color || "#4e73df", 
-                          width: "32px", 
-                          height: "32px",
-                          minWidth: "32px"
-                        }}
-                        title={`${account.account_name} - ${account.account_type}`}
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center mb-1.5">
+              <i className="fas fa-plus-circle text-emerald-500 text-[10px]"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase">Assets</p>
+            <p className="text-sm font-bold text-emerald-600 truncate">
+              {getCurrencySymbol('PHP')}{totalAssets.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-6 h-6 rounded-lg bg-rose-100 flex items-center justify-center mb-1.5">
+              <i className="fas fa-credit-card text-rose-500 text-[10px]"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase">Debt</p>
+            <p className="text-sm font-bold text-rose-600 truncate">
+              {getCurrencySymbol('PHP')}{totalDebt.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            </p>
+          </div>
+        </div>
+
+        {/* Mobile Account Cards */}
+        <div className="space-y-2">
+          {accounts.map((account, index) => (
+            <div 
+              key={account.id} 
+              className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm animate__animated animate__fadeIn"
+              style={{ animationDelay: `${index * 0.05}s` }}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center relative"
+                    style={{ backgroundColor: account.color || "#4e73df" }}
+                  >
+                    <i className={`${getAccountTypeIcon(account.account_type)} text-white text-sm`}></i>
+                    {account.is_default && (
+                      <button
+                        type="button"
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center border-0"
+                        onClick={() => onDefaultAccountClick && account.id && onDefaultAccountClick(account.id)}
+                        disabled={isFormVisible}
                       >
-                        <i className={`${getAccountTypeIcon(account.account_type)} text-white fa-sm`}></i>
-                        {account.is_default && (
+                        <i className="fas fa-star text-white text-[7px]"></i>
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800">{account.account_name}</h4>
+                    <p className="text-[10px] text-gray-500 capitalize">
+                      {account.account_type === 'credit' ? 'Credit Card' : account.account_type}
+                      {account.institution_name && ` • ${account.institution_name}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-bold ${
+                    account.account_type === 'credit' 
+                      ? (account.balance < 0 ? 'text-rose-600' : account.balance === 0 ? 'text-emerald-600' : 'text-amber-600')
+                      : (account.balance >= 0 ? 'text-emerald-600' : 'text-rose-600')
+                  }`}>
+                    {account.balance < 0 ? '-' : ''}{getCurrencySymbol('PHP')}{Math.abs(account.balance).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </p>
+                  {account.account_type === 'credit' && account.balance < 0 && (
+                    <p className="text-[9px] text-gray-400">Debt</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Mobile Actions */}
+              <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-gray-100">
+                {!account.is_default && onSetAsDefault && (
+                  <button
+                    type="button"
+                    onClick={() => account.id && onSetAsDefault(account.id)}
+                    disabled={isFormVisible}
+                    className="w-7 h-7 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center hover:bg-amber-100 transition-colors disabled:opacity-50"
+                    title="Set as Default"
+                  >
+                    <i className="fas fa-star text-[10px]"></i>
+                  </button>
+                )}
+                {onViewHistory && (
+                  <button
+                    type="button"
+                    onClick={() => account.id && onViewHistory(account.id, account.account_name)}
+                    disabled={isFormVisible}
+                    className="w-7 h-7 rounded-full bg-cyan-50 text-cyan-500 flex items-center justify-center hover:bg-cyan-100 transition-colors disabled:opacity-50"
+                    title="View History"
+                  >
+                    <i className="fas fa-history text-[10px]"></i>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onEdit(account)}
+                  disabled={isFormVisible}
+                  className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                  title="Edit"
+                >
+                  <i className="fas fa-edit text-[10px]"></i>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => account.id && onDelete(account.id)}
+                  disabled={isFormVisible}
+                  className="w-7 h-7 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-colors disabled:opacity-50"
+                  title="Delete"
+                >
+                  <i className="fas fa-trash text-[10px]"></i>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Desktop View */}
+      <div className="hidden md:block">
+        {/* Desktop Summary Row */}
+        <div className="row mb-4">
+          <div className="col-md-4">
+            <div className="card border-left-primary shadow h-100 py-2">
+              <div className="card-body">
+                <div className="row no-gutters align-items-center">
+                  <div className="col mr-2">
+                    <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Accounts</div>
+                    <div className="h5 mb-0 font-weight-bold text-gray-800">{accounts.length}</div>
+                  </div>
+                  <div className="col-auto">
+                    <i className="fas fa-wallet fa-2x text-gray-300"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div className="card border-left-success shadow h-100 py-2">
+              <div className="card-body">
+                <div className="row no-gutters align-items-center">
+                  <div className="col mr-2">
+                    <div className="text-xs font-weight-bold text-success text-uppercase mb-1">Total Assets</div>
+                    <div className="h5 mb-0 font-weight-bold text-gray-800">
+                      {getCurrencySymbol('PHP')}{totalAssets.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div className="col-auto">
+                    <i className="fas fa-plus-circle fa-2x text-gray-300"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="col-md-4">
+            <div className="card border-left-danger shadow h-100 py-2">
+              <div className="card-body">
+                <div className="row no-gutters align-items-center">
+                  <div className="col mr-2">
+                    <div className="text-xs font-weight-bold text-danger text-uppercase mb-1">Total Debt</div>
+                    <div className="h5 mb-0 font-weight-bold text-gray-800">
+                      {getCurrencySymbol('PHP')}{totalDebt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div className="col-auto">
+                    <i className="fas fa-credit-card fa-2x text-gray-300"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Accounts Table */}
+        <div className="card shadow mb-4">
+          <div className="card-header py-3">
+            <h6 className="m-0 font-weight-bold text-primary">
+              <i className="fas fa-list mr-2"></i>
+              Your Accounts
+            </h6>
+          </div>
+          <div className="card-body">
+            <div className="table-responsive">
+              <table className="table table-hover">
+                <thead className="thead-light">
+                  <tr>
+                    <th>Account</th>
+                    <th>Type</th>
+                    <th>Balance</th>
+                    <th>Status</th>
+                    <th className="text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map((account) => (
+                    <tr key={account.id} className="animate__animated animate__fadeIn">
+                      <td>
+                        <div className="d-flex align-items-center">
+                          <div 
+                            className="rounded-circle mr-3 d-flex align-items-center justify-content-center"
+                            style={{ 
+                              backgroundColor: account.color || "#4e73df", 
+                              width: "40px", 
+                              height: "40px",
+                              minWidth: "40px"
+                            }}
+                          >
+                            <i className={`${getAccountTypeIcon(account.account_type)} text-white`}></i>
+                          </div>
+                          <div>
+                            <div className="font-weight-bold">{account.account_name}</div>
+                            {account.institution_name && (
+                              <small className="text-muted">{account.institution_name}</small>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="badge badge-light">
+                          {account.account_type === 'credit' ? 'Credit Card' : 
+                           account.account_type.charAt(0).toUpperCase() + account.account_type.slice(1)}
+                        </span>
+                      </td>
+                      <td>{formatBalance(account.balance, account.account_type)}</td>
+                      <td>
+                        {account.is_default ? (
+                          <span className="badge badge-warning">
+                            <i className="fas fa-star mr-1"></i>Default
+                          </span>
+                        ) : (
+                          <span className="badge badge-secondary">Active</span>
+                        )}
+                      </td>
+                      <td className="text-center">
+                        <div className="btn-group btn-group-sm">
+                          {!account.is_default && onSetAsDefault && (
+                            <button
+                              type="button"
+                              className="btn btn-outline-warning"
+                              onClick={() => account.id && onSetAsDefault(account.id)}
+                              disabled={isFormVisible}
+                              title="Set as Default"
+                            >
+                              <i className="fas fa-star"></i>
+                            </button>
+                          )}
+                          {onViewHistory && (
+                            <button
+                              type="button"
+                              className="btn btn-outline-info"
+                              onClick={() => account.id && onViewHistory(account.id, account.account_name)}
+                              disabled={isFormVisible}
+                              title="View History"
+                            >
+                              <i className="fas fa-history"></i>
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className="position-absolute badge badge-warning rounded-circle p-1 border-0" 
-                            style={{ 
-                              top: "-2px", 
-                              right: "-2px", 
-                              fontSize: "0.6rem",
-                              minWidth: "14px",
-                              height: "14px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "pointer"
-                            }}
-                            title="Change Default Account"
-                            onClick={() => onDefaultAccountClick && account.id && onDefaultAccountClick(account.id)}
+                            className="btn btn-outline-primary"
+                            onClick={() => onEdit(account)}
                             disabled={isFormVisible}
+                            title="Edit"
                           >
-                            <i className="fas fa-star" style={{ fontSize: "0.5rem" }}></i>
+                            <i className="fas fa-edit"></i>
                           </button>
-                        )}
-                      </div>
-                      <div>
-                        <div className="font-weight-bold text-gray-800">{account.account_name}</div>
-                        {account.description && (
-                          <small className="text-gray-500">{account.description}</small>
-                        )}
-                        {account.institution_name && (
-                          <small className="text-gray-500 d-block">
-                            <i className="fas fa-building mr-1"></i>
-                            {account.institution_name}
-                          </small>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="align-middle">
-                    <div className="d-flex align-items-center">
-                      <i className={`${getAccountTypeIcon(account.account_type)} text-gray-500 mr-2`}></i>
-                      <span className="text-capitalize font-weight-medium">
-                        {account.account_type === 'credit' ? 'Credit Card' : account.account_type}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="align-middle text-right">
-                    <div>
-                      {formatBalance(account.balance, account.account_type)}
-                    </div>
-                    {account.account_type === 'credit' && account.balance < 0 && (
-                      <small className="text-muted">
-                        Debt Outstanding
-                      </small>
-                    )}
-                    {account.account_type === 'credit' && account.balance === 0 && (
-                      <small className="text-success">
-                        Paid Off
-                      </small>
-                    )}
-                  </td>
-                  <td className="align-middle text-center">
-                    <div className="btn-group" role="group">
-                      {!account.is_default && onSetAsDefault && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-warning"
-                          onClick={() => account.id && onSetAsDefault(account.id)}
-                          disabled={isFormVisible}
-                          title="Set as Default Account"
-                        >
-                          <i className="fas fa-star"></i>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-primary"
-                        onClick={() => onEdit(account)}
-                        disabled={isFormVisible}
-                        title="Edit Account"
-                      >
-                        <i className="fas fa-edit"></i>
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-danger"
-                        onClick={() => account.id && onDelete(account.id)}
-                        disabled={isFormVisible}
-                        title="Delete Account"
-                      >
-                        <i className="fas fa-trash"></i>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      
-      {/* Account Summary Footer */}
-      <div className="card-footer bg-light">
-        <div className="row text-center">
-          <div className="col-md-4">
-            <div className="d-flex align-items-center justify-content-center">
-              <i className="fas fa-wallet text-primary mr-2"></i>
-              <div>
-                <div className="font-weight-bold text-gray-800">{accounts.length}</div>
-                <small className="text-gray-600">Total Accounts</small>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-4">
-            <div className="d-flex align-items-center justify-content-center">
-              <i className="fas fa-plus-circle text-success mr-2"></i>
-              <div>
-                <div className="font-weight-bold text-success">
-                  {formatBalance(
-                    accounts
-                      .filter(acc => acc.account_type !== 'credit')
-                      .reduce((sum, acc) => sum + (acc.balance > 0 ? acc.balance : 0), 0),
-                    'savings'
-                  )}
-                </div>
-                <small className="text-gray-600">Total Assets</small>
-              </div>
-            </div>
-          </div>
-          <div className="col-md-4">
-            <div className="d-flex align-items-center justify-content-center">
-              <i className="fas fa-credit-card text-danger mr-2"></i>
-              <div>
-                <div className="font-weight-bold text-danger">
-                  {formatBalance(
-                    Math.abs(accounts
-                      .filter(acc => acc.account_type === 'credit')
-                      .reduce((sum, acc) => sum + (acc.balance < 0 ? acc.balance : 0), 0)),
-                    'credit'
-                  )}
-                </div>
-                <small className="text-gray-600">Total Debt</small>
-              </div>
+                          <button
+                            type="button"
+                            className="btn btn-outline-danger"
+                            onClick={() => account.id && onDelete(account.id)}
+                            disabled={isFormVisible}
+                            title="Delete"
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 

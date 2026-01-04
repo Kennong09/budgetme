@@ -5,8 +5,8 @@ import { isUserAdmin } from '../../utils/adminHelpers';
 
 /**
  * AdminRedirect - Component for the /admin path that redirects based on authentication status:
- * - If not authenticated: redirects to /admin/login
- * - If authenticated but not admin: redirects to /admin/login?access_denied=true
+ * - If not authenticated: redirects to /404 (Page Not Found)
+ * - If authenticated but not admin: redirects to /?access_denied=true
  * - If authenticated and admin: redirects to /admin/dashboard
  */
 const AdminRedirect: React.FC = () => {
@@ -70,14 +70,14 @@ const AdminRedirect: React.FC = () => {
     );
   }
   
-  // If not authenticated, redirect to admin login
+  // If not authenticated, show 404 page instead of redirecting
   if (!user) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/404" replace />;
   }
   
-  // If not admin, redirect to login with access_denied parameter
+  // If not admin, redirect to main page with access_denied parameter
   if (isAdmin === false) {
-    return <Navigate to="/admin/login?access_denied=true" replace />;
+    return <Navigate to="/?access_denied=true" replace />;
   }
   
   // If admin, redirect to dashboard

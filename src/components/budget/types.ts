@@ -65,7 +65,7 @@ export interface BudgetFormData {
   category_id: string;
   category_name?: string; // Optional category name for display purposes
   amount: number; // Changed from string to number for centavo precision
-  period: "month" | "quarter" | "year";
+  period: "day" | "week" | "month" | "quarter" | "year";
   startDate: string;
 }
 

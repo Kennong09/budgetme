@@ -236,19 +236,211 @@ const ProphetCategoryVisualization: FC<ProphetCategoryVisualizationProps> = ({
 
   if (Object.keys(categoryForecasts).length === 0) {
     return (
-      <div className="card">
-        <div className="card-header">
-          <h6 className="font-weight-bold text-primary">{title}</h6>
+      <>
+        {/* Mobile Empty State */}
+        <div className="block md:hidden mb-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-tags text-indigo-500 text-[10px]"></i>
+                {title}
+              </h6>
+            </div>
+            <div className="p-6 text-center">
+              <i className="fas fa-folder-open text-gray-300 text-2xl mb-2"></i>
+              <p className="text-[10px] text-gray-500">No category forecast data available</p>
+            </div>
+          </div>
         </div>
-        <div className="card-body text-center py-5">
-          <p className="text-muted">No category forecast data available</p>
+        
+        {/* Desktop Empty State */}
+        <div className="card d-none d-md-block">
+          <div className="card-header">
+            <h6 className="font-weight-bold text-primary">{title}</h6>
+          </div>
+          <div className="card-body text-center py-5">
+            <p className="text-muted">No category forecast data available</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
+  // Mobile View Component
+  const MobileView = () => (
+    <div className="block md:hidden mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Mobile Header */}
+        <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
+          <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+            <i className="fas fa-tags text-indigo-500 text-[10px]"></i>
+            Category Forecasts
+          </h6>
+          <div className="flex items-center gap-1">
+            {summary && (
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-100 text-indigo-600">
+                {chartData.length} categories
+              </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Mobile Summary Stats */}
+        {summary && (
+          <div className="grid grid-cols-4 gap-1 p-2 bg-gradient-to-r from-indigo-50 to-purple-50 border-b border-gray-100">
+            <div className="text-center">
+              <p className="text-[9px] text-gray-500">Total</p>
+              <p className="text-[11px] font-bold text-indigo-600">${summary.totalPredicted}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-gray-500">Confidence</p>
+              <p className="text-[11px] font-bold text-emerald-600">{summary.avgConfidence}%</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-gray-500">Change</p>
+              <p className={`text-[11px] font-bold ${Number(summary.totalChange) >= 0 ? 'text-amber-600' : 'text-rose-600'}`}>
+                {Number(summary.totalChange) >= 0 ? '+' : ''}{summary.totalChangePercent}%
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-gray-500">Trends</p>
+              <p className="text-[11px] font-bold">
+                <span className="text-emerald-600">↗{summary.increasingCategories}</span>
+                <span className="text-rose-600 ml-0.5">↘{summary.decreasingCategories}</span>
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Mobile Tab Navigation */}
+        <div className="flex border-b border-gray-100">
+          {[
+            { key: 'bar', label: 'Bar', icon: 'fa-chart-bar' },
+            { key: 'trend', label: 'Trend', icon: 'fa-chart-line' },
+            { key: 'pie', label: 'Dist', icon: 'fa-chart-pie' }
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveView(tab.key as any)}
+              className={`flex-1 py-2 text-[10px] font-medium transition-colors ${
+                activeView === tab.key
+                  ? 'text-indigo-600 border-b-2 border-indigo-500 bg-indigo-50/50'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <i className={`fas ${tab.icon} mr-1 text-[9px]`}></i>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        
+        {/* Mobile Chart */}
+        <div className="p-2">
+          {activeView === 'bar' && (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis 
+                  dataKey="category" 
+                  tick={{ fontSize: 8 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis tick={{ fontSize: 9 }} />
+                <Tooltip contentStyle={{ fontSize: '10px', padding: '6px' }} />
+                <Bar dataKey="historical" fill="#858796" name="Historical" radius={[0, 0, 2, 2]} />
+                <Bar dataKey="predicted" fill="#4e73df" name="Forecast" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          
+          {activeView === 'trend' && (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis 
+                  dataKey="category" 
+                  tick={{ fontSize: 8 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={60}
+                />
+                <YAxis tick={{ fontSize: 9 }} />
+                <Tooltip contentStyle={{ fontSize: '10px', padding: '6px' }} />
+                <Line type="monotone" dataKey="historical" stroke="#858796" strokeWidth={1.5} dot={{ r: 2 }} name="Historical" />
+                <Line type="monotone" dataKey="predicted" stroke="#4e73df" strokeWidth={2} dot={{ r: 2 }} name="Forecast" />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+          
+          {activeView === 'pie' && (
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={70}
+                  fill="#8884d8"
+                  dataKey="predicted"
+                  label={({ category, percent }) => `${category}: ${(percent * 100).toFixed(0)}%`}
+                  labelLine={false}
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ fontSize: '10px', padding: '6px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+        
+        {/* Mobile Category List */}
+        <div className="px-3 pb-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-semibold text-gray-700">Top Categories</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="text-[9px] border border-gray-200 rounded px-1.5 py-0.5 bg-white"
+            >
+              <option value="predicted">By Amount</option>
+              <option value="change">By Change</option>
+              <option value="confidence">By Confidence</option>
+            </select>
+          </div>
+          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+            {chartData.slice(0, 5).map((item, index) => (
+              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="w-2 h-2 rounded-full" 
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  ></div>
+                  <span className="text-[10px] font-medium text-gray-700">{item.category}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-indigo-600">${item.predicted}</span>
+                  <span className={`text-[9px] ${item.change >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {item.change >= 0 ? '+' : ''}{item.changePercent}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="card mb-4">
+    <>
+      <MobileView />
+      
+      {/* Desktop View */}
+      <div className="card mb-4 d-none d-md-block">
       <div className="card-header">
         <div className="d-flex justify-content-between align-items-center">
           <h6 className="font-weight-bold text-primary mb-0">{title}</h6>
@@ -394,6 +586,7 @@ const ProphetCategoryVisualization: FC<ProphetCategoryVisualizationProps> = ({
         )}
       </div>
     </div>
+    </>
   );
 };
 

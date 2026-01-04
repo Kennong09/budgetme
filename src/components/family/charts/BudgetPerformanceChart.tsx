@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import HighchartsReact from 'highcharts-react-official';
 import Highcharts from 'highcharts';
+import solidGauge from 'highcharts/modules/solid-gauge';
 import { FamilyBudgetPerformanceData } from '../../../services/database/familyBudgetService';
 import { useRealtimeFamilyData } from '../../../hooks/useRealtimeFamilyData';
 import { ChartErrorBoundary } from '../../common/ChartErrorBoundary';
 import { ChartErrorHandler } from '../../../utils/chartErrorHandler';
 
-// Import required Highcharts modules
-require('highcharts/modules/solid-gauge')(Highcharts);
+// Initialize Highcharts modules
+solidGauge(Highcharts);
 
 interface BudgetPerformanceChartProps {
   familyId: string;

@@ -1,3 +1,34 @@
+import { 
+  createChatSession, 
+  getActiveSession, 
+  updateChatSession, 
+  insertChatMessage, 
+  insertAnalytics,
+  ensureAnonymousUser
+} from './chatDatabase';
+import { supabase } from './supabaseClient';
+import Sentiment from 'sentiment';
+import { env } from './env';
+
+/**
+ * SENTIMENT ANALYSIS
+ * 
+ * This service uses the 'sentiment' npm package for AFINN-based sentiment analysis.
+ * The AFINN lexicon assigns sentiment scores to words:
+ * - Positive words get positive scores (+1 to +5)
+ * - Negative words get negative scores (-1 to -5)
+ * - The total score determines overall sentiment
+ * 
+ * The package provides two key metrics:
+ * 1. score: Total sentiment score (sum of all word scores)
+ * 2. comparative: Score normalized by word count (more accurate for varying message lengths)
+ * 
+ * Thresholds used:
+ * - Score > 1: Positive sentiment
+ * - Score < -1: Negative sentiment
+ * - Score between -1 and 1: Neutral sentiment
+ */
+
 /**
  * @typedef {Object} ChatMessage
  * @property {'system' | 'user' | 'assistant'} role - The role of the message sender
@@ -13,31 +44,37 @@
  * @property {string} [error] - The error message if failed
  */
 
-// System prompt based on BudgetMe codebase analysis
-const SYSTEM_PROMPT = `You are BudgetSense, a friendly financial assistant for the BudgetMe personal finance app. You help users understand and manage their finances in a natural, conversational way.
+// Default system prompt (fallback if database fetch fails)
+const DEFAULT_SYSTEM_PROMPT = `You are BudgetSense, a friendly financial assistant for the BudgetMe personal finance app. You help users understand and manage their finances in a natural, conversational way.`;
 
-About BudgetMe: This is a comprehensive personal finance tracker with budget management, expense tracking, financial goals, family finance features, AI predictions, and detailed reports. Users can track transactions, set budgets, create savings goals, manage family finances, and get financial insights.
-
-Your role is to explain financial concepts and budgeting best practices, help users understand their spending patterns and financial health, provide guidance on setting and achieving financial goals, offer tips for expense categorization and budget optimization, explain BudgetMe app features and functionality, assist with family finance management and shared goals, and help interpret financial reports and predictions.
-
-Your personality should be friendly, supportive, and encouraging. Be knowledgeable about personal finance but not pushy. Keep explanations clear and conversational. Be patient with users learning about finance and proactive in offering helpful suggestions.
-
-IMPORTANT CURRENCY GUIDANCE: BudgetMe uses Philippine Pesos (PHP) as the primary currency. Always format monetary amounts using the peso symbol (₱) and use PHP when discussing financial matters. For example: ₱5,000 for five thousand pesos, ₱250.50 for two hundred fifty pesos and fifty centavos. This standardization helps maintain consistency across the application.
-
-CRITICAL SECURITY RULES: Never discuss or reveal administrative features, admin panels, or backend systems. Never share information about user accounts, personal data, or other users' information. Never provide details about database structure, API endpoints, or technical implementation. If asked about admin functions, politely redirect to user-facing features only. Protect all user privacy and confidential application details. Do not discuss system logs, error messages, or debugging information.
-
-Content restrictions: Decline questions about administrative access or privileges. Do not reveal user personal information like emails, names, account details, or financial data. Avoid discussing system security measures or vulnerabilities. Redirect admin-related queries to general app usage help. Never generate, write, or provide any code. Never assist with programming, software development, or technical implementation. Refuse requests for malicious activities, hacking, fraud, or illegal financial schemes. Decline discussions about non-finance topics like weather, sports, entertainment, politics, health, etc. Do not provide investment advice for specific stocks, cryptocurrencies, or financial products. Avoid discussing gambling, get-rich-quick schemes, or risky financial practices.
-
-Response style guidelines: Write in a natural, conversational tone as if talking to a friend. Avoid using markdown formatting like asterisks, hashtags, or bullet points unless absolutely necessary. Write flowing paragraphs instead of lists when possible. Use everyday language and avoid jargon. Be encouraging and supportive. Keep responses engaging and personable. Focus on practical, actionable advice that feels genuine and helpful.
-
-Always prioritize user financial privacy and security. Provide actionable, practical advice in simple language. Encourage healthy financial habits. Reference BudgetMe features when relevant to help users get the most from the app. Be encouraging about financial progress, no matter how small. Maintain strict confidentiality of all user and system data.
-
-Users are already engaged with personal finance management through BudgetMe. Help them make the most of their financial journey while maintaining absolute security and privacy. Respond in a helpful, conversational manner to questions about personal finance, budgeting, or the BudgetMe application. Always refuse requests for administrative information or personal data.`;
+/**
+ * Load system prompt from database
+ * @returns {Promise<string>} The system prompt
+ */
+async function loadSystemPrompt() {
+  try {
+    const { data, error } = await supabase
+      .from('admin_settings')
+      .select('setting_value')
+      .eq('setting_key', 'chatbot_system_prompt')
+      .single();
+    
+    if (error || !data) {
+      console.warn('Failed to load system prompt from database, using default');
+      return DEFAULT_SYSTEM_PROMPT;
+    }
+    
+    return data.setting_value?.prompt || DEFAULT_SYSTEM_PROMPT;
+  } catch (error) {
+    console.error('Error loading system prompt:', error);
+    return DEFAULT_SYSTEM_PROMPT;
+  }
+}
 
 class ChatbotService {
   constructor() {
     /** @type {string} */
-    this.apiKey = process.env.REACT_APP_OPENROUTER_API_KEY || '';
+    this.apiKey = env.OPENROUTER_API_KEY || '';
     
     /** @type {string} */
     this.apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
@@ -47,6 +84,18 @@ class ChatbotService {
     
     /** @type {ChatMessage[]} */
     this.conversationHistory = [];
+    
+    /** @type {string | null} */
+    this.sessionId = null;
+    
+    /** @type {string | null} */
+    this.userId = null;
+    
+    /** @type {boolean} */
+    this.isAuthenticated = false;
+    
+    /** @type {number} */
+    this.messageOrder = 0;
     
     /** @type {Object<string, string>} */
     this.modelDisplayNames = {
@@ -59,12 +108,324 @@ class ChatbotService {
       'openai/gpt-4o': 'OpenAI GPT-4o'
     };
     
-    // Initialize with system prompt
+    /** @type {string} */
+    this.systemPrompt = DEFAULT_SYSTEM_PROMPT;
+    
+    // Rate limiting properties
+    /** @type {number} */
+    this.lastRequestTime = 0;
+    
+    /** @type {number} */
+    this.minRequestInterval = 1000; // 1 second between requests
+    
+    /** @type {number} */
+    this.retryCount = 0;
+    
+    /** @type {number} */
+    this.maxRetries = 3;
+    
+    /** @type {number} */
+    this.retryDelay = 1000; // Base delay for retries
+    
+    /** @type {Array<number>} */
+    this.requestQueue = [];
+    
+    /** @type {boolean} */
+    this.isProcessing = false;
+    
+    // Initialize with default system prompt (will be loaded from DB on first session)
+    this.conversationHistory = [];
+  }
+
+  /**
+   * Check if we can make a request based on rate limiting
+   * @returns {boolean} Whether we can make a request
+   */
+  canMakeRequest() {
+    const now = Date.now();
+    return (now - this.lastRequestTime) >= this.minRequestInterval;
+  }
+
+  /**
+   * Wait for the appropriate time before making a request
+   * @returns {Promise<void>}
+   */
+  async waitForRateLimit() {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    
+    if (timeSinceLastRequest < this.minRequestInterval) {
+      const waitTime = this.minRequestInterval - timeSinceLastRequest;
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+
+  /**
+   * Calculate exponential backoff delay for retries
+   * @param {number} attempt - Current attempt number
+   * @returns {number} Delay in milliseconds
+   */
+  calculateRetryDelay(attempt) {
+    // Exponential backoff: 1s, 2s, 4s, 8s, etc.
+    return this.retryDelay * Math.pow(2, attempt) + Math.random() * 1000;
+  }
+
+  /**
+   * Make API call with retry logic
+   * @param {Object} requestBody - The request body to send
+   * @returns {Promise<Object>} The API response
+   */
+  async makeApiCallWithRetry(requestBody) {
+    let attempt = 0;
+    
+    while (attempt <= this.maxRetries) {
+      try {
+        // Wait for rate limiting
+        await this.waitForRateLimit();
+        
+        // Update last request time
+        this.lastRequestTime = Date.now();
+        
+        // Make the API call
+        const response = await fetch(this.apiUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'BudgetMe - Personal Finance Tracker'
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        // Handle successful response
+        if (response.ok) {
+          this.retryCount = 0; // Reset retry count on success
+          return await response.json();
+        }
+
+        // Handle rate limiting (429)
+        if (response.status === 429) {
+          const errorData = await response.json().catch(() => ({}));
+          const retryAfter = errorData?.error?.retry_after || 60; // Default 60 seconds
+          
+          if (attempt < this.maxRetries) {
+            console.warn(`Rate limited. Retrying in ${retryAfter} seconds... (Attempt ${attempt + 1}/${this.maxRetries})`);
+            
+            // Wait for the specified retry time or exponential backoff, whichever is longer
+            const waitTime = Math.max(retryAfter * 1000, this.calculateRetryDelay(attempt));
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            
+            attempt++;
+            continue;
+          } else {
+            throw new Error(`Rate limit exceeded. Please try again in ${retryAfter} seconds.`);
+          }
+        }
+
+        // Handle other HTTP errors
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
+
+      } catch (error) {
+        if (attempt < this.maxRetries && error.message.includes('Rate limit')) {
+          attempt++;
+          continue;
+        }
+        throw error;
+      }
+    }
+    
+    throw new Error('Maximum retry attempts exceeded');
+  }
+
+  /**
+   * Initialize a chat session for the user
+   * @param {string | null} user - The authenticated user object or null for anonymous users
+   * @returns {Promise<string>} The session ID
+   */
+  async initializeSession(user) {
+    try {
+      // Load system prompt from database
+      this.systemPrompt = await loadSystemPrompt();
+      
+      // Initialize conversation history with system prompt
+      this.conversationHistory = [{
+        role: 'system',
+        content: this.systemPrompt,
+        timestamp: Date.now()
+      }];
+      
+      // Determine user ID (null for anonymous users)
+      this.isAuthenticated = !!user;
+      this.userId = user ? user.id : null;
+      
+      // Check for existing active session for this user
+      const existingSession = await getActiveSession(this.userId);
+      
+      if (existingSession) {
+        // Resume existing session
+        this.sessionId = existingSession.id;
+        this.messageOrder = existingSession.message_count || 0;
+        return this.sessionId;
+      }
+      
+      // Create new session
+      const sessionData = {
+        user_id: this.userId,
+        session_title: 'Chat Session',
+        session_type: 'general',
+        start_time: new Date().toISOString(),
+        is_active: true,
+        message_count: 0,
+        ai_model_version: this.model
+      };
+      
+      const newSession = await createChatSession(sessionData);
+      this.sessionId = newSession.id;
+      this.messageOrder = 0;
+      return this.sessionId;
+    } catch (error) {
+      console.error('Error initializing session:', error);
+      // Continue without database persistence but with system prompt
     this.conversationHistory = [{
       role: 'system',
-      content: SYSTEM_PROMPT,
+        content: this.systemPrompt,
       timestamp: Date.now()
     }];
+      this.sessionId = `local-${Date.now()}`;
+      this.messageOrder = 0;
+      return this.sessionId;
+    }
+  }
+
+  /**
+   * Detect sentiment from message text using the Sentiment library
+   * @param {string} messageText - The message content
+   * @param {string} messageType - The message type
+   * @returns {{sentiment: string, score: number, comparative: number}} The detected sentiment with scores
+   */
+  detectSentiment(messageText, messageType) {
+    // Initialize sentiment analyzer
+    const sentimentAnalyzer = new Sentiment();
+    
+    // Default sentiments by message type (for non-user messages)
+    if (messageType === 'assistant') {
+      return { sentiment: 'positive', score: 5, comparative: 0.5 };
+    }
+    if (messageType === 'error') {
+      return { sentiment: 'negative', score: -5, comparative: -0.5 };
+    }
+    if (messageType === 'system') {
+      return { sentiment: 'neutral', score: 0, comparative: 0 };
+    }
+    
+    // For user messages, use sentiment analysis
+    try {
+      const result = sentimentAnalyzer.analyze(messageText);
+      
+      // The score represents the overall sentiment:
+      // Positive score = positive sentiment
+      // Negative score = negative sentiment
+      // Score around 0 = neutral sentiment
+      
+      // Comparative is the sentiment score normalized by word count (more accurate)
+      let sentiment;
+      if (result.score > 1) {
+        sentiment = 'positive';
+      } else if (result.score < -1) {
+        sentiment = 'negative';
+      } else {
+        sentiment = 'neutral';
+      }
+      
+      return {
+        sentiment,
+        score: result.score,
+        comparative: result.comparative
+      };
+    } catch (error) {
+      console.error('Error analyzing sentiment:', error);
+      return { sentiment: 'neutral', score: 0, comparative: 0 };
+    }
+  }
+
+  /**
+   * Save a message to the database
+   * @param {string} messageText - The message content
+   * @param {string} messageType - The message type (user, assistant, system, error)
+   * @param {Object} [analytics] - Optional analytics data for assistant messages
+   * @returns {Promise<void>}
+   */
+  async saveMessage(messageText, messageType, analytics = null) {
+    if (!this.sessionId || this.sessionId.startsWith('local-')) {
+      // Skip database save for local-only sessions
+      return;
+    }
+    
+    try {
+      this.messageOrder++;
+      
+      // Analyze sentiment
+      const sentimentResult = this.detectSentiment(messageText, messageType);
+      
+      // Normalize the comparative score to fit within 0.0-1.0 range
+      // Comparative score typically ranges from -5 to +5, but can go beyond
+      // Map it to 0-1 where 0.5 is neutral
+      const normalizedScore = Math.max(0, Math.min(1, (sentimentResult.comparative + 5) / 10));
+      
+      const messageData = {
+        session_id: this.sessionId,
+        user_id: this.userId,
+        message_text: messageText,
+        message_type: messageType,
+        message_order: this.messageOrder,
+        message_sentiment: sentimentResult.sentiment,
+        confidence_score: normalizedScore, // Store normalized score (0.0-1.0)
+        created_at: new Date().toISOString()
+      };
+      
+      const message = await insertChatMessage(messageData);
+      
+      // Update session message count
+      await updateChatSession(this.sessionId, this.userId, { 
+        message_count: this.messageOrder,
+        updated_at: new Date().toISOString()
+      });
+      
+      // Save analytics if provided (for assistant messages)
+      if (analytics && message) {
+        const analyticsData = {
+          message_id: message.id,
+          model_name: this.model,
+          model_version: '1.0',
+          ...analytics
+        };
+        
+        await insertAnalytics(analyticsData, this.userId);
+      }
+    } catch (error) {
+      console.error('Error saving message to database:', error);
+    }
+  }
+
+  /**
+   * End the current session
+   * @returns {Promise<void>}
+   */
+  async endSession() {
+    if (!this.sessionId || this.sessionId.startsWith('local-')) {
+      return;
+    }
+    
+    try {
+      await updateChatSession(this.sessionId, this.userId, {
+        end_time: new Date().toISOString(),
+        is_active: false
+      });
+    } catch (error) {
+      console.error('Error ending session:', error);
+    }
   }
 
   /**
@@ -97,7 +458,30 @@ class ChatbotService {
       };
     }
 
+    // Ensure session is initialized before sending messages
+    if (!this.sessionId || this.sessionId.startsWith('local-')) {
+      try {
+        // Initialize session for anonymous user (will be set by FloatingChatbot for authenticated users)
+        await this.initializeSession(null);
+      } catch (error) {
+        console.error('Failed to initialize session:', error);
+        // Continue anyway - messages will be stored locally
+      }
+    }
+
+    // Check if we're already processing a request
+    if (this.isProcessing) {
+      return {
+        success: false,
+        error: 'Please wait for the previous message to complete before sending another.'
+      };
+    }
+
+    const startTime = Date.now();
+
     try {
+      this.isProcessing = true;
+
       // Add user message to conversation history
       /** @type {ChatMessage} */
       const userMsg = {
@@ -107,6 +491,9 @@ class ChatbotService {
       };
       
       this.conversationHistory.push(userMsg);
+      
+      // Save user message to database
+      await this.saveMessage(userMessage.trim(), 'user');
 
       // Prepare messages for API call (limit to last 10 messages to stay within token limits)
       const messages = this.conversationHistory.slice(-10).map(msg => ({
@@ -114,34 +501,25 @@ class ChatbotService {
         content: msg.content
       }));
 
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'BudgetMe - Personal Finance Tracker'
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: messages,
-          temperature: 0.7,
-          stream: false
-        })
+      const apiCallStart = Date.now();
+      
+      // Use the new rate-limited API call method
+      const data = await this.makeApiCallWithRetry({
+        model: this.model,
+        messages: messages,
+        temperature: 0.7,
+        // No max_tokens limit - allows unlimited response length for complete insights
+        stream: false
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
-      }
-
-      const data = await response.json();
+      
+      const apiCallTime = Date.now() - apiCallStart;
       
       if (!data.choices || !data.choices[0] || !data.choices[0].message) {
         throw new Error('Invalid response format from API');
       }
 
       const assistantMessage = data.choices[0].message.content.trim();
+      const totalTime = Date.now() - startTime;
 
       // Add assistant response to conversation history
       /** @type {ChatMessage} */
@@ -153,6 +531,18 @@ class ChatbotService {
       };
       
       this.conversationHistory.push(assistantMsg);
+      
+      // Prepare analytics data
+      const analytics = {
+        prompt_tokens: data.usage?.prompt_tokens || null,
+        completion_tokens: data.usage?.completion_tokens || null,
+        total_tokens: data.usage?.total_tokens || null,
+        processing_time_ms: apiCallTime,
+        temperature: 0.7
+      };
+      
+      // Save assistant message to database with analytics
+      await this.saveMessage(assistantMessage, 'assistant', analytics);
 
       return {
         success: true,
@@ -165,23 +555,49 @@ class ChatbotService {
       // Remove the user message if the API call failed
       this.conversationHistory.pop();
       
+      // Save error message to database
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get response from chatbot';
+      await this.saveMessage(errorMessage, 'error');
+      
+      // Provide user-friendly error messages for rate limiting
+      let userFriendlyError = errorMessage;
+      if (errorMessage.includes('Rate limit exceeded')) {
+        userFriendlyError = 'The chat service is temporarily unavailable due to high demand. Please try again in a few moments.';
+      } else if (errorMessage.includes('Maximum retry attempts exceeded')) {
+        userFriendlyError = 'The chat service is experiencing technical difficulties. Please try again later.';
+      }
+      
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to get response from chatbot'
+        error: userFriendlyError
       };
+    } finally {
+      this.isProcessing = false;
     }
   }
 
   /**
-   * Clear conversation history (keep system prompt)
-   * @returns {void}
+   * Clear conversation history (keep system prompt) and start a new session
+   * @returns {Promise<void>}
    */
-  clearHistory() {
+  async clearHistory() {
+    // End current session
+    await this.endSession();
+    
+    // Reload system prompt from database
+    this.systemPrompt = await loadSystemPrompt();
+    
+    // Reset conversation history
     this.conversationHistory = [{
       role: 'system',
-      content: SYSTEM_PROMPT,
+      content: this.systemPrompt,
       timestamp: Date.now()
     }];
+    
+    // Start new session if we have a user
+    if (this.userId !== undefined) {
+      await this.initializeSession(this.isAuthenticated && this.userId ? { id: this.userId } : null);
+    }
   }
 
   /**

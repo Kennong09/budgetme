@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { FC, memo } from 'react';
 import { TooltipSystemProps, TooltipContent } from '../types';
 
-const TooltipSystem: React.FC<TooltipSystemProps> = ({
+const TooltipSystem: FC<TooltipSystemProps> = memo(({
   activeTip,
   tooltipPosition
 }) => {
@@ -106,6 +106,8 @@ const TooltipSystem: React.FC<TooltipSystemProps> = ({
       }}></div>
     </div>
   );
-};
+});
+
+TooltipSystem.displayName = 'TooltipSystem';
 
 export default TooltipSystem;

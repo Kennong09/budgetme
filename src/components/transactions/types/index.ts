@@ -56,6 +56,8 @@ export interface FilterState {
   search: string;
   scope: "all" | "personal" | "family";
   goal_id?: string;
+  currentPage: number;
+  pageSize: number;
 }
 
 // Highcharts interfaces
@@ -191,7 +193,7 @@ export interface TransactionSummaryCardsProps {
 export interface TransactionChartsProps {
   lineChartOptions: LineChartConfig | null;
   pieChartOptions: PieChartConfig | null;
-  filteredTransactions: Transaction[];
+  filteredTransactions: Transaction[]; // Complete filtered transactions for chart data
   periodTitle: string;
   expensesRatio: number;
   onToggleTip: (tipId: string, event?: React.MouseEvent) => void;
@@ -206,11 +208,19 @@ export interface TransactionFiltersProps {
 }
 
 export interface TransactionTableProps {
-  filteredTransactions: Transaction[];
+  filteredTransactions: Transaction[]; // Paginated subset of filtered transactions for table display
   userData: UserData | null;
   isFiltering: boolean;
   onToggleTip: (tipId: string, event?: React.MouseEvent) => void;
   onDeleteTransaction: (transactionId: string) => void;
+  currentPage: number;
+  pageSize: number;
+  totalPages: number;
+  totalItems: number;
+  startIndex: number;
+  endIndex: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
 }
 
 export interface DeleteConfirmationModalProps {

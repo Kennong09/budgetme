@@ -1,5 +1,16 @@
 /* Settings component specific styles */
 
+/* Desktop layout visibility - hidden on mobile, shown on md+ */
+#desktop-settings-layout {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  #desktop-settings-layout {
+    display: flex !important;
+  }
+}
+
 /* Settings navigation styling */
 .settings-nav .list-group-item {
   border-left: 3px solid transparent;
@@ -140,4 +151,103 @@
 
 .settings-section {
   animation: fadeIn 0.3s ease-out;
-} 
+}
+
+/* Enhanced Profile Picture Styles */
+.profile-picture-container img {
+  border: 3px solid #e3e6f0;
+  transition: all 0.3s ease;
+}
+
+.profile-picture-container img:hover {
+  border-color: #4e73df;
+  box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.25);
+}
+
+/* Image Upload Zone */
+.image-upload-zone {
+  border: 2px dashed #d1d3e2;
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.image-upload-zone:hover {
+  border-color: #4e73df;
+  background-color: #f8f9fc;
+}
+
+.image-upload-zone.dragover {
+  border-color: #1cc88a;
+  background-color: #f1f9f4;
+}
+
+/* Form Enhancement Styles */
+.form-group .input-group .input-group-text {
+  border-color: #d1d3e2;
+  background-color: #f8f9fc;
+}
+
+.form-group .input-group .form-control:focus ~ .input-group-append .input-group-text,
+.form-group .input-group .form-control:focus ~ .input-group-prepend .input-group-text {
+  border-color: #4e73df;
+  box-shadow: 0 0 0 0.2rem rgba(78, 115, 223, 0.25);
+}
+
+/* Loading States */
+.btn .spinner-border-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+/* Card Border Colors */
+.border-left-primary {
+  border-left: 0.25rem solid #4e73df !important;
+}
+
+.border-left-success {
+  border-left: 0.25rem solid #1cc88a !important;
+}
+
+.border-left-info {
+  border-left: 0.25rem solid #36b9cc !important;
+}
+
+.border-left-warning {
+  border-left: 0.25rem solid #f6c23e !important;
+}
+
+.border-left-danger {
+  border-left: 0.25rem solid #e74a3b !important;
+}
+
+/* Button Enhancements */
+.btn-outline-primary:hover {
+  box-shadow: 0 0.125rem 0.25rem rgba(78, 115, 223, 0.15);
+}
+
+.btn-success:hover {
+  box-shadow: 0 0.125rem 0.25rem rgba(28, 200, 138, 0.15);
+}
+
+/* Responsive Design for Profile Settings */
+@media (max-width: 768px) {
+  .profile-picture-container {
+    width: 120px;
+    height: 120px;
+  }
+  
+  .card-body {
+    padding: 1rem;
+  }
+  
+  .d-flex.flex-wrap.gap-2 {
+    flex-direction: column;
+  }
+  
+  .d-flex.flex-wrap.gap-2 > .btn {
+    margin-bottom: 0.5rem;
+  }
+}

@@ -424,16 +424,7 @@ BEGIN
         p_family_id, p_invited_by, p_email, p_role, v_token, p_message
     ) RETURNING id INTO v_invitation_id;
     
-    -- Send notification
-    PERFORM public.send_notification(
-        'family_invitation',
-        jsonb_build_object(
-            'invitation_id', v_invitation_id,
-            'family_id', p_family_id,
-            'email', p_email,
-            'token', v_token
-        )::TEXT
-    );
+    -- Invitation created successfully
     
     RETURN v_invitation_id;
 END;

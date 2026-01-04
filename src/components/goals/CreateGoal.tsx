@@ -11,7 +11,7 @@ import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
 import { CentavoInput, ContributionInput } from "../common/CentavoInput";
 import { formatCurrency as formatCurrencyNew, roundToCentavo } from "../../utils/currencyUtils";
-import { GoalNotificationService } from "../../services/database/goalNotificationService";
+import { TargetDateSelector, PrioritySelector, PriorityLevel } from "./components";
 
 // Import SB Admin CSS (already imported at the app level)
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -22,7 +22,7 @@ interface GoalFormData {
   target_amount: number; // Changed from string to number for centavo precision
   target_date: string;
   current_amount: number; // Changed from string to number for centavo precision
-  priority: "low" | "medium" | "high";
+  priority: PriorityLevel;
   notes: string;
   share_with_family: boolean; // Whether to share the goal with family
 }
@@ -40,7 +40,7 @@ const CreateGoal: FC = () => {
   // Family status states
   const [isFamilyMember, setIsFamilyMember] = useState<boolean>(false);
   const [userFamilyId, setUserFamilyId] = useState<string | null>(null);
-  const [familyRole, setFamilyRole] = useState<"admin" | "viewer" | null>(null);
+  const [familyRole, setFamilyRole] = useState<"admin" | "member" | "viewer" | null>(null);
 
   const initialFormState: GoalFormData = {
     goal_name: "",
@@ -106,7 +106,7 @@ const CreateGoal: FC = () => {
           console.log("User is a family member:", memberData[0]);
           setIsFamilyMember(true);
           setUserFamilyId(memberData[0].family_id);
-          setFamilyRole(memberData[0].role as "admin" | "viewer");
+          setFamilyRole(memberData[0].role as "admin" | "member" | "viewer");
         } else {
           // Fallback: Since check_user_family RPC doesn't exist, set defaults
           console.log("No family_members record found and check_user_family RPC is not available");
@@ -237,16 +237,6 @@ const CreateGoal: FC = () => {
         throw new Error(error.message);
       }
       
-      // Trigger goal creation notifications
-      if (data) {
-        try {
-          await GoalNotificationService.getInstance().checkGoalMilestones(data.id);
-          console.log('Goal creation notifications processed successfully');
-        } catch (notificationError) {
-          // Log notification error but don't fail the goal creation
-          console.warn('Failed to process goal creation notifications:', notificationError);
-        }
-      }
       
       // Success! Show toast and redirect
       showSuccessToast(`Goal "${goal.goal_name}" ${goal.share_with_family ? 'shared with family' : 'created'} successfully!`);
@@ -284,7 +274,20 @@ const CreateGoal: FC = () => {
   if (loading) {
     return (
       <div className="container-fluid">
-        <div className="text-center my-5">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">Loading...</p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="text-center my-5 hidden md:block">
           <div className="spinner-border text-primary" role="status">
             <span className="sr-only">Loading...</span>
           </div>
@@ -299,64 +302,203 @@ const CreateGoal: FC = () => {
 
     return (
       <div className="container-fluid animate__animated animate__fadeIn">
-        {/* Page Heading */}
-        <div className="d-sm-flex align-items-center justify-content-between mb-4">
-          <h1 className="h3 mb-0 text-gray-800">Review Your Goal</h1>
-          <Link to="/goals" className="btn btn-sm btn-secondary shadow-sm">
-            <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
-          </Link>
+        {/* Mobile Review View */}
+        <div className="block md:hidden">
+          {/* Mobile Page Heading */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between">
+              <h1 className="text-base font-bold text-gray-800">Review Goal</h1>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setViewMode("form")}
+                  className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                  aria-label="Back to edit"
+                >
+                  <i className="fas fa-arrow-left text-xs"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Error Alert */}
+          {error && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-3">
+              <div className="flex items-center gap-2">
+                <i className="fas fa-exclamation-triangle text-rose-500 text-sm"></i>
+                <p className="text-xs text-rose-700">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Goal Summary Card */}
+          <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-2xl p-4 mb-3 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-white/80 text-xs font-medium">New Goal</span>
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                <i className="fas fa-bullseye text-white text-sm"></i>
+              </div>
+            </div>
+            <div className="text-white text-lg font-bold mb-1 truncate">
+              {goal.goal_name}
+            </div>
+            <div className="text-white/70 text-xs">
+              Target: {formatCurrencyNew(goal.target_amount)}
+            </div>
+          </div>
+
+          {/* Goal Type Badge */}
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mb-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${goal.share_with_family ? 'bg-blue-100' : 'bg-indigo-100'}`}>
+                <i className={`fas ${goal.share_with_family ? 'fa-users' : 'fa-user'} ${goal.share_with_family ? 'text-blue-500' : 'text-indigo-500'} text-sm`}></i>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-gray-800">
+                  {goal.share_with_family ? 'Family Shared Goal' : 'Personal Goal'}
+                </p>
+                <p className="text-[10px] text-gray-500">
+                  {goal.share_with_family ? 'Visible to family members' : 'Only visible to you'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Details Grid */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center mb-2">
+                <i className="fas fa-bullseye text-blue-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Target</p>
+              <p className="text-sm font-bold text-gray-800">{formatCurrencyNew(goal.target_amount)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center mb-2">
+                <i className="fas fa-piggy-bank text-emerald-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Current</p>
+              <p className="text-sm font-bold text-gray-800">{formatCurrencyNew(goal.current_amount || 0)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center mb-2">
+                <i className="fas fa-calendar text-amber-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Target Date</p>
+              <p className="text-xs font-bold text-gray-800">{formatDate(goal.target_date)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center mb-2">
+                <i className="fas fa-flag text-rose-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Priority</p>
+              <p className="text-xs font-bold text-gray-800 capitalize">{goal.priority}</p>
+            </div>
+          </div>
+
+          {/* Monthly Savings Recommendation */}
+          {monthlySavings && (
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-4 mb-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  <i className="fas fa-chart-line text-white text-sm"></i>
+                </div>
+                <div className="flex-1">
+                  <p className="text-white/80 text-[10px] font-medium uppercase tracking-wide">Monthly Saving</p>
+                  <p className="text-white text-lg font-bold">{formatCurrency(monthlySavings)}</p>
+                  <p className="text-white/60 text-[10px]">To reach goal by {formatDate(goal.target_date)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {goal.notes && (
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mb-3">
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide mb-1">Notes</p>
+              <p className="text-xs text-gray-700">{goal.notes}</p>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setViewMode("form")}
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+            >
+              <i className="fas fa-arrow-left text-xs"></i>
+              Edit
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <i className={`fas ${isSubmitting ? 'fa-spinner fa-spin' : 'fa-check'} text-xs`}></i>
+              {isSubmitting ? 'Creating...' : 'Create Goal'}
+            </button>
+          </div>
         </div>
 
-        {/* Display error if any */}
-        {error && (
-          <div className="alert alert-danger mb-4">
-            <i className="fas fa-exclamation-triangle mr-2"></i>
-            {error}
+        {/* Desktop Review View */}
+        <div className="hidden md:block">
+          {/* Page Heading */}
+          <div className="d-sm-flex align-items-center justify-content-between mb-4">
+            <h1 className="h3 mb-0 text-gray-800">Review Your Goal</h1>
+            <Link to="/goals" className="btn btn-sm btn-secondary shadow-sm">
+              <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
+            </Link>
           </div>
-        )}
 
-        <div className="row">
-          <div className="col-lg-8 mx-auto">
-            <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
-              <div className="card-header py-3">
-                <h6 className="m-0 font-weight-bold text-primary">Goal Details</h6>
-              </div>
-              <div className="card-body">
-                <div className="row mb-4">
-                  <div className="col-12 mb-4">
-                    <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                      Goal Name
-                    </div>
-                    <h4 className="h4 mb-0 font-weight-bold text-gray-800">{goal.goal_name}</h4>
-                  </div>
+          {/* Display error if any */}
+          {error && (
+            <div className="alert alert-danger mb-4">
+              <i className="fas fa-exclamation-triangle mr-2"></i>
+              {error}
+            </div>
+          )}
+
+          <div className="row">
+            <div className="col-lg-8 mx-auto">
+              <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
+                <div className="card-header py-3">
+                  <h6 className="m-0 font-weight-bold text-primary">Goal Details</h6>
                 </div>
+                <div className="card-body">
+                  <div className="row mb-4">
+                    <div className="col-12 mb-4">
+                      <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                        Goal Name
+                      </div>
+                      <h4 className="h4 mb-0 font-weight-bold text-gray-800">{goal.goal_name}</h4>
+                    </div>
+                  </div>
 
-                {/* Goal Type Indicator */}
-                <div className="row mb-4">
-                  <div className="col-12">
-                    <div className="card border-left-info shadow h-100 py-2">
-                      <div className="card-body">
-                        <div className="row no-gutters align-items-center">
-                          <div className="col mr-2">
-                            <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
-                              Goal Type
-                            </div>
-                            <div className="h5 mb-0 font-weight-bold text-gray-800 d-flex align-items-center">
-                              {goal.share_with_family ? (
-                                <>
-                                  <div className="mr-2">
-                                    <i className="fas fa-users text-info"></i>
-                                  </div>
-                                  Family Shared Goal
-                                  <span className="badge badge-info ml-2">Visible to family members</span>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="mr-2">
-                                    <i className="fas fa-user text-primary"></i>
-                                  </div>
-                                  Personal Goal
-                                  <span className="badge badge-primary ml-2">Only visible to you</span>
+                  {/* Goal Type Indicator */}
+                  <div className="row mb-4">
+                    <div className="col-12">
+                      <div className="card border-left-info shadow h-100 py-2">
+                        <div className="card-body">
+                          <div className="row no-gutters align-items-center">
+                            <div className="col mr-2">
+                              <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Goal Type
+                              </div>
+                              <div className="h5 mb-0 font-weight-bold text-gray-800 d-flex align-items-center">
+                                {goal.share_with_family ? (
+                                  <>
+                                    <div className="mr-2">
+                                      <i className="fas fa-users text-info"></i>
+                                    </div>
+                                    Family Shared Goal
+                                    <span className="badge badge-info ml-2">Visible to family members</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="mr-2">
+                                      <i className="fas fa-user text-primary"></i>
+                                    </div>
+                                    Personal Goal
+                                    <span className="badge badge-primary ml-2">Only visible to you</span>
                                 </>
                               )}
                             </div>
@@ -377,7 +519,7 @@ const CreateGoal: FC = () => {
                               Target Amount
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {formatCurrencyNew(goal.target_amount, 'PHP')}
+                              {formatCurrencyNew(goal.target_amount)}
                             </div>
                           </div>
                           <div className="col-auto">
@@ -396,7 +538,7 @@ const CreateGoal: FC = () => {
                               Current Amount
                             </div>
                             <div className="h5 mb-0 font-weight-bold text-gray-800">
-                              {formatCurrencyNew(goal.current_amount || 0, 'PHP')}
+                              {formatCurrencyNew(goal.current_amount || 0)}
                             </div>
                           </div>
                           <div className="col-auto">
@@ -506,55 +648,356 @@ const CreateGoal: FC = () => {
           </div>
         </div>
       </div>
+    </div>
     );
   }
 
   return (
     <div className="container-fluid animate__animated animate__fadeIn">
-      {/* Page Heading */}
-      <div className="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 className="h3 mb-0 text-gray-800">Create New Goal</h1>
-        <Link to="/goals" className="btn btn-sm btn-secondary shadow-sm">
-          <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Goals
-        </Link>
+      {/* Mobile Form View */}
+      <div className="block md:hidden">
+        {/* Mobile Page Heading */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-base font-bold text-gray-800">Create Goal</h1>
+            <Link
+              to="/goals"
+              className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+              aria-label="Back to goals"
+            >
+              <i className="fas fa-arrow-left text-xs"></i>
+            </Link>
+          </div>
+        </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <i className="fas fa-exclamation-triangle text-rose-500 text-sm"></i>
+                <p className="text-xs text-rose-700">{error}</p>
+              </div>
+              <button onClick={() => setError(null)} className="text-rose-500">
+                <i className="fas fa-times text-xs"></i>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ===== MOBILE FORM VIEW ===== */}
+        <form onSubmit={handleReview}>
+          {/* Mobile Goal Name Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-bullseye text-indigo-500 text-[10px]"></i>
+                Goal Name
+                <span className="text-red-500">*</span>
+              </h6>
+            </div>
+            <div className="p-3">
+              <input
+                type="text"
+                name="goal_name"
+                value={goal.goal_name}
+                onChange={handleChange}
+                className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none transition-all"
+                placeholder="e.g., Vacation, Emergency Fund"
+                required
+              />
+              <p className="text-[10px] text-gray-400 mt-1.5">Give your goal a clear, specific name</p>
+            </div>
+          </div>
+
+          {/* Mobile Amount Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-peso-sign text-indigo-500 text-[10px]"></i>
+                Amounts
+              </h6>
+            </div>
+            <div className="p-3 space-y-3">
+              <div>
+                <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1 block">
+                  Target Amount <span className="text-red-500">*</span>
+                </label>
+                <CentavoInput
+                  value={goal.target_amount}
+                  onChange={handleAmountChange('target_amount')}
+                  currency="PHP"
+                  label=""
+                  placeholder="0.00"
+                  required={true}
+                  min={0.01}
+                  className="mb-0"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1 block">
+                  Current Amount (Optional)
+                </label>
+                <CentavoInput
+                  value={goal.current_amount}
+                  onChange={handleAmountChange('current_amount')}
+                  currency="PHP"
+                  label=""
+                  placeholder="0.00"
+                  required={false}
+                  min={0}
+                  className="mb-0"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Money you've already saved</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Date & Priority Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-calendar-alt text-indigo-500 text-[10px]"></i>
+                Timeline & Priority
+              </h6>
+            </div>
+            <div className="p-3 space-y-3">
+              <div>
+                <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1 block">
+                  Target Date <span className="text-red-500">*</span>
+                </label>
+                <TargetDateSelector
+                  selectedDate={goal.target_date}
+                  onDateSelect={(date) => setGoal({...goal, target_date: date})}
+                  required={true}
+                  label=""
+                  className="mb-0"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1 block">
+                  Priority <span className="text-red-500">*</span>
+                </label>
+                <PrioritySelector
+                  selectedPriority={goal.priority}
+                  onPrioritySelect={(priority) => setGoal({...goal, priority})}
+                  required={true}
+                  showDescription={false}
+                  label=""
+                  className="mb-0"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Notes Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-sticky-note text-indigo-500 text-[10px]"></i>
+                Notes
+                <span className="text-gray-400 text-[9px] font-normal">(Optional)</span>
+              </h6>
+            </div>
+            <div className="p-3">
+              <textarea
+                name="notes"
+                value={goal.notes}
+                onChange={handleChange}
+                rows={3}
+                className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 outline-none transition-all resize-none"
+                placeholder="Add any details about your goal"
+              ></textarea>
+            </div>
+          </div>
+
+          {/* Mobile Family Sharing Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-users text-indigo-500 text-[10px]"></i>
+                Family Sharing
+              </h6>
+            </div>
+            <div className="p-3">
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs text-gray-500">Checking family status...</span>
+                </div>
+              ) : isFamilyMember ? (
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <i className="fas fa-users text-blue-500 text-xs"></i>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-blue-800">Family Member</p>
+                      <p className="text-[10px] text-blue-600">Role: {familyRole ? familyRole.charAt(0).toUpperCase() + familyRole.slice(1) : 'N/A'}</p>
+                    </div>
+                  </div>
+                  <label className={`flex items-center gap-2 ${familyRole === 'viewer' ? 'opacity-50' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={goal.share_with_family}
+                      disabled={familyRole === 'viewer'}
+                      onChange={(e) => setGoal({...goal, share_with_family: e.target.checked})}
+                      className="w-4 h-4 text-blue-500 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-gray-700">Share this goal with family</span>
+                  </label>
+                  {familyRole === 'viewer' && (
+                    <p className="text-[10px] text-amber-600 mt-1.5">
+                      <i className="fas fa-info-circle mr-1"></i>
+                      Viewers cannot share goals
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <i className="fas fa-users text-gray-400 text-xs"></i>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-medium text-gray-600">Not in a family</p>
+                    <p className="text-[10px] text-gray-500">Join or create a family to share goals</p>
+                  </div>
+                  <Link to="/family/create" className="text-[10px] text-indigo-500 font-medium">
+                    Create →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile Goal Preview Card */}
+          {goal.goal_name && goal.target_amount > 0 && goal.target_date && (
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl shadow-sm border border-indigo-100 overflow-hidden mb-3">
+              <div className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center">
+                    <i className="fas fa-bullseye text-white text-sm"></i>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-indigo-700">Goal Preview</p>
+                    <p className="text-[10px] text-indigo-500">{goal.goal_name}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <div className="text-center p-2 bg-white rounded-lg">
+                    <p className="text-[9px] text-gray-500 uppercase font-medium">Target</p>
+                    <p className="text-xs font-bold text-gray-800">{formatCurrencyNew(goal.target_amount)}</p>
+                  </div>
+                  <div className="text-center p-2 bg-white rounded-lg">
+                    <p className="text-[9px] text-gray-500 uppercase font-medium">Current</p>
+                    <p className="text-xs font-bold text-gray-800">{formatCurrencyNew(goal.current_amount || 0)}</p>
+                  </div>
+                  <div className="text-center p-2 bg-white rounded-lg">
+                    <p className="text-[9px] text-gray-500 uppercase font-medium">Priority</p>
+                    <p className="text-xs font-bold text-gray-800 capitalize">{goal.priority}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Submit Button */}
+          <button
+            type="submit"
+            className="w-full py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold shadow-lg transition-all active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
+            disabled={isSubmitting}
+          >
+            <i className="fas fa-arrow-right text-xs"></i>
+            Continue to Review
+          </button>
+        </form>
+
+        {/* Mobile Tips Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-3 mb-4">
+          <div className="px-3 py-2.5 border-b border-gray-100">
+            <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+              <i className="fas fa-lightbulb text-amber-500 text-[10px]"></i>
+              Goal Setting Tips
+            </h6>
+          </div>
+          <div className="p-3 space-y-2.5">
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <i className="fas fa-bullseye text-blue-500 text-[10px]"></i>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-800">Be Specific</p>
+                <p className="text-[10px] text-gray-500">Define exactly what you're saving for</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                <i className="fas fa-calendar-check text-emerald-500 text-[10px]"></i>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-800">Set Realistic Dates</p>
+                <p className="text-[10px] text-gray-500">Choose achievable deadlines for your goals</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <i className="fas fa-chart-line text-amber-500 text-[10px]"></i>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-800">Track Progress</p>
+                <p className="text-[10px] text-gray-500">Regular contributions lead to success</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Display error if any */}
-      {error && (
-        <div className="alert alert-danger mb-4">
-          <i className="fas fa-exclamation-triangle mr-2"></i>
-          {error}
-          <button 
-            onClick={() => setError(null)} 
-            className="close" 
-            aria-label="Close"
-          >
-            <span aria-hidden="true">&times;</span>
-          </button>
+      {/* Desktop Form View */}
+      <div className="hidden md:block">
+        {/* Page Heading */}
+        <div className="d-sm-flex align-items-center justify-content-between mb-4">
+          <h1 className="h3 mb-0 text-gray-800">Create New Goal</h1>
+          <Link to="/goals" className="btn btn-sm btn-secondary shadow-sm">
+            <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Goals
+          </Link>
         </div>
-      )}
 
-      <div className="row">
-        <div className="col-lg-8 mx-auto">
-          <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
-            <div className="card-header py-3">
-              <h6 className="m-0 font-weight-bold text-primary">Goal Information</h6>
-            </div>
-            <div className="card-body">
-              <form onSubmit={handleReview}>
-                <div className="form-group">
-                  <label htmlFor="goal_name" className="font-weight-bold text-gray-800">
-                    Goal Name <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="goal_name"
-                    name="goal_name"
-                    value={goal.goal_name}
-                    onChange={handleChange}
-                    className="form-control form-control-user"
-                    placeholder="e.g., Vacation, Emergency Fund, New Car"
-                    required
+        {/* Display error if any */}
+        {error && (
+          <div className="alert alert-danger mb-4">
+            <i className="fas fa-exclamation-triangle mr-2"></i>
+            {error}
+            <button 
+              onClick={() => setError(null)} 
+              className="close" 
+              aria-label="Close"
+            >
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+        )}
+
+        <div className="row">
+          <div className="col-lg-8 mx-auto">
+            <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
+              <div className="card-header py-3">
+                <h6 className="m-0 font-weight-bold text-primary">Goal Information</h6>
+              </div>
+              <div className="card-body">
+                <form onSubmit={handleReview}>
+                  <div className="form-group">
+                    <label htmlFor="goal_name" className="font-weight-bold text-gray-800">
+                      Goal Name <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="goal_name"
+                      name="goal_name"
+                      value={goal.goal_name}
+                      onChange={handleChange}
+                      className="form-control form-control-user"
+                      placeholder="e.g., Vacation, Emergency Fund, New Car"
+                      required
                   />
                   <small className="form-text text-muted">
                     Give your goal a clear, specific name
@@ -594,46 +1037,22 @@ const CreateGoal: FC = () => {
 
                 <div className="row">
                   <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="target_date" className="font-weight-bold text-gray-800">
-                        Target Date <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        id="target_date"
-                        name="target_date"
-                        value={goal.target_date}
-                        onChange={handleChange}
-                        className="form-control"
-                        required
-                      />
-                      <small className="form-text text-muted">
-                        When do you want to achieve this goal?
-                      </small>
-                    </div>
+                    <TargetDateSelector
+                      selectedDate={goal.target_date}
+                      onDateSelect={(date) => setGoal({...goal, target_date: date})}
+                      required={true}
+                      label="Target Date"
+                    />
                   </div>
 
                   <div className="col-md-6">
-                    <div className="form-group">
-                      <label htmlFor="priority" className="font-weight-bold text-gray-800">
-                        Priority <span className="text-danger">*</span>
-                      </label>
-                      <select
-                        id="priority"
-                        name="priority"
-                        value={goal.priority}
-                        onChange={handleChange}
-                        className="form-control"
-                        required
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                      </select>
-                      <small className="form-text text-muted">
-                        How important is this goal to you?
-                      </small>
-                    </div>
+                    <PrioritySelector
+                      selectedPriority={goal.priority}
+                      onPrioritySelect={(priority) => setGoal({...goal, priority})}
+                      required={true}
+                      showDescription={true}
+                      label="Priority"
+                    />
                   </div>
                 </div>
 
@@ -676,6 +1095,28 @@ const CreateGoal: FC = () => {
                           <i className="fas fa-users mr-2"></i>
                           Family Goal Sharing
                         </h5>
+                        {/* Role Permissions Info */}
+                        <div className="alert alert-light mt-2 mb-0 py-2">
+                          <small className="text-muted">
+                            <i className="fas fa-info-circle mr-1"></i>
+                            <strong>Your family role: {familyRole ? familyRole.charAt(0).toUpperCase() + familyRole.slice(1) : 'N/A'}</strong>
+                            {familyRole === 'viewer' && (
+                              <span className="text-warning ml-2">
+                                • Viewers can only view goals but cannot contribute to them or link goals to family
+                              </span>
+                            )}
+                            {familyRole === 'member' && (
+                              <span className="text-success ml-2">
+                                • Members can contribute to goals and link goals to family
+                              </span>
+                            )}
+                            {familyRole === 'admin' && (
+                              <span className="text-primary ml-2">
+                                • Admins have full permissions including goal management and family administration
+                              </span>
+                            )}
+                          </small>
+                        </div>
                       </div>
                       
                       <div className="row">
@@ -687,17 +1128,20 @@ const CreateGoal: FC = () => {
                               id="shareWithFamily"
                               name="share_with_family"
                               checked={goal.share_with_family}
+                              disabled={familyRole === 'viewer'}
                               onChange={(e) => 
                                 setGoal({...goal, share_with_family: e.target.checked})
                               }
                             />
-                            <label className="font-weight-bold text-nowrap mb-0" htmlFor="shareWithFamily">
-                              Share this goal with my family
+                            <label className={`font-weight-bold text-nowrap mb-0 ${familyRole === 'viewer' ? 'text-muted' : ''}`} htmlFor="shareWithFamily">
+                              Share this goal with my family {familyRole === 'viewer' && '(Not available for viewers)'}
                             </label>
                           </div>
                           <small className="form-text text-muted d-block">
                             <i className="fas fa-info-circle mr-1"></i>
-                            When shared, this goal will appear in your family dashboard and family members can view and contribute to it.
+                            {familyRole === 'viewer' 
+                              ? 'Viewers can only view family goals but cannot create or share new goals with the family.' 
+                              : 'When shared, this goal will appear in your family dashboard and family members can view and contribute to it.'}
                           </small>
                           <small className="form-text text-muted d-block mt-1">
                             <i className="fas fa-lock mr-1"></i>
@@ -802,6 +1246,7 @@ const CreateGoal: FC = () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

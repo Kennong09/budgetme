@@ -24,10 +24,8 @@ const useInsightsAndChartsInternal = (
   customEndDate?: string
 ) => {
 
-
   // CRITICAL: ALL HOOKS MUST BE CALLED FIRST - NO CONDITIONAL RETURNS BEFORE THIS POINT
-  // Temporarily disable circuit breaker to fix hook order issues completely
-  const canRender = true; // Always render for now - circuit breaker disabled
+  const canRender = true;
   
   // Legacy circuit breaker refs (will be phased out)
   const renderCountRef = useRef(0);
@@ -40,10 +38,8 @@ const useInsightsAndChartsInternal = (
   const [monthlyData, setMonthlyData] = useState<HighchartsConfig | null>(null);
   const [categoryData, setCategoryData] = useState<PieChartConfig | null>(null);
 
-  // REMOVED ALL CONDITIONAL EARLY RETURNS TO FIX HOOK ORDER VIOLATIONS
-
   // Stable memoized values to prevent unnecessary recalculations
-  const stableTransactions = useMemo(() => transactions, [transactions]);
+  const stableTransactions = useMemo(() => transactions || [], [transactions]);
   const stableBudgetData = useMemo(() => budgetData, [budgetData]);
   const stableExpenseCategories = useMemo(() => expenseCategories, [expenseCategories]);
   const stableDateFilter = useMemo(() => dateFilter, [dateFilter]);
@@ -60,28 +56,55 @@ const useInsightsAndChartsInternal = (
       case 'current-month':
         startDate = new Date(today.getFullYear(), today.getMonth(), 1);
         break;
-      case 'last-3-months':
-        startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
-        break;
-      case 'last-6-months':
-        startDate = new Date(today.getFullYear(), today.getMonth() - 6, 1);
-        break;
-      case 'last-year':
-        startDate = new Date(today.getFullYear() - 1, today.getMonth(), 1);
-        break;
-      case 'custom':
-        if (stableCustomStartDate && stableCustomEndDate) {
-          startDate = new Date(stableCustomStartDate);
-          endDate = new Date(stableCustomEndDate);
-        } else {
-          // Fallback to last 3 months
-          startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
-        }
-        break;
-      default: // 'all'
-        // For 'all', we'll show the last 5 months for better chart readability
-        startDate = new Date(today.getFullYear(), today.getMonth() - 4, 1);
-        break;
+        case 'last-3-months':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 2, 1); // -2 to include current month
+          break;
+        case 'last-6-months':
+          startDate = new Date(today.getFullYear(), today.getMonth() - 5, 1); // -5 to include current month
+          break;
+        case 'last-year':
+          // Show previous calendar year (Jan - Dec of previous year)
+          startDate = new Date(today.getFullYear() - 1, 0, 1); // Jan 1 of previous year
+          endDate = new Date(today.getFullYear() - 1, 11, 31); // Dec 31 of previous year
+          break;
+          case 'custom':
+            if (stableCustomStartDate && stableCustomEndDate) {
+              startDate = new Date(stableCustomStartDate);
+              endDate = new Date(stableCustomEndDate);
+              // Validate dates: if invalid or start > end, fallback to last 3 months
+              if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || startDate > endDate) {
+                startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+                endDate = today;
+              }
+            } else if (stableCustomStartDate) {
+              // Only start date: show from start to today
+              startDate = new Date(stableCustomStartDate);
+              if (isNaN(startDate.getTime())) {
+                startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+              }
+            } else if (stableCustomEndDate) {
+              // Only end date: show last 3 months up to end date
+              endDate = new Date(stableCustomEndDate);
+              if (isNaN(endDate.getTime())) {
+                endDate = today;
+              }
+              startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 3, 1);
+            } else {
+              // No dates provided: fallback to last 3 months
+              startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+            }
+            break;
+        default: // 'all'
+          // For 'all', find the earliest transaction date to show ALL data
+          if (stableTransactions && stableTransactions.length > 0) {
+            const dates = stableTransactions.map(tx => new Date(tx.date));
+            const earliestDate = new Date(Math.min(...dates.map(d => d.getTime())));
+            startDate = new Date(earliestDate.getFullYear(), earliestDate.getMonth(), 1);
+          } else {
+            // Fallback: show last 12 months if no transactions
+            startDate = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+          }
+          break;
     }
 
     return { startDate, endDate };
@@ -93,15 +116,15 @@ const useInsightsAndChartsInternal = (
 
   // Stable generateInsights function with minimal dependencies to prevent re-renders
   const generateInsights = useCallback((income: number, expenses: number, savingsRate: number): void => {
-    if (!canRender) return;
-    
     const newInsights: InsightData[] = [];
     
-    // Enhanced data validation
+    // Enhanced data validation - but don't exit early if we have financial data to analyze
     if (!stableTransactions || stableTransactions.length === 0) {
-      
-      setInsights([]);
-      return;
+      // Even with no transactions, we can still provide insights based on income/expenses data
+      if (income === 0 && expenses === 0 && savingsRate === 0) {
+        // Don't call setInsights here - just return to avoid infinite loop
+        return;
+      }
     }
     
     // Validate numeric inputs and sanitize
@@ -798,24 +821,20 @@ const useInsightsAndChartsInternal = (
     // Select up to 4 unique insights
     const selectedInsights = uniqueInsights.slice(0, Math.min(4, uniqueInsights.length));
     
-
-    
     setInsights(selectedInsights);
-  }, [canRender, stableFormatCurrency, stableFormatPercentage]); // Minimal dependencies to prevent constant re-creation
+  }, [stableFormatCurrency, stableFormatPercentage, stableTransactions, stableBudgetData, stableExpenseCategories]);
 
   // Calculate transaction trends with minimal dependencies to prevent re-renders
   const calculateTransactionTrends = useCallback((): void => {
-    if (!canRender) return;
-    
     if (!stableTransactions || stableTransactions.length === 0) {
-      setTrends([]);
+      // Don't call setTrends here - just return to avoid infinite loop
       return;
     }
 
     const expenseTransactions = stableTransactions.filter(tx => tx.type === 'expense');
     
     if (expenseTransactions.length === 0) {
-      setTrends([]);
+      // Don't call setTrends here - just return to avoid infinite loop
       return;
     }
 
@@ -830,17 +849,20 @@ const useInsightsAndChartsInternal = (
       }
       
       const monthData = monthlySpending.get(monthKey)!;
-      if (tx.category_id) {
+      // Fix: Use expense_category_id instead of category_id for expense transactions
+      const categoryId = (tx as any).expense_category_id || tx.category_id || (tx as any).category || 'uncategorized';
+      
+      if (categoryId) {
         const amount = parseFloat(tx.amount.toString()) || 0;
-        const current = monthData.get(tx.category_id) || 0;
-        monthData.set(tx.category_id, current + amount);
+        const current = monthData.get(categoryId) || 0;
+        monthData.set(categoryId, current + amount);
       }
     });
-
+    
     const sortedMonths = Array.from(monthlySpending.keys()).sort();
     
     if (sortedMonths.length < 2) {
-      setTrends([]);
+      // Don't call setTrends here - just return to avoid infinite loop
       return;
     }
 
@@ -865,7 +887,7 @@ const useInsightsAndChartsInternal = (
       if (currentAmount === 0 && prevAmount === 0) return;
       
       const category = stableExpenseCategories.find(c => c.id === categoryId);
-      const categoryName = category ? category.category_name : 'Other';
+      const categoryName = category ? category.category_name : (categoryId === 'uncategorized' ? 'Uncategorized' : 'Other');
       
       let change = 0;
       if (prevAmount > 0) {
@@ -886,13 +908,14 @@ const useInsightsAndChartsInternal = (
       Math.abs(b.currentAmount - b.previousAmount) - Math.abs(a.currentAmount - a.previousAmount)
     );
     
-    setTrends(trendData.slice(0, 4));
-  }, [canRender]); // Minimal dependencies to prevent constant re-renders
+    const finalTrends = trendData.slice(0, 4);
+    
+    setTrends(finalTrends);
+  }, [stableExpenseCategories, stableTransactions]);
 
   // Simplified calculations with stable dependencies
   const calculations = useMemo(() => {
     if (!stableTransactions || stableTransactions.length === 0) {
-      
       return { income: 0, expenses: 0, savingsRate: 0, hasData: false };
     }
 
@@ -906,201 +929,185 @@ const useInsightsAndChartsInternal = (
       
     const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
 
-
-
     return { income, expenses, savingsRate, hasData: true };
   }, [stableTransactions]);
 
-  // Effect 1: Generate insights with stable dependencies and periodic refresh
-  useEffect(() => {
+  // Track if insights have been generated to prevent infinite loops
+  const insightsGeneratedRef = useRef(false);
+  const lastCalculationsRef = useRef({ income: 0, expenses: 0, savingsRate: 0 });
 
-    
-    if (!canRender || !calculations.hasData) {
-      
-      setInsights([]);
+  // Effect 1: Generate insights - ONLY when we have data
+  useEffect(() => {
+    // Don't do anything if no data - initial state is already empty array
+    if (!calculations.hasData) {
       return;
     }
 
-    // Generate insights immediately
-    const generateAndSetInsights = () => {
-      
+    // Skip if calculations haven't meaningfully changed
+    const calculationsChanged = 
+      lastCalculationsRef.current.income !== calculations.income ||
+      lastCalculationsRef.current.expenses !== calculations.expenses ||
+      Math.abs(lastCalculationsRef.current.savingsRate - calculations.savingsRate) > 0.01;
+    
+    if (!calculationsChanged && insightsGeneratedRef.current) {
+      return;
+    }
+
+    // Update refs
+    lastCalculationsRef.current = { 
+      income: calculations.income, 
+      expenses: calculations.expenses, 
+      savingsRate: calculations.savingsRate 
+    };
+
+    // Generate insights with debounce
+    const timeoutId = setTimeout(() => {
       generateInsights(calculations.income, calculations.expenses, calculations.savingsRate);
-    };
+      insightsGeneratedRef.current = true;
+    }, 200);
     
-    // Initial generation
-    const initialTimeout = setTimeout(generateAndSetInsights, 100);
-    
-    // Set up periodic refresh to show different random insights every 30 seconds
-    const refreshInterval = setInterval(generateAndSetInsights, 30000);
-    
-    return () => {
-      clearTimeout(initialTimeout);
-      clearInterval(refreshInterval);
-    };
+    return () => clearTimeout(timeoutId);
   }, [calculations.hasData, calculations.income, calculations.expenses, calculations.savingsRate, generateInsights]);
 
-  // Effect 2: Calculate trends with stable dependencies (heavily throttled)
+  // Track if trends have been calculated to prevent infinite loops
+  const trendsCalculatedRef = useRef(false);
+  const lastTransactionsLengthRef = useRef(0);
+
+  // Effect 2: Calculate trends - ONLY when we have data
   useEffect(() => {
-    if (!canRender || !calculations.hasData) {
-      setTrends([]);
+    // Don't do anything if no data - initial state is already empty array
+    if (!calculations.hasData || stableTransactions.length === 0) {
       return;
     }
+
+    // Skip if transactions haven't changed
+    if (lastTransactionsLengthRef.current === stableTransactions.length && trendsCalculatedRef.current) {
+      return;
+    }
+
+    lastTransactionsLengthRef.current = stableTransactions.length;
 
     // HEAVY THROTTLE: Only update trends when absolutely necessary
     const timeoutId = setTimeout(() => {
       calculateTransactionTrends();
-    }, 500); // Increased from 100ms to 500ms
+      trendsCalculatedRef.current = true;
+    }, 500);
     
     return () => clearTimeout(timeoutId);
-  }, [calculations.hasData, calculateTransactionTrends]); // Use stable callback ref
+  }, [calculations.hasData, calculateTransactionTrends, stableTransactions.length]);
 
-  // Effect 3: Generate chart data with heavily stabilized dependencies
+  // SIMPLE CHART GENERATION - Following the same pattern as TransactionCharts
+  // Use a ref to track if charts have been generated to prevent unnecessary re-renders
+  const chartsGeneratedRef = useRef(false);
+  const lastTxCountRef = useRef(0);
+  // Track the actual transaction IDs to detect real data changes
+  const lastTxIdsRef = useRef<string>('');
+  
+  // Use a single effect with the actual transactions array to properly detect changes
   useEffect(() => {
-    if (!canRender || !calculations.hasData) {
-      setMonthlyData(null);
-      setCategoryData(null);
+    const txCount = stableTransactions?.length || 0;
+    
+    // Only generate charts if we have data - don't do anything if no data
+    // This prevents the infinite loop caused by setting state to null repeatedly
+    if (txCount === 0) {
+      // Reset refs when no data so charts regenerate when data arrives
+      chartsGeneratedRef.current = false;
+      lastTxCountRef.current = 0;
+      lastTxIdsRef.current = '';
       return;
     }
 
-    // VERY HEAVY THROTTLE: Chart generation is expensive, only update when filter changes
-    const timeoutId = setTimeout(() => {
-      try {
-        // Recreate getDateRange inline to avoid dependency issues
-        const today = new Date();
-        let startDate: Date;
-        let endDate: Date = today;
+    // Create a hash of transaction IDs to detect actual data changes
+    const txIds = stableTransactions.map(tx => tx.id).sort().join(',');
+    
+    // Skip if we've already generated charts for this exact data
+    // Check both count AND actual transaction IDs to ensure we regenerate when data changes
+    if (chartsGeneratedRef.current && lastTxCountRef.current === txCount && lastTxIdsRef.current === txIds) {
+      return;
+    }
 
-        switch (stableDateFilter) {
-          case 'current-month':
-            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-            break;
-          case 'last-3-months':
-            startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
-            break;
-          case 'last-6-months':
-            startDate = new Date(today.getFullYear(), today.getMonth() - 6, 1);
-            break;
-          case 'last-year':
-            startDate = new Date(today.getFullYear() - 1, today.getMonth(), 1);
-            break;
-          case 'custom':
-            if (stableCustomStartDate && stableCustomEndDate) {
-              startDate = new Date(stableCustomStartDate);
-              endDate = new Date(stableCustomEndDate);
-            } else {
-              startDate = new Date(today.getFullYear(), today.getMonth() - 3, 1);
-            }
-            break;
-          default: // 'all'
-            startDate = new Date(today.getFullYear(), today.getMonth() - 4, 1);
-            break;
+    console.log('[useInsightsAndCharts] Generating charts for', txCount, 'transactions');
+
+    // Generate monthly bar chart data
+    const generateMonthlyChart = (): HighchartsConfig | null => {
+      const monthsMap = new Map<string, { income: number; expenses: number }>();
+      
+      stableTransactions.forEach(tx => {
+        const txDate = new Date(tx.date);
+        const monthKey = `${txDate.getFullYear()}-${String(txDate.getMonth()).padStart(2, '0')}`;
+        
+        if (!monthsMap.has(monthKey)) {
+          monthsMap.set(monthKey, { income: 0, expenses: 0 });
         }
         
-        // Generate monthly data based on date range
-        const monthlyLabels: string[] = [];
-        const monthlyIncomeData: number[] = [];
-        const monthlyExpenseData: number[] = [];
-      
-      // Create months array based on date range
-      const currentDate = new Date(startDate);
-      const lastDate = new Date(endDate);
-      
-      // Determine how many months to show based on filter
-      let monthsToShow = 5; // default
-      if (stableDateFilter === 'current-month') monthsToShow = 1;
-      else if (stableDateFilter === 'last-3-months') monthsToShow = 3;
-      else if (stableDateFilter === 'last-6-months') monthsToShow = 6;
-      else if (stableDateFilter === 'last-year') monthsToShow = 12;
-      else if (stableDateFilter === 'custom' && stableCustomStartDate && stableCustomEndDate) {
-        const start = new Date(stableCustomStartDate);
-        const end = new Date(stableCustomEndDate);
-        monthsToShow = Math.min(12, Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 30))));
-      }
-      
-      // Generate data for each month
-      for (let i = monthsToShow - 1; i >= 0; i--) {
-        const monthDate = new Date();
-        monthDate.setMonth(monthDate.getMonth() - i);
+        const monthData = monthsMap.get(monthKey)!;
+        const amount = parseFloat(tx.amount?.toString() || '0') || 0;
         
-        const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-        const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
-        
-        // Only include if within our date range
-        if (monthEnd >= startDate && monthStart <= endDate) {
-          const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
-          monthlyLabels.push(monthName);
-          
-          // Filter transactions for this month
-          const monthTransactions = stableTransactions.filter(tx => {
-            const txDate = new Date(tx.date);
-            return txDate >= monthStart && txDate <= monthEnd;
-          });
-          
-          // Calculate income and expenses for this month
-          const monthIncome = monthTransactions
-            .filter(tx => tx.type === 'income')
-            .reduce((sum, tx) => sum + (parseFloat(tx.amount.toString()) || 0), 0);
-            
-          const monthExpenses = monthTransactions
-            .filter(tx => tx.type === 'expense')
-            .reduce((sum, tx) => sum + (parseFloat(tx.amount.toString()) || 0), 0);
-            
-          monthlyIncomeData.push(monthIncome);
-          monthlyExpenseData.push(monthExpenses);
+        if (tx.type === 'income') {
+          monthData.income += amount;
+        } else if (tx.type === 'expense') {
+          monthData.expenses += amount;
         }
-      }
-      
-      // If no data, show at least current month
+      });
+
+      // Sort months and create chart data
+      const sortedMonths = Array.from(monthsMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .slice(-12); // Last 12 months max
+
+      const monthlyLabels: string[] = [];
+      const monthlyIncomeData: number[] = [];
+      const monthlyExpenseData: number[] = [];
+
+      sortedMonths.forEach(([monthKey, data]) => {
+        const [year, month] = monthKey.split('-').map(Number);
+        const date = new Date(year, month);
+        monthlyLabels.push(date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
+        monthlyIncomeData.push(data.income);
+        monthlyExpenseData.push(data.expenses);
+      });
+
       if (monthlyLabels.length === 0) {
-        const now = new Date();
-        monthlyLabels.push(now.toLocaleDateString('en-US', { month: 'short' }));
-        monthlyIncomeData.push(calculations.income);
-        monthlyExpenseData.push(calculations.expenses);
+        return null;
       }
 
-      const formattedMonthlyData = {
+      return {
         chart: {
           type: "column",
           style: {
-            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+            fontFamily: 'Nunito, -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
           },
           backgroundColor: "transparent",
-          animation: {
-            duration: 800,
-          },
+          animation: { duration: 1000 },
           height: 350,
         },
         title: { text: null },
         xAxis: {
           categories: monthlyLabels,
           crosshair: true,
-          labels: {
-            style: {
-              color: "#666",
-            },
-          },
+          labels: { style: { color: "#858796" } },
         },
         yAxis: {
           min: 0,
           title: { text: null },
-          gridLineColor: "#e6e6e6",
-          gridLineDashStyle: "Solid",
+          gridLineColor: "#eaecf4",
+          gridLineDashStyle: "dash",
           labels: {
-            formatter: () => "₱{value}",
-            style: {
-              color: "#666",
+            formatter: function(this: any) {
+              return formatCurrency(this.value);
             },
+            style: { color: "#858796" },
           },
         },
         tooltip: {
           headerFormat: '<span style="font-size:10px">{point.key}</span><table>',
-          pointFormat: '<tr><td style="color:{series.color};padding:0">{series.name}: </td><td style="padding:0"><b>₱{point.y:,.2f}</b></td></tr>',
+          pointFormat: '<tr><td style="color:{series.color};padding:0">{series.name}: </td><td style="padding:0"><b>{point.y:,.0f}</b></td></tr>',
           footerFormat: '</table>',
           shared: true,
           useHTML: true,
           style: {
             fontSize: "12px",
-            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+            fontFamily: 'Nunito, -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
           },
           valuePrefix: "₱",
         },
@@ -1110,127 +1117,104 @@ const useInsightsAndChartsInternal = (
             borderWidth: 0,
             borderRadius: 3,
           },
-          series: {
-            animation: {
-              duration: 800,
-            },
-          },
+          series: { animation: { duration: 1000 } },
         },
         series: [
-          {
-            name: "Income",
-            data: monthlyIncomeData,
-            color: "#4e73df",
-            type: "column",
-          },
-          {
-            name: "Expenses",
-            data: monthlyExpenseData,
-            color: "#e74a3b",
-            type: "column",
-          },
+          { name: "Income", data: monthlyIncomeData, color: "#1cc88a", type: "column" },
+          { name: "Expenses", data: monthlyExpenseData, color: "#e74a3b", type: "column" },
         ],
         credits: { enabled: false },
       };
-      
-      setMonthlyData(formattedMonthlyData);
-      
-      // Simple category data generation
+    };
+
+    // Generate pie chart data for expense categories
+    const generateCategoryChart = (): PieChartConfig | null => {
       const expenseTransactions = stableTransactions.filter(tx => tx.type === 'expense');
-      if (expenseTransactions.length > 0) {
-        const categoryMap = new Map<string, number>();
-        
-        expenseTransactions.forEach(tx => {
-          const categoryName = tx.category || 'Uncategorized';
-          const current = categoryMap.get(categoryName) || 0;
-          const amount = parseFloat(tx.amount.toString()) || 0;
-          categoryMap.set(categoryName, current + amount);
-        });
-        
-        const labels = Array.from(categoryMap.keys());
-        const data = Array.from(categoryMap.values());
-        
-        if (labels.length > 0 && data.some(value => value > 0)) {
-          const pieData = labels.map((label, index) => ({
-            name: label,
-            y: data[index],
-          }));
-          
-          const formattedCategoryData = {
-            chart: {
-              type: "pie",
-              backgroundColor: "transparent",
-              style: {
-                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-              },
-              height: 350,
-            },
-            title: { text: null },
-            tooltip: {
-              pointFormat: '<b>{point.name}</b>: {point.percentage:.1f}%<br>₱{point.y:,.2f}',
-              valuePrefix: "₱",
-              useHTML: true,
-            },
-            plotOptions: {
-              pie: {
-                allowPointSelect: true,
-                cursor: "pointer",
-                dataLabels: {
-                  enabled: true,
-                  format: "<b>{point.name}</b>: {point.percentage:.1f}%",
-                  style: {
-                    fontWeight: "bold",
-                  },
-                  connectorWidth: 2,
-                  distance: 30,
-                },
-                showInLegend: false,
-                size: "75%",
-                point: {
-                  events: {
-                    click: function() {
-                      // Handle pie slice click if needed
-                    },
-                  },
-                },
-              },
-            },
-            legend: {
-              enabled: false,
-              align: "right",
-              verticalAlign: "middle",
-              layout: "vertical",
-              itemStyle: {
-                fontWeight: "normal",
-              },
-            },
-            series: [
-              {
-                name: "Spending",
-                colorByPoint: true,
-                data: pieData,
-              },
-            ],
-            credits: { enabled: false },
-          };
-          
-          setCategoryData(formattedCategoryData);
-        } else {
-          setCategoryData(null);
-        }
-      } else {
-        setCategoryData(null);
-      }
       
-      } catch (error) {
-        
-        setMonthlyData(null);
-        setCategoryData(null);
+      if (expenseTransactions.length === 0) {
+        return null;
       }
-    }, 1000); // HEAVY THROTTLE: 1 second delay for expensive chart generation
+
+      const categoryMap = new Map<string, number>();
+      
+      expenseTransactions.forEach(tx => {
+        // Check both category_id (mapped by EnhancedTransactionService) and expense_category_id (raw from DB)
+        // Use type assertion to handle the raw database field
+        const rawTx = tx as Transaction & { expense_category_id?: string };
+        const categoryId = tx.category_id || rawTx.expense_category_id;
+        let categoryName = 'Uncategorized';
+        
+        if (categoryId && stableExpenseCategories && stableExpenseCategories.length > 0) {
+          const category = stableExpenseCategories.find(c => c.id === categoryId);
+          if (category) {
+            categoryName = category.category_name;
+          }
+        }
+        
+        const current = categoryMap.get(categoryName) || 0;
+        const amount = parseFloat(tx.amount?.toString() || '0') || 0;
+        categoryMap.set(categoryName, current + amount);
+      });
+
+      const pieData = Array.from(categoryMap.entries())
+        .filter(([_, value]) => value > 0)
+        .map(([name, y]) => ({ name, y }))
+        .sort((a, b) => b.y - a.y);
+
+      if (pieData.length === 0) {
+        return null;
+      }
+
+      return {
+        chart: {
+          type: "pie",
+          backgroundColor: "transparent",
+          style: {
+            fontFamily: 'Nunito, -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+          },
+          height: 350,
+        },
+        title: { text: null },
+        tooltip: {
+          pointFormat: '<b>{point.name}</b>: {point.percentage:.1f}% (₱{point.y:,.2f})',
+          valuePrefix: "₱",
+        },
+        plotOptions: {
+          pie: {
+            allowPointSelect: true,
+            cursor: "pointer",
+            dataLabels: {
+              enabled: true,
+              format: "<b>{point.name}</b>: {point.percentage:.1f}%",
+              style: { fontWeight: "normal" },
+              connectorWidth: 0,
+              distance: 15,
+            },
+            showInLegend: false,
+            size: '85%',
+          },
+        },
+        legend: { enabled: false },
+        series: [{
+          name: "Expenses",
+          colorByPoint: true,
+          data: pieData,
+        }],
+        credits: { enabled: false },
+      };
+    };
+
+    // Generate charts
+    const monthlyChart = generateMonthlyChart();
+    const categoryChart = generateCategoryChart();
     
-    return () => clearTimeout(timeoutId);
-  }, [calculations.hasData, stableDateFilter, stableCustomStartDate, stableCustomEndDate]); // Removed stableTransactions.length to prevent constant re-renders
+    setMonthlyData(monthlyChart);
+    setCategoryData(categoryChart);
+    chartsGeneratedRef.current = true;
+    lastTxCountRef.current = txCount;
+    lastTxIdsRef.current = txIds;
+    
+  }, [stableTransactions, stableExpenseCategories]); // Depend on actual arrays to detect content changes
 
   // Manual refresh function for insights
   const refreshInsights = useCallback(() => {

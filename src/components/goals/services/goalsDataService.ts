@@ -1,5 +1,6 @@
 import { supabase } from '../../../utils/supabaseClient';
 import { Goal } from '../types';
+import { GoalContributionAuditService } from '../../../services/database/goalContributionAuditService';
 
 /**
  * Robust Goals Data Access Layer
@@ -267,9 +268,9 @@ export class GoalsDataService {
           goal.current_amount, 
           goal.target_amount
         ),
-        formatted_target: this.formatCurrency(goal.target_amount, 'PHP'),
-        formatted_current: this.formatCurrency(goal.current_amount, 'PHP'),
-        formatted_remaining: this.formatCurrency(remaining, 'PHP'),
+        formatted_target: this.formatCurrency(goal.target_amount),
+        formatted_current: this.formatCurrency(goal.current_amount),
+        formatted_remaining: this.formatCurrency(remaining),
         contribution_count: 0, // Would need separate query to get accurate count
         is_overdue: this.checkIfOverdue(goal.target_date),
       };
@@ -297,17 +298,17 @@ export class GoalsDataService {
   }
 
   /**
-   * Simple currency formatting
+   * Simple currency formatting - PHP ONLY
    */
-  private formatCurrency(amount: number, currency: string = 'USD'): string {
+  private formatCurrency(amount: number): string {
     try {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: currency,
-        minimumFractionDigits: 2
+      const formatted = new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }).format(amount);
+      return '₱' + formatted;
     } catch {
-      return `$${amount.toFixed(2)}`; // Fallback formatting
+      return `₱${amount.toFixed(2)}`; // Fallback formatting
     }
   }
 
@@ -414,7 +415,7 @@ export class GoalsDataService {
         const maxContribution = goal.target_amount - (goal.current_amount || 0);
         return {
           success: false,
-          error: `Contribution would exceed goal target. Maximum contribution: ${this.formatCurrency(maxContribution, 'PHP')}`
+          error: `Contribution would exceed goal target. Maximum contribution: ${this.formatCurrency(maxContribution)}`
         };
       }
 

@@ -1,7 +1,28 @@
 # DFD - Transaction Module (3.0): BudgetMe Financial Management System
 
 ## Overview
-This Data Flow Diagram details the Transaction Module (Process 3.0) of the BudgetMe system, located at `src/components/transactions/`. This module handles all financial transaction processing, categorization, validation, and management. It serves as the core data foundation for budgeting, reporting, and financial analysis.
+
+The Transaction Module (Process 3.0) is the central data hub of the BudgetMe system, implemented in `src/components/transactions/` with comprehensive services in `src/services/`. This module processes all financial transactions—income, expenses, and contributions—serving as the foundational data layer for budgeting, reporting, goal tracking, and AI-powered financial analysis.
+
+### Core Responsibilities
+
+- **Transaction Entry**: Manual entry with validation, auto-categorization, and account balance updates
+- **Bulk Operations**: CSV/Excel import with duplicate detection, bank statement parsing, and batch processing
+- **Categorization Engine**: AI-assisted auto-categorization using historical patterns and merchant recognition
+- **Account Management**: Multi-account support (checking, savings, credit, cash, investment) with real-time balance tracking
+- **Goal Integration**: Contribution transactions linked to financial goals with progress tracking
+- **Family Transactions**: Shared transaction visibility and family expense coordination
+- **Audit Trail**: Complete transaction history with edit tracking for compliance and reconciliation
+
+### Key Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `transactions` | Core transaction records with amounts, dates, descriptions, and category references |
+| `accounts` | Financial account definitions with balances and account types |
+| `income_categories` | User and system-defined income categorization |
+| `expense_categories` | User and system-defined expense categorization |
+| `goal_contributions` | Transactions linked to financial goal funding |
 
 ## Transaction Module Data Flow Diagram
 
@@ -55,13 +76,13 @@ graph TB
         CHATBOT[8.0 Chatbot]
     end
     
-    subgraph "Data Stores"
-        D1[(D1<br/>Transaction Database)]
-        D2[(D2<br/>Category Rules)]
-        D3[(D3<br/>Transaction Templates)]
-        D4[(D4<br/>Import History)]
-        D5[(D5<br/>Audit Log)]
-        D6[(D6<br/>Reconciliation Data)]
+    subgraph "Data Stores (Supabase)"
+        D1[(transactions)]
+        D2[(income_categories<br/>expense_categories)]
+        D3[(accounts)]
+        D4[(profiles<br/>user_settings)]
+        D5[(system_activity_log)]
+        D6[(goals<br/>goal_contributions)]
     end
     
     %% Manual Transaction Entry
@@ -627,84 +648,77 @@ graph TB
 - Audit trail retained for 7 years
 - Audit access restricted to authorized users
 
-## Data Store Specifications
+## Data Store Specifications (Actual Supabase Tables)
 
-### D1 - Transaction Database
-**Structure**:
-- Transaction ID (Primary Key), User ID (Foreign Key)
-- Amount, Currency, Description, Date
-- Category ID, Account ID, Status
-- Created/Modified timestamps
-- Metadata (source, reconciliation status)
+### D1 - transactions
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique transaction identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `account_id` | UUID FK | References accounts(id) |
+| `type` | TEXT | "income", "expense", "transfer", "contribution" |
+| `amount` | NUMERIC | Transaction amount (positive value) |
+| `description` | TEXT | Transaction description/memo |
+| `transaction_date` | DATE | Date of transaction |
+| `income_category_id` | UUID FK | References income_categories(id) |
+| `expense_category_id` | UUID FK | References expense_categories(id) |
+| `goal_id` | UUID FK | References goals(id) for contributions |
+| `family_id` | UUID FK | References families(id) for shared visibility |
+| `is_recurring` | BOOLEAN | Whether transaction repeats |
+| `notes` | TEXT | Additional notes |
+| `created_at` | TIMESTAMPTZ | Record creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
 
-**Access Patterns**:
-- High-frequency reads for reporting and analysis
-- Batch inserts for imports and synchronization
-- Updates for categorization and editing
-- Complex queries for search and filtering
+### D2 - accounts
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique account identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `name` | TEXT | Account display name |
+| `type` | TEXT | "checking", "savings", "credit", "cash", "investment" |
+| `balance` | NUMERIC | Current account balance |
+| `currency` | TEXT | Currency code (USD, PHP, EUR) |
+| `institution` | TEXT | Bank/financial institution name |
+| `is_active` | BOOLEAN | Whether account is active |
+| `created_at` | TIMESTAMPTZ | Account creation timestamp |
 
-### D2 - Category Rules
-**Structure**:
-- Rule ID, User ID, Category ID
-- Matching patterns (keywords, merchants, amounts)
-- Confidence thresholds and priorities
-- Learning algorithm parameters
-- Success rate and effectiveness metrics
+### D3 - income_categories / expense_categories
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique category identifier |
+| `user_id` | UUID FK | References auth.users(id), NULL for system categories |
+| `name` | TEXT | Category display name |
+| `icon` | TEXT | Icon identifier for UI display |
+| `color` | TEXT | Hex color code for visualization |
+| `is_system` | BOOLEAN | Whether system-provided category |
+| `sort_order` | INTEGER | Display ordering preference |
+| `created_at` | TIMESTAMPTZ | Category creation timestamp |
 
-**Access Patterns**:
-- Real-time reads for auto-categorization
-- Updates based on user feedback
-- Bulk operations for rule optimization
-- Analytics for rule effectiveness
+### D4 - goal_contributions
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique contribution identifier |
+| `goal_id` | UUID FK | References goals(id) |
+| `user_id` | UUID FK | References auth.users(id) |
+| `transaction_id` | UUID FK | References transactions(id), optional |
+| `amount` | NUMERIC | Contribution amount |
+| `notes` | TEXT | Contribution notes |
+| `contribution_date` | DATE | Date of contribution |
+| `created_at` | TIMESTAMPTZ | Record creation timestamp |
 
-### D3 - Transaction Templates
-**Structure**:
-- Template ID, User ID, Template Name
-- Default values for recurring transactions
-- Usage frequency and last used date
-- Template categories and rules
-
-**Access Patterns**:
-- Quick reads for template application
-- Updates for template modifications
-- Analytics for template usage patterns
-
-### D4 - Import History
-**Structure**:
-- Import ID, User ID, Import Date
-- File information and metadata
-- Import results and statistics
-- Error logs and validation reports
-
-**Access Patterns**:
-- Writes for new import operations
-- Reads for import history and debugging
-- Cleanup for old import records
-
-### D5 - Audit Log
-**Structure**:
-- Audit ID, Transaction ID, User ID
-- Operation type and description
-- Before/after values for changes
-- Timestamp and IP address
-- System context and metadata
-
-**Access Patterns**:
-- High-frequency writes for all operations
-- Specialized reads for audit reports
-- Long-term storage with archival
-
-### D6 - Reconciliation Data
-**Structure**:
-- Reconciliation ID, Account ID, Period
-- Reconciliation status and results
-- Unmatched transactions and discrepancies
-- Reconciliation notes and adjustments
-
-**Access Patterns**:
-- Periodic writes for reconciliation processes
-- Reads for reconciliation reporting
-- Updates for manual adjustments
+### D5 - system_activity_log (Audit)
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique log entry identifier |
+| `user_id` | UUID FK | User who performed action |
+| `activity_type` | TEXT | "create", "update", "delete", "import" |
+| `activity_description` | TEXT | Human-readable description |
+| `target_table` | TEXT | Affected table name |
+| `target_id` | UUID | Affected record ID |
+| `previous_values` | JSONB | State before change |
+| `new_values` | JSONB | State after change |
+| `ip_address` | INET | Client IP address |
+| `created_at` | TIMESTAMPTZ | Activity timestamp |
 
 ## Integration Points
 

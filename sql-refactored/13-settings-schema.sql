@@ -90,21 +90,6 @@ CREATE TABLE IF NOT EXISTS public.user_settings (
     theme TEXT DEFAULT 'light' CHECK (theme IN ('light', 'dark', 'auto')),
     language TEXT DEFAULT 'en' CHECK (language IN ('en', 'es', 'fr', 'de', 'pt', 'zh')),
     
-    -- Notification preferences
-    email_notifications JSONB DEFAULT '{
-        "budget_alerts": true,
-        "goal_milestones": true,
-        "family_activity": true,
-        "weekly_summary": true,
-        "monthly_report": true
-    }'::jsonb,
-    
-    push_notifications JSONB DEFAULT '{
-        "budget_alerts": true,
-        "goal_milestones": true,
-        "family_activity": false,
-        "transaction_reminders": true
-    }'::jsonb,
     
     -- Privacy settings
     profile_visibility TEXT DEFAULT 'private' CHECK (profile_visibility IN ('public', 'family', 'private')),
@@ -354,8 +339,6 @@ BEGIN
         WHEN 'currency' THEN v_setting_value := to_jsonb(v_user_settings.default_currency);
         WHEN 'theme' THEN v_setting_value := to_jsonb(v_user_settings.theme);
         WHEN 'language' THEN v_setting_value := to_jsonb(v_user_settings.language);
-        WHEN 'email_notifications' THEN v_setting_value := v_user_settings.email_notifications;
-        WHEN 'push_notifications' THEN v_setting_value := v_user_settings.push_notifications;
         WHEN 'dashboard_layout' THEN v_setting_value := v_user_settings.dashboard_layout;
         ELSE v_setting_value := p_default_value;
     END CASE;
@@ -388,14 +371,6 @@ BEGIN
         WHEN 'language' THEN
             UPDATE public.user_settings 
             SET language = (p_setting_value #>> '{}')
-            WHERE user_id = p_user_id;
-        WHEN 'email_notifications' THEN
-            UPDATE public.user_settings 
-            SET email_notifications = p_setting_value
-            WHERE user_id = p_user_id;
-        WHEN 'push_notifications' THEN
-            UPDATE public.user_settings 
-            SET push_notifications = p_setting_value
             WHERE user_id = p_user_id;
         WHEN 'dashboard_layout' THEN
             UPDATE public.user_settings 
@@ -507,10 +482,6 @@ BEGIN
         'language', v_settings.language,
         'date_format', v_settings.date_format,
         'time_format', v_settings.time_format,
-        'notifications', jsonb_build_object(
-            'email', v_settings.email_notifications,
-            'push', v_settings.push_notifications
-        ),
         'privacy', jsonb_build_object(
             'profile_visibility', v_settings.profile_visibility,
             'share_goals_publicly', v_settings.share_goals_publicly,
@@ -578,8 +549,6 @@ SELECT
     us.theme,
     us.language,
     us.profile_visibility,
-    us.email_notifications->>'budget_alerts' as email_budget_alerts,
-    us.push_notifications->>'budget_alerts' as push_budget_alerts,
     us.dashboard_layout->>'compact_view' as compact_dashboard,
     us.created_at,
     us.updated_at,

@@ -114,6 +114,7 @@ export interface HighchartsConfig {
       duration: number;
     };
     height: number;
+    spacing?: number[];
   };
   title: {
     text: string | null;
@@ -124,7 +125,9 @@ export interface HighchartsConfig {
     labels: {
       style: {
         color: string;
+        fontSize?: string;
       };
+      rotation?: number;
     };
   };
   yAxis: {
@@ -138,6 +141,7 @@ export interface HighchartsConfig {
       formatter: () => string;
       style: {
         color: string;
+        fontSize?: string;
       };
     };
   };
@@ -164,6 +168,9 @@ export interface HighchartsConfig {
         duration: number;
       };
     };
+  };
+  legend?: {
+    enabled: boolean;
   };
   credits: {
     enabled: boolean;
@@ -192,6 +199,9 @@ export interface PieChartConfig {
     pointFormat: string;
     valuePrefix: string;
     useHTML?: boolean;
+    style?: {
+      fontSize: string;
+    };
   };
   plotOptions: {
     pie: {
@@ -202,12 +212,14 @@ export interface PieChartConfig {
         format: string;
         style: {
           fontWeight: string;
+          fontSize?: string;
         };
         connectorWidth?: number;
         distance?: number;
       };
       showInLegend: boolean;
       size: string;
+      innerSize?: string;
       point?: {
         events: {
           click: Function;
@@ -221,8 +233,11 @@ export interface PieChartConfig {
     verticalAlign?: string;
     layout?: string;
     itemStyle?: {
-      fontWeight: string;
+      fontWeight?: string;
+      fontSize?: string;
     };
+    symbolRadius?: number;
+    itemMarginTop?: number;
   };
   series: Array<{
     name: string;

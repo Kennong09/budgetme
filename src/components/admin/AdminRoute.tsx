@@ -115,9 +115,9 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ element, title }) => {
     );
   }
   
-  // If not authenticated, redirect to admin login page
+  // If not authenticated, show 404 page instead of redirecting
   if (!user) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/404" replace />;
   }
   
   // If admin status is still unknown, show loading - spinner only
@@ -127,9 +127,9 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ element, title }) => {
     );
   }
   
-  // If not admin, redirect to admin login with access denied parameter
+  // If not admin, redirect to main page with access denied parameter
   if (!isAdmin) {
-    return <Navigate to="/admin/login?access_denied=true" replace />;
+    return <Navigate to="/?access_denied=true" replace />;
   }
   
   // If admin, render the provided element wrapped in an error boundary

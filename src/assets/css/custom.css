@@ -135,56 +135,6 @@
   padding: 0.75rem 1.25rem;
 }
 
-/* Admin sidebar styles */
-.sidebar {
-  transition: width 0.35s;
-}
-
-.sidebar.toggled {
-  width: 6.5rem !important;
-  overflow: visible;
-}
-
-.sidebar.toggled .nav-item {
-  position: relative;
-}
-
-.sidebar.toggled .nav-item .nav-link {
-  text-align: center;
-  padding: 0.75rem 1rem;
-  width: 6.5rem;
-}
-
-.sidebar.toggled .nav-item .nav-link span {
-  display: none;
-}
-
-.sidebar.toggled .nav-item .nav-link i {
-  font-size: 1.25rem;
-  margin-right: 0;
-}
-
-.sidebar.toggled .sidebar-brand .sidebar-brand-text {
-  display: none;
-}
-
-.sidebar.toggled .sidebar-heading {
-  text-align: center;
-}
-
-.sidebar-compact {
-  width: 6.5rem !important;
-}
-
-.sidebar-toggle-btn {
-  width: 2rem;
-  height: 2rem;
-  text-align: center;
-  margin-bottom: 1rem;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
 /* Mobile action buttons */
 .mobile-action-btn {
   position: fixed;

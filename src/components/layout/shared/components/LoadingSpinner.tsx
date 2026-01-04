@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import React, { FC, memo } from "react";
 
 export interface LoadingSpinnerProps {
   size?: "sm" | "md" | "lg";
@@ -40,15 +40,7 @@ const LoadingSpinner: FC<LoadingSpinnerProps> = ({
   if (fullScreen) {
     return (
       <div 
-        className="d-flex align-items-center justify-content-center position-fixed"
-        style={{
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(255, 255, 255, 0.8)",
-          zIndex: 9999
-        }}
+        className="fixed inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm z-[9999] transition-opacity duration-300"
       >
         {spinnerElement}
       </div>
@@ -58,4 +50,5 @@ const LoadingSpinner: FC<LoadingSpinnerProps> = ({
   return spinnerElement;
 };
 
-export default LoadingSpinner;
+// Memoize LoadingSpinner component for performance
+export default memo(LoadingSpinner);

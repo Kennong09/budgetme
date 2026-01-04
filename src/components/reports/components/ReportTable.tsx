@@ -1,4 +1,4 @@
-import React, { FC } from 'react';
+import React, { FC, useState } from 'react';
 import { formatCurrency, formatPercentage } from '../../../utils/helpers';
 import { ReportType, TimeframeType } from './ReportControls';
 
@@ -47,6 +47,9 @@ const ReportTable: FC<ReportTableProps> = ({
   goalRelationship,
   onToggleTip
 }) => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const getReportTitle = (): string => {
     const typeTitle = reportType === "spending" 
       ? "Spending by Category" 
@@ -69,6 +72,313 @@ const ReportTable: FC<ReportTableProps> = ({
     return `${typeTitle} (${timeframeTitle})`;
   };
 
+  const getShortReportTitle = (): string => {
+    switch (reportType) {
+      case "spending": return "Spending";
+      case "income-expense": return "Income/Expense";
+      case "trends": return "Trends";
+      case "goals": return "Goals";
+      case "savings": return "Savings";
+      case "predictions": return "Predictions";
+      default: return "Report";
+    }
+  };
+
+  const getReportIcon = (): string => {
+    switch (reportType) {
+      case 'spending': return 'fa-chart-pie';
+      case 'income-expense': return 'fa-exchange-alt';
+      case 'savings': return 'fa-piggy-bank';
+      case 'trends': return 'fa-chart-line';
+      case 'goals': return 'fa-bullseye';
+      case 'predictions': return 'fa-magic';
+      default: return 'fa-table';
+    }
+  };
+
+  // Mobile Spending Card
+  const renderMobileSpendingCard = (item: SpendingDataItem, index: number, total: number) => {
+    const percentage = (item.value / total) * 100;
+    return (
+      <div key={`spending-mobile-${index}`} className="bg-white rounded-xl p-3 border border-gray-100 mb-2">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold text-gray-800 truncate flex-1">{item.name}</span>
+          <span className="text-xs font-bold text-indigo-600">{formatCurrency(item.value)}</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+          <div
+            className="h-1.5 rounded-full bg-indigo-500 transition-all duration-500"
+            style={{ width: `${Math.min(percentage, 100)}%` }}
+          ></div>
+        </div>
+        <span className="text-[9px] text-gray-500">{formatPercentage(percentage)} of total</span>
+      </div>
+    );
+  };
+
+  // Mobile Income/Expense Card
+  const renderMobileIncomeExpenseCard = (item: IncomeExpenseDataItem, index: number) => {
+    const savings = item.income - item.expenses;
+    const savingsRate = item.income > 0 ? (savings / item.income) * 100 : 0;
+    const isPositive = savings >= 0;
+    
+    return (
+      <div key={`income-mobile-${index}`} className="bg-white rounded-xl p-3 border border-gray-100 mb-2">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold text-gray-800">{item.name}</span>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+            isPositive ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
+          }`}>
+            {isPositive ? '+' : ''}{formatPercentage(savingsRate)}
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <p className="text-[9px] text-gray-400 uppercase">Income</p>
+            <p className="text-xs font-semibold text-emerald-600">{formatCurrency(item.income)}</p>
+          </div>
+          <div>
+            <p className="text-[9px] text-gray-400 uppercase">Expenses</p>
+            <p className="text-xs font-semibold text-rose-600">{formatCurrency(item.expenses)}</p>
+          </div>
+          <div>
+            <p className="text-[9px] text-gray-400 uppercase">Savings</p>
+            <p className={`text-xs font-semibold ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {formatCurrency(savings)}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Mobile Trend Card
+  const renderMobileTrendCard = (trend: TrendData, index: number) => {
+    const isPositive = trend.change >= 0;
+    return (
+      <div key={`trend-mobile-${index}`} className="bg-white rounded-xl p-3 border border-gray-100 mb-2">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold text-gray-800 truncate flex-1">{trend.category}</span>
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+            isPositive ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
+          }`}>
+            <i className={`fas fa-arrow-${isPositive ? 'up' : 'down'} text-[8px]`}></i>
+            {Math.abs(trend.change).toFixed(1)}%
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="text-gray-500">
+            {formatCurrency(trend.previousAmount)} → {formatCurrency(trend.currentAmount)}
+          </span>
+          <span className={isPositive ? 'text-rose-500' : 'text-emerald-500'}>
+            {isPositive ? '+' : ''}{formatCurrency(trend.currentAmount - trend.previousAmount)}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMobileSpendingList = () => {
+    if (!categoryData) return null;
+    const data = Array.isArray(categoryData) ? categoryData : [];
+    const total = data.reduce((sum: number, cat: SpendingDataItem) => sum + cat.value, 0);
+    
+    // Pagination
+    const totalPages = Math.ceil(data.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedData = data.slice(startIndex, startIndex + itemsPerPage);
+
+    return (
+      <div>
+        {paginatedData.map((item: SpendingDataItem, index: number) => 
+          renderMobileSpendingCard(item, index, total)
+        )}
+        {/* Total */}
+        <div className="bg-indigo-50 rounded-xl p-3 border border-indigo-100 mt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-indigo-800">Total</span>
+            <span className="text-sm font-bold text-indigo-600">{formatCurrency(total)}</span>
+          </div>
+        </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-3">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center disabled:opacity-50"
+            >
+              <i className="fas fa-chevron-left text-[10px]"></i>
+            </button>
+            <span className="text-[10px] text-gray-500">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center disabled:opacity-50"
+            >
+              <i className="fas fa-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMobileIncomeExpenseList = () => {
+    if (!monthlyData) return null;
+    const data = Array.isArray(monthlyData) ? monthlyData : [];
+    
+    // Pagination
+    const totalPages = Math.ceil(data.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedData = data.slice(startIndex, startIndex + itemsPerPage);
+
+    // Calculate averages
+    const avgIncome = data.reduce((sum: number, item: IncomeExpenseDataItem) => sum + item.income, 0) / data.length;
+    const avgExpenses = data.reduce((sum: number, item: IncomeExpenseDataItem) => sum + item.expenses, 0) / data.length;
+
+    return (
+      <div>
+        {paginatedData.map((item: IncomeExpenseDataItem, index: number) => 
+          renderMobileIncomeExpenseCard(item, index)
+        )}
+        {/* Average Summary */}
+        <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 mt-3">
+          <p className="text-[9px] text-gray-500 uppercase mb-2">Average</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[9px] text-gray-400">Income</p>
+              <p className="text-xs font-semibold text-emerald-600">{formatCurrency(avgIncome)}</p>
+            </div>
+            <div>
+              <p className="text-[9px] text-gray-400">Expenses</p>
+              <p className="text-xs font-semibold text-rose-600">{formatCurrency(avgExpenses)}</p>
+            </div>
+          </div>
+        </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-3">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center disabled:opacity-50"
+            >
+              <i className="fas fa-chevron-left text-[10px]"></i>
+            </button>
+            <span className="text-[10px] text-gray-500">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center disabled:opacity-50"
+            >
+              <i className="fas fa-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMobileTrendsList = () => {
+    if (!trendsData || trendsData.length === 0) return null;
+    
+    // Pagination
+    const totalPages = Math.ceil(trendsData.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedData = trendsData.slice(startIndex, startIndex + itemsPerPage);
+
+    return (
+      <div>
+        {paginatedData.map((trend: TrendData, index: number) => 
+          renderMobileTrendCard(trend, index)
+        )}
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-3">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center disabled:opacity-50"
+            >
+              <i className="fas fa-chevron-left text-[10px]"></i>
+            </button>
+            <span className="text-[10px] text-gray-500">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center disabled:opacity-50"
+            >
+              <i className="fas fa-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderMobileGoalsSummary = () => {
+    if (!goalRelationship) return null;
+
+    return (
+      <div className="space-y-2">
+        <div className="bg-white rounded-xl p-3 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-600">Total Budget Allocated</span>
+            <span className="text-sm font-bold text-indigo-600">{formatCurrency(goalRelationship.totalBudgetAllocated)}</span>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-3 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-600">Total Spent on Goals</span>
+            <span className="text-sm font-bold text-emerald-600">{formatCurrency(goalRelationship.totalSpentOnGoals)}</span>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-3 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-600">Budget to Goals %</span>
+            <span className="text-sm font-bold text-amber-600">{formatPercentage(goalRelationship.percentageBudgetToGoals)}</span>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-3 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-600">Goal Transactions</span>
+            <span className="text-sm font-bold text-gray-800">{goalRelationship.goalTransactionsCount}</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMobileContent = () => {
+    switch (reportType) {
+      case "spending":
+        return renderMobileSpendingList();
+      case "income-expense":
+      case "savings":
+      case "predictions":
+        return renderMobileIncomeExpenseList();
+      case "trends":
+        return renderMobileTrendsList();
+      case "goals":
+        return renderMobileGoalsSummary();
+      default:
+        return (
+          <div className="text-center py-8">
+            <i className="fas fa-table text-gray-300 text-3xl mb-3"></i>
+            <p className="text-xs text-gray-500">No data available</p>
+          </div>
+        );
+    }
+  };
+
+  // Desktop table renderers (existing code)
   const renderSpendingTable = () => {
     if (!categoryData) return null;
 
@@ -161,80 +471,12 @@ const ReportTable: FC<ReportTableProps> = ({
                 </tr>
               );
             })
-          ) : monthlyData.labels && monthlyData.datasets ? (
-            monthlyData.labels.map((label: string, index: number) => {
-              const income = monthlyData.datasets[0].data[index];
-              const expenses = monthlyData.datasets[1].data[index];
-              const savings = income - expenses;
-              const savingsRate = income > 0 ? (savings / income) * 100 : 0;
-              return (
-                <tr key={`income-${index}`}>
-                  <td>{label}</td>
-                  <td>{formatCurrency(income)}</td>
-                  <td>{formatCurrency(expenses)}</td>
-                  <td className={savings >= 0 ? "text-success" : "text-danger"}>
-                    {formatCurrency(savings)}
-                  </td>
-                  <td>{formatPercentage(savingsRate)}</td>
-                </tr>
-              );
-            })
           ) : (
             <tr>
               <td colSpan={5} className="text-center">No income/expense data available</td>
             </tr>
           )}
         </tbody>
-        <tfoot>
-          <tr className="font-weight-bold">
-            <th>Average</th>
-            <th>
-              {formatCurrency(
-                Array.isArray(monthlyData)
-                  ? monthlyData.reduce((sum: number, item: IncomeExpenseDataItem) => sum + item.income, 0) / monthlyData.length
-                  : monthlyData.datasets && monthlyData.datasets[0]
-                    ? monthlyData.datasets[0].data.reduce((a: number, b: number) => a + b, 0) / monthlyData.datasets[0].data.length
-                    : 0
-              )}
-            </th>
-            <th>
-              {formatCurrency(
-                Array.isArray(monthlyData)
-                  ? monthlyData.reduce((sum: number, item: IncomeExpenseDataItem) => sum + item.expenses, 0) / monthlyData.length
-                  : monthlyData.datasets && monthlyData.datasets[1]
-                    ? monthlyData.datasets[1].data.reduce((a: number, b: number) => a + b, 0) / monthlyData.datasets[1].data.length
-                    : 0
-              )}
-            </th>
-            <th>
-              {formatCurrency(
-                Array.isArray(monthlyData)
-                  ? monthlyData.reduce((sum: number, item: IncomeExpenseDataItem) => sum + (item.income - item.expenses), 0) / monthlyData.length
-                  : monthlyData.datasets && monthlyData.datasets[0] && monthlyData.datasets[1]
-                    ? (monthlyData.datasets[0].data.reduce((a: number, b: number) => a + b, 0) - 
-                      monthlyData.datasets[1].data.reduce((a: number, b: number) => a + b, 0)) / monthlyData.datasets[0].data.length
-                    : 0
-              )}
-            </th>
-            <th>
-              {formatPercentage(
-                Array.isArray(monthlyData)
-                  ? (() => {
-                      const totalIncome = monthlyData.reduce((sum: number, item: IncomeExpenseDataItem) => sum + item.income, 0);
-                      const totalExpenses = monthlyData.reduce((sum: number, item: IncomeExpenseDataItem) => sum + item.expenses, 0);
-                      return totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
-                    })()
-                  : monthlyData.datasets && monthlyData.datasets[0] && monthlyData.datasets[1]
-                    ? (() => {
-                        const totalIncome = monthlyData.datasets[0].data.reduce((a: number, b: number) => a + b, 0);
-                        const totalExpenses = monthlyData.datasets[1].data.reduce((a: number, b: number) => a + b, 0);
-                        return totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
-                      })()
-                    : 0
-              )}
-            </th>
-          </tr>
-        </tfoot>
       </table>
     );
   };
@@ -325,32 +567,66 @@ const ReportTable: FC<ReportTableProps> = ({
   };
 
   return (
-    <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.5s" }}>
-      <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-        <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
-          {getReportTitle()}
-          <div className="ml-2 position-relative">
-            <i 
-              className="fas fa-info-circle text-gray-400 cursor-pointer" 
-              onClick={(e: React.MouseEvent) => onToggleTip('reportContent', e)}
-              aria-label="Report content information"
-            ></i>
+    <>
+      {/* Mobile Table Card */}
+      <div className="block md:hidden mb-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate__animated animate__fadeIn">
+          {/* Header */}
+          <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+              <i className={`fas ${getReportIcon()} text-indigo-500 text-[10px]`}></i>
+              {getShortReportTitle()} Data
+            </h6>
+            <span className="text-[9px] text-gray-400 font-medium">
+              {timeframe.charAt(0).toUpperCase() + timeframe.slice(1)}
+            </span>
           </div>
-        </h6>
-      </div>
-      <div className="card-body">
-        <div className="table-responsive">
-          {renderTableContent()}
-        </div>
-        
-        <div className="mt-3 text-center">
-          <div className="small text-muted">
-            <i className="fas fa-info-circle mr-1"></i> 
-            This report was generated based on your transaction history. Data may be subject to rounding.
+
+          {/* Content */}
+          <div className="p-3">
+            {renderMobileContent()}
+          </div>
+
+          {/* Footer */}
+          <div className="px-3 py-2 bg-slate-50 border-t border-gray-100">
+            <p className="text-[9px] text-gray-400 text-center">
+              <i className="fas fa-info-circle mr-1"></i>
+              Based on your transaction history
+            </p>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Desktop Table Card */}
+      <div className="hidden md:block">
+        <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.5s" }}>
+        <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+          <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
+            {getReportTitle()}
+            <div className="ml-2 position-relative">
+              <i 
+                className="fas fa-info-circle text-gray-400 cursor-pointer" 
+                onClick={(e: React.MouseEvent) => onToggleTip('reportContent', e)}
+                aria-label="Report content information"
+              ></i>
+            </div>
+          </h6>
+        </div>
+        <div className="card-body">
+          <div className="table-responsive">
+            {renderTableContent()}
+          </div>
+          
+          <div className="mt-3 text-center">
+            <div className="small text-muted">
+              <i className="fas fa-info-circle mr-1"></i> 
+              This report was generated based on your transaction history. Data may be subject to rounding.
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </>
   );
 };
 

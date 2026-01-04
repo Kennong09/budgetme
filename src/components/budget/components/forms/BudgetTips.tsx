@@ -1,7 +1,7 @@
-import React, { FC } from "react";
+import React, { FC, memo, useMemo } from "react";
 
-const BudgetTips: FC = () => {
-  const tips = [
+const BudgetTips: FC = memo(() => {
+  const tips = useMemo(() => [
     {
       icon: "piggy-bank",
       color: "primary",
@@ -26,18 +26,18 @@ const BudgetTips: FC = () => {
       title: "Adjust As Needed",
       description: "Review and update your budget regularly"
     }
-  ];
+  ], []);
 
   return (
     <div className="col-lg-4 d-none d-lg-block">
-      <div className="card shadow mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.3s" }}>
-        <div className="card-header py-3">
-          <h6 className="m-0 font-weight-bold text-primary">Budgeting Tips</h6>
+      <div className="card shadow mb-3 md:mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.3s" }}>
+        <div className="card-header py-2 md:py-3">
+          <h6 className="m-0 text-sm md:text-base font-weight-bold text-primary">Budgeting Tips</h6>
         </div>
-        <div className="card-body">
+        <div className="card-body p-3 md:p-4">
           {tips.map((tip, index) => (
-            <div key={tip.title} className={index < tips.length - 1 ? "mb-3" : "mb-0"}>
-              <div className="d-flex align-items-center mb-2">
+            <div key={tip.title} className={index < tips.length - 1 ? "mb-2 md:mb-3" : "mb-0"}>
+              <div className="d-flex align-items-center mb-1 md:mb-2">
                 <div 
                   className={`rounded-circle p-1 mr-3 d-flex align-items-center justify-content-center`}
                   style={{ 
@@ -53,15 +53,17 @@ const BudgetTips: FC = () => {
                 >
                   <i className={`fas fa-${tip.icon} text-${tip.color}`}></i>
                 </div>
-                <p className="font-weight-bold mb-0">{tip.title}</p>
+                <p className="text-sm md:text-base font-weight-bold mb-0">{tip.title}</p>
               </div>
-              <p className="text-sm ml-5 mb-0">{tip.description}</p>
+              <p className="text-xs md:text-sm ml-5 mb-0">{tip.description}</p>
             </div>
           ))}
         </div>
       </div>
     </div>
   );
-};
+});
+
+BudgetTips.displayName = 'BudgetTips';
 
 export default BudgetTips;

@@ -1,7 +1,34 @@
 # DFD - Chatbot Module (8.0): BudgetSense AI Assistant
 
 ## Overview
-This Data Flow Diagram details the Chatbot Module (Process 8.0) of the BudgetMe system, located at `src/components/chatbot/`. The BudgetSense AI Assistant provides intelligent financial guidance, conversational support, and personalized recommendations through natural language interaction powered by multiple large language models.
+
+The Chatbot Module (Process 8.0) implements the **BudgetSense AI Assistant**, a sophisticated conversational financial advisor built in `src/components/chatbot/`. Powered by multiple Large Language Models (LLMs) through the OpenRouter API, BudgetSense provides personalized financial guidance, spending analysis, budget recommendations, and goal achievement strategies through natural language interaction.
+
+### Core Responsibilities
+
+- **Conversational Interface**: Natural language financial Q&A with context-aware responses
+- **Financial Context**: Integration with user transactions, budgets, and goals for personalized advice
+- **Multi-Model Support**: Access to multiple LLMs (GPT-4, Claude, Llama) via OpenRouter for optimal responses
+- **Session Management**: Persistent conversation history with context building across sessions
+- **Usage Tracking**: Token usage monitoring with subscription-tier limits (free/premium)
+- **Help Integration**: Feature-specific help and tutorial guidance within chat interface
+- **Engagement System**: Proactive tooltips and suggestions to encourage financial wellness
+
+### Key Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `chat_sessions` | Conversation session metadata with status and context |
+| `chat_messages` | Individual messages with role, content, model used, and token counts |
+| `user_chat_preferences` | User preferences for model selection and financial context inclusion |
+| `prediction_usage_limits` | Token/request usage tracking with tier-based limits |
+
+### AI Integration
+
+BudgetSense leverages the **OpenRouter API** to access multiple AI models:
+- **Primary**: OpenAI GPT-4 for complex financial analysis
+- **Fallback**: Claude 3 for nuanced conversation handling
+- **Efficient**: Llama 3 for quick responses and cost optimization
 
 ## Chatbot Module Data Flow Diagram
 
@@ -58,13 +85,13 @@ graph TB
         REPORTS[6.0 Reports Module]
     end
     
-    subgraph "Data Stores"
-        D1[(D1<br/>Conversation History)]
-        D2[(D2<br/>User Financial Context)]
-        D3[(D3<br/>Response Templates)]
-        D4[(D4<br/>Usage Analytics)]
-        D5[(D5<br/>Model Configurations)]
-        D6[(D6<br/>Feature Help Content)]
+    subgraph "Data Stores (Supabase)"
+        D1[(chat_sessions<br/>chat_messages)]
+        D2[(transactions<br/>budgets<br/>goals)]
+        D3[(user_chat_preferences)]
+        D4[(system_activity_log)]
+        D5[(profiles<br/>user_settings)]
+        D6[(ai_insights<br/>ai_reports)]
     end
     
     %% User Interaction Flows
@@ -665,91 +692,78 @@ graph TB
 - Insights used for system improvement only
 - Analytics comply with privacy regulations
 
-## Data Store Specifications
+## Data Store Specifications (Actual Supabase Tables)
 
-### D1 - Conversation History
-**Structure**:
-- Session ID, Message ID, User ID
-- Message content (user/assistant)
-- Timestamps and metadata
-- Model information and parameters
-- Conversation context and state
+### D1 - chat_sessions
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique session identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `session_type` | TEXT | "general", "financial_advice", "help", "prediction" |
+| `status` | TEXT | "active", "ended", "expired" |
+| `message_count` | INTEGER | Number of messages in session |
+| `context` | JSONB | Conversation context and state |
+| `started_at` | TIMESTAMPTZ | Session start timestamp |
+| `ended_at` | TIMESTAMPTZ | Session end timestamp |
+| `last_activity_at` | TIMESTAMPTZ | Last message timestamp |
 
-**Access Patterns**:
-- Write: Store new messages and responses
-- Read: Retrieve conversation history
-- Update: Modify message status and metadata
-- Delete: Clear conversation history
+### D2 - chat_messages
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique message identifier |
+| `session_id` | UUID FK | References chat_sessions(id) |
+| `user_id` | UUID FK | References auth.users(id) |
+| `role` | TEXT | "user", "assistant", "system" |
+| `content` | TEXT | Message content |
+| `model_used` | TEXT | AI model identifier (e.g., "openai/gpt-4") |
+| `prompt_tokens` | INTEGER | Input tokens consumed |
+| `completion_tokens` | INTEGER | Output tokens generated |
+| `metadata` | JSONB | Additional message metadata |
+| `created_at` | TIMESTAMPTZ | Message timestamp |
 
-### D2 - User Financial Context
-**Structure**:
-- User ID and context timestamp
-- Aggregated financial summaries
-- Budget and spending patterns
-- Goal progress and achievements
-- Prediction insights and recommendations
+### D3 - user_chat_preferences
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique preference identifier |
+| `user_id` | UUID FK UK | References auth.users(id), unique |
+| `preferred_model` | TEXT | User's preferred AI model |
+| `include_financial_context` | BOOLEAN | Whether to include budget/transaction data |
+| `custom_instructions` | TEXT | User-defined system prompt additions |
+| `response_style` | TEXT | "concise", "detailed", "friendly" |
+| `created_at` | TIMESTAMPTZ | Preference creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
 
-**Access Patterns**:
-- Read: Build conversation context
-- Write: Cache financial context
-- Update: Refresh with new financial data
-- Cleanup: Remove expired context
+### D4 - prediction_usage_limits (Shared with AI Prediction)
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique record identifier |
+| `user_id` | UUID FK UK | References auth.users(id), unique |
+| `monthly_limit` | INTEGER | Maximum requests per month (default: 5 free, unlimited premium) |
+| `current_usage` | INTEGER | Current month's usage count |
+| `last_reset_at` | TIMESTAMPTZ | Last monthly reset timestamp |
+| `subscription_tier` | TEXT | "free", "premium", "enterprise" |
 
-### D3 - Response Templates
-**Structure**:
-- Template ID and category
-- Template content and variables
-- Usage frequency and effectiveness
-- Personalization parameters
-- Template versioning and updates
+### D5 - profiles (User Context)
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK,FK | References auth.users(id) |
+| `full_name` | TEXT | User's display name for personalization |
+| `currency` | TEXT | Preferred currency for financial context |
+| `timezone` | TEXT | User timezone for contextual responses |
+| `preferences` | JSONB | Application preferences including chat settings |
 
-**Access Patterns**:
-- Read: Retrieve templates for responses
-- Write: Store new templates
-- Update: Modify template content
-- Analytics: Track template usage
-
-### D4 - Usage Analytics
-**Structure**:
-- User ID and usage period
-- Message counts and limits
-- Feature usage statistics
-- Conversation metrics
-- Performance and satisfaction data
-
-**Access Patterns**:
-- Write: Log usage events
-- Read: Validate usage limits
-- Analytics: Generate usage reports
-- Cleanup: Archive old usage data
-
-### D5 - Model Configurations
-**Structure**:
-- Model ID and provider information
-- Configuration parameters
-- Performance metrics
-- Cost and usage data
-- Availability and status
-
-**Access Patterns**:
-- Read: Select models for requests
-- Update: Modify model configurations
-- Analytics: Track model performance
-- Management: Handle model lifecycle
-
-### D6 - Feature Help Content
-**Structure**:
-- Feature ID and help content
-- Step-by-step instructions
-- Visual aids and demonstrations
-- Usage frequency and effectiveness
-- Content versioning and updates
-
-**Access Patterns**:
-- Read: Retrieve help content
-- Write: Store new help content
-- Update: Modify help information
-- Analytics: Track help effectiveness
+### D6 - ai_insights (Feature Help & Insights)
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique insight identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `prediction_id` | UUID FK | References prophet_predictions(id) |
+| `insights` | JSONB | AI-generated insights content |
+| `ai_service` | TEXT | Service provider (e.g., "openrouter") |
+| `model_used` | TEXT | Model identifier |
+| `confidence_level` | NUMERIC | Confidence score (0-1) |
+| `generated_at` | TIMESTAMPTZ | Insight generation timestamp |
+| `expires_at` | TIMESTAMPTZ | Cache expiration timestamp |
 
 ## Integration Points
 

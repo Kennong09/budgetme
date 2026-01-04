@@ -1,98 +1,132 @@
-import React, { useState, useEffect, FC, ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../utils/AuthContext";
+import { useState, useEffect, FC, ReactNode, memo, useCallback } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
+import MobileQuickNav from "./MobileQuickNav";
 import Meta from "./Meta";
-import MobileNavigation from "./MobileNavigation";
 import "../../assets/css/responsive.css";
 import "./layout.css";
-import { useResize } from "./shared/hooks";
 import { Footer } from "./shared/components";
 
 interface LayoutProps {
   children: ReactNode;
   title?: string;
+  hideSidebar?: boolean;
 }
 
-const Layout: FC<LayoutProps> = ({ children, title }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
-  const resizeState = useResize(768, 992);
-  const isMobile = resizeState.isMobile;
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { logout } = useAuth();
-  
-  // Update sidebar state on resize
+const Layout: FC<LayoutProps> = ({ children, title, hideSidebar = false }) => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isTablet, setIsTablet] = useState(window.innerWidth >= 768 && window.innerWidth < 1024);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth >= 768 && window.innerWidth < 1024);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // Update mobile/tablet state based on screen size
   useEffect(() => {
-    if (!resizeState.isMobile) {
-      // On desktop/tablet, sidebar visibility depends on previous state
-      setSidebarOpen(prevState => prevState);
-    } else {
-      // On mobile, always ensure sidebar is closed by default
-      setSidebarOpen(false);
-    }
-  }, [resizeState.isMobile]);
+    const handleResize = () => {
+      const width = window.innerWidth;
+      const mobile = width < 768;
+      const tablet = width >= 768 && width < 1024;
+      
+      setIsMobile(mobile);
+      setIsTablet(tablet);
+      
+      // Auto-collapse sidebar on tablet, close drawer on mobile
+      if (mobile) {
+        setSidebarOpen(false);
+        setSidebarCollapsed(false);
+      } else if (tablet) {
+        setSidebarOpen(false);
+        setSidebarCollapsed(true);
+      }
+    };
 
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate("/login");
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
-  };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
-  // Toggle sidebar visibility
-  const toggleSidebar = () => {
-    setSidebarOpen(prevState => !prevState);
+  // Toggle sidebar on mobile
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev);
+  }, []);
+
+  // Close sidebar
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
+  // Handle sidebar collapse change
+  const handleCollapseChange = useCallback((collapsed: boolean) => {
+    setIsTransitioning(true);
+    setSidebarCollapsed(collapsed);
+    
+    // Clear transitioning state after animation completes
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 400);
+  }, []);
+
+  // Calculate main content margin based on sidebar state
+  const getMainContentMargin = () => {
+    if (hideSidebar || isMobile) return "";
+    // Tablet always has collapsed sidebar (ml-20), desktop depends on state
+    if (isTablet) return "md:ml-20";
+    return sidebarCollapsed ? "lg:ml-20" : "lg:ml-64";
   };
 
   return (
     <>
       <Meta title={title} />
-      <div id="wrapper" className="d-flex">
+      
+      <div id="wrapper" className="flex min-h-screen bg-slate-50">
         {/* Sidebar */}
-        <div className={`sidebar-container ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+        {!hideSidebar && (
           <Sidebar 
-            isOpen={sidebarOpen} 
-            onToggleSidebar={toggleSidebar}
-            isMobile={isMobile}
+            isOpen={isMobile ? sidebarOpen : true} 
+            onClose={closeSidebar}
+            isCollapsed={isTablet ? true : sidebarCollapsed}
+            onCollapseChange={handleCollapseChange}
+            isTransitioning={isTransitioning}
+            isTablet={isTablet}
           />
-        </div>
-
-        {/* Overlay for mobile when sidebar is open */}
-        {sidebarOpen && isMobile && (
-          <div 
-            onClick={toggleSidebar}
-            aria-hidden="true"
-            className="sidebar-backdrop"
-          ></div>
         )}
 
         {/* Content Wrapper */}
-        <div id="content-wrapper" className={`d-flex flex-column ${sidebarOpen && !isMobile ? "" : "content-full"} flex-fill`}>
+        <div 
+          className={`
+            flex flex-col flex-1 min-h-screen transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
+            ${getMainContentMargin()}
+          `}
+        >
           {/* Main Content */}
-          <div id="content" className="flex-fill">
+          <div id="content" className="flex-1 flex flex-col">
             {/* Topbar */}
-            <Header toggleSidebar={toggleSidebar} />
+            <div className="sticky top-0 z-30">
+              <Header 
+                onMenuToggle={toggleSidebar}
+              />
+            </div>
 
             {/* Begin Page Content */}
-            <div className={`container-fluid dashboard-content pb-5 ${isMobile ? "has-mobile-nav" : ""}`}>
+            <main 
+              className={`
+                flex-1 container-fluid
+                ${isMobile ? "has-mobile-nav px-3 pt-2 pb-24" : "px-4 md:px-6 pt-4 pb-5"}
+              `}
+            >
               {children}
-            </div>
+            </main>
           </div>
 
           {/* Footer */}
           <Footer />
+
+          {/* Mobile Floating Quick Navigation */}
+          {isMobile && !hideSidebar && <MobileQuickNav />}
         </div>
-        
-        {/* Mobile Navigation */}
-        {isMobile && <MobileNavigation />}
       </div>
     </>
   );
 };
 
-export default Layout;
+// Memoize Layout component for performance
+export default memo(Layout);

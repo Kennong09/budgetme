@@ -17,6 +17,7 @@ import MembersTab from './tabs/MembersTab';
 import ActivityTab from './tabs/ActivityTab';
 import GoalsTab from './tabs/GoalsTab';
 import NoFamilyHandler from './NoFamilyHandler';
+import ContributionModal from '../goals/components/ContributionModal';
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -28,6 +29,7 @@ import "animate.css";
 
 // Import types
 import { Family, FamilyMember, Goal, Transaction, RecentActivity, FamilySummaryData } from './types';
+import { Goal as MainGoalType } from '../../types';
 
 
 // --- COMPONENTS ---
@@ -94,23 +96,21 @@ const FamilyDashboard: React.FC = () => {
     setActiveTab(tab);
   };
   
-  // Goal contribution data states
-  const [goalContributions] = useState<any[]>([]);
-  const [contributionChartData] = useState<any | null>(null);
-  const [contributionPieChartData] = useState<any | null>(null);
-  const [selectedGoalForContributions] = useState<string | null>(null);
-  const [loadingContributions] = useState<boolean>(false);
+  // Goal contribution data states  
+  const [goalContributions, setGoalContributions] = useState<any[]>([]);
+  const [contributionChartData, setContributionChartData] = useState<any | null>(null);
+  const [contributionPieChartData, setContributionPieChartData] = useState<any | null>(null);
+  const [selectedGoalForContributions, setSelectedGoalForContributions] = useState<string | null>(null);
+  const [loadingContributions, setLoadingContributions] = useState<boolean>(false);
   
   // Quick goal contribution modal state
   const [showContributeModal, setShowContributeModal] = useState<boolean>(false);
-  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
-  const [contributionAmount, setContributionAmount] = useState<string>("");
+  const [preSelectedGoal, setPreSelectedGoal] = useState<Goal | undefined>(undefined);
   
   // Budget-related state variables
   const [totalExpenses, setTotalExpenses] = useState<number>(0);
   const [totalIncome, setTotalIncome] = useState<number>(0);
   const [budgetUtilization, setBudgetUtilization] = useState<number>(0);
-  const [isContributing, setIsContributing] = useState<boolean>(false);
   const [isLoadingGoals] = useState(false);
   const [budgetPerformanceData] = useState<any>(null);
   const [isCreator, setIsCreator] = useState(false);
@@ -209,9 +209,157 @@ const FamilyDashboard: React.FC = () => {
     return diffDays;
   };
   
+  /**
+   * Fetches goal contributions with contributor profiles and formats data for charts
+   * @param goalId - The ID of the goal to fetch contributions for
+   */
   const fetchGoalContributions = async (goalId: string) => {
-    // This function is now handled by the GoalsTab component
     console.log('fetchGoalContributions called for:', goalId);
+    
+    try {
+      setLoadingContributions(true);
+      setSelectedGoalForContributions(goalId);
+      
+      // Fetch contributions first
+      const { data: contributions, error: contribError } = await supabase
+        .from('goal_contributions')
+        .select('*')
+        .eq('goal_id', goalId)
+        .order('contribution_date', { ascending: false });
+      
+      if (contribError) {
+        console.error('Error fetching contributions:', contribError);
+        showErrorToast('Failed to load contribution data');
+        setGoalContributions([]);
+        setContributionChartData(null);
+        setContributionPieChartData(null);
+        return;
+      }
+      
+      // If we have contributions, fetch the user profiles
+      let enrichedContributions = contributions || [];
+      if (contributions && contributions.length > 0) {
+        const userIds = [...new Set(contributions.map(c => c.user_id))];
+        
+        const { data: profiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url')
+          .in('id', userIds);
+        
+        if (!profileError && profiles) {
+          // Merge profiles data into contributions
+          enrichedContributions = contributions.map(contrib => ({
+            ...contrib,
+            profiles: profiles.find(p => p.id === contrib.user_id)
+          }));
+        }
+      }
+      
+      setGoalContributions(enrichedContributions);
+      
+      // Aggregate contributions by user for charts
+      if (enrichedContributions && enrichedContributions.length > 0) {
+        const aggregated = enrichedContributions.reduce((acc: any, contrib: any) => {
+          const userId = contrib.user_id;
+          if (!acc[userId]) {
+            acc[userId] = {
+              userId,
+              userName: contrib.profiles?.full_name || 'Unknown',
+              userAvatar: contrib.profiles?.avatar_url,
+              totalAmount: 0,
+              contributionCount: 0,
+              contributions: []
+            };
+          }
+          acc[userId].totalAmount += contrib.amount;
+          acc[userId].contributionCount += 1;
+          acc[userId].contributions.push(contrib);
+          return acc;
+        }, {});
+        
+        const aggregatedArray = Object.values(aggregated);
+        
+        // Format for bar chart (Highcharts column format)
+        setContributionChartData({
+          chart: { type: 'column' },
+          title: { text: '' },
+          xAxis: {
+            categories: aggregatedArray.map((item: any) => item.userName),
+            crosshair: true
+          },
+          yAxis: {
+            min: 0,
+            title: { text: 'Amount (₱)' }
+          },
+          tooltip: {
+            headerFormat: '<span style="font-size:10px">{point.key}</span><table>',
+            pointFormat: '<tr><td style="color:{series.color};padding:0">{series.name}: </td>' +
+              '<td style="padding:0"><b>₱{point.y:.2f}</b></td></tr>',
+            footerFormat: '</table>',
+            shared: true,
+            useHTML: true
+          },
+          plotOptions: {
+            column: {
+              pointPadding: 0.2,
+              borderWidth: 0
+            }
+          },
+          series: [{
+            name: 'Total Contributions',
+            data: aggregatedArray.map((item: any) => item.totalAmount),
+            color: '#4e73df'
+          }],
+          credits: { enabled: false }
+        });
+        
+        // Format for pie chart
+        setContributionPieChartData({
+          chart: { type: 'pie' },
+          title: { text: '' },
+          tooltip: {
+            pointFormat: '{series.name}: <b>₱{point.y:.2f}</b> ({point.percentage:.1f}%)'
+          },
+          accessibility: {
+            point: {
+              valueSuffix: '%'
+            }
+          },
+          plotOptions: {
+            pie: {
+              allowPointSelect: true,
+              cursor: 'pointer',
+              dataLabels: {
+                enabled: true,
+                format: '<b>{point.name}</b>: {point.percentage:.1f} %'
+              }
+            }
+          },
+          series: [{
+            name: 'Contribution',
+            colorByPoint: true,
+            data: aggregatedArray.map((item: any) => ({
+              name: item.userName,
+              y: item.totalAmount
+            }))
+          }],
+          credits: { enabled: false }
+        });
+      } else {
+        // No contributions - clear chart data
+        setContributionChartData(null);
+        setContributionPieChartData(null);
+      }
+      
+    } catch (error) {
+      console.error('Error in fetchGoalContributions:', error);
+      showErrorToast('An error occurred while loading contributions');
+      setGoalContributions([]);
+      setContributionChartData(null);
+      setContributionPieChartData(null);
+    } finally {
+      setLoadingContributions(false);
+    }
   };
   
   // Manual refresh function for charts
@@ -947,181 +1095,10 @@ const FamilyDashboard: React.FC = () => {
 
   // --- NEW FUNCTIONS FOR FAMILY MANAGEMENT ---
 
-  // State for account selection in contribution modal
-  const [userAccounts, setUserAccounts] = useState<{id: string, account_name: string}[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>("default");
-
   // Goal contribution functions
   const openContributeModal = (goal: Goal) => {
-    setSelectedGoal(goal);
-    setContributionAmount("");
-    fetchUserAccounts();
+    setPreSelectedGoal(goal);
     setShowContributeModal(true);
-  };
-
-  const closeContributeModal = () => {
-    setShowContributeModal(false);
-    setSelectedGoal(null);
-  };
-  
-  // Function to fetch user accounts for contribution
-  const fetchUserAccounts = async () => {
-    try {
-      if (!user) return;
-      
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('id, account_name')
-        .eq('user_id', user.id)
-        .order('account_name');
-        
-      if (error) {
-        console.error('Error fetching user accounts:', error);
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        console.log('User accounts fetched:', data);
-        setUserAccounts(data);
-        // Set first account as default selection if available
-        setSelectedAccountId(data[0].id);
-      } else {
-        // If no accounts, use default
-        setUserAccounts([{ id: 'default', account_name: 'Default Account' }]);
-        setSelectedAccountId('default');
-      }
-    } catch (err) {
-      console.error('Error in fetchUserAccounts:', err);
-      // Set a default account if there's an error
-      setUserAccounts([{ id: 'default', account_name: 'Default Account' }]);
-      setSelectedAccountId('default');
-    }
-  };
-
-  const handleContribute = async () => {
-    if (!selectedGoal || !user || !contributionAmount) return;
-    
-    const amount = parseFloat(contributionAmount);
-    if (isNaN(amount) || amount <= 0) {
-      showErrorToast("Please enter a valid amount");
-      return;
-    }
-    
-    // Debug goal type and family information
-    console.log('Selected goal details before contribution:', {
-      id: selectedGoal.id,
-      name: selectedGoal.goal_name,
-      isShared: selectedGoal.is_family_goal,
-      familyId: selectedGoal.family_id,
-      currentAmount: selectedGoal.current_amount,
-      owner: selectedGoal.user_id,
-      currentUser: user.id
-    });
-    
-    setIsContributing(true);
-    try {
-      // Create contribution data - note: goal_contributions table doesn't have family_id column
-      const contributionData = {
-        goal_id: selectedGoal.id,
-        user_id: user.id,
-        amount: amount,
-        date: new Date().toISOString(),
-        created_at: new Date().toISOString()
-      };
-      
-      // Note: We don't include family_id in contribution data as that column doesn't exist
-      // We'll only add family_id to the transaction record
-      
-      console.log('Creating contribution with data:', contributionData);
-      
-      // Create a contribution record
-      const { data: contribution, error: contribError } = await supabase
-        .from('goal_contributions')
-        .insert(contributionData)
-        .select();
-        
-      if (contribError) {
-        console.error('Contribution insert error:', contribError);
-        throw contribError;
-      }
-      
-      console.log('Contribution created successfully:', contribution);
-      
-      // Update goal progress
-      const newAmount = selectedGoal.current_amount + amount;
-      const newStatus = newAmount >= selectedGoal.target_amount ? 'completed' : 'in_progress';
-      
-      console.log(`Updating goal ${selectedGoal.id} with new amount: ${newAmount}, new status: ${newStatus}`);
-      
-      const { error: updateError } = await supabase
-        .from('goals')
-        .update({
-          current_amount: newAmount,
-          status: newStatus
-        })
-        .eq('id', selectedGoal.id);
-        
-      if (updateError) {
-        console.error('Goal update error:', updateError);
-        throw updateError;
-      }
-      
-      console.log('Goal updated successfully');
-      
-      // Also create a transaction record to ensure it appears in transaction history
-      const transactionData: any = {
-        user_id: user.id,
-        goal_id: selectedGoal.id,
-        amount: amount,
-        date: new Date().toISOString(),
-        type: 'expense',
-        account_id: selectedAccountId, // Use selected account
-        notes: `Contribution to goal: ${selectedGoal.goal_name}`,
-        category: 'Contribution', // Explicitly set as "Contribution"
-        category_id: 'contribution', // Set category_id for proper categorization
-        created_at: new Date().toISOString()
-      };
-      
-      // Add family_id for family goals
-      if (selectedGoal.family_id) {
-        transactionData.family_id = selectedGoal.family_id;
-        console.log('This is a family goal, adding family_id:', selectedGoal.family_id);
-      }
-      
-      console.log('Creating transaction record:', transactionData);
-      
-      // Create the transaction record
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
-        .insert(transactionData)
-        .select();
-        
-      if (txError) {
-        console.error('Transaction insert error:', txError);
-        // Don't throw error here, as the contribution itself succeeded
-        console.warn('Warning: Transaction record creation failed but contribution was successful');
-      } else {
-        console.log('Transaction record created successfully:', txData);
-      }
-      
-      showSuccessToast(`Successfully contributed ${formatCurrency(amount)} to ${selectedGoal.goal_name}`);
-      
-      // Manually refresh family data to show updated values
-      if (familyData?.id) {
-        fetchFamilyMembers(familyData.id);
-        fetchGoals(familyData.id);
-        fetchJoinRequests(familyData.id);
-      }
-      
-      // The subscription will update the UI automatically too
-      closeContributeModal();
-    } catch (error) {
-      console.error("Error contributing to goal:", error);
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      showErrorToast(`Failed to contribute to goal: ${errorMessage}`);
-    } finally {
-      setIsContributing(false);
-    }
   };
 
   // Delete family confirmation modal
@@ -1260,12 +1237,27 @@ const FamilyDashboard: React.FC = () => {
     <div className="container-fluid">
       {/* Show loading state while fetching family data */}
       {isLoadingFamily ? (
-        <div className="text-center py-5">
-          <div className="spinner-border text-primary mb-3" role="status">
-            <span className="sr-only">Loading...</span>
+        <>
+          {/* Mobile Loading State */}
+          <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+            <div className="flex flex-col items-center justify-center">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+              <p className="mt-3 text-xs text-gray-500 font-medium">Loading family data...</p>
+            </div>
           </div>
-          <h5 className="text-gray-600">Loading family information...</h5>
-        </div>
+
+          {/* Desktop Loading State */}
+          <div className="hidden md:block text-center py-5">
+            <div className="spinner-border text-primary mb-3" role="status">
+              <span className="sr-only">Loading...</span>
+            </div>
+            <h5 className="text-gray-600">Loading family information...</h5>
+          </div>
+        </>
       ) : (
         <>
           {/* Render no family state when user doesn't belong to any family */}
@@ -1380,109 +1372,104 @@ const FamilyDashboard: React.FC = () => {
       )}
       
       {/* Goal Contribution Modal */}
-      {showContributeModal && selectedGoal && (
-        <>
-          <div className="modal fade show" style={{ display: 'block', zIndex: 1050 }} tabIndex={-1} role="dialog">
-            <div className="modal-dialog" role="document">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">Contribute to {selectedGoal.goal_name}</h5>
-                  <button type="button" className="close" onClick={closeContributeModal}>
-                    <span aria-hidden="true">&times;</span>
-                  </button>
-                </div>
-                <div className="modal-body">
-                  <div className="progress mb-3" style={{height: '10px'}}>
-                    <div 
-                      className={`progress-bar ${
-                        selectedGoal.percentage >= 90 ? "bg-success" : 
-                        selectedGoal.percentage >= 50 ? "bg-info" : 
-                        selectedGoal.percentage >= 25 ? "bg-warning" : 
-                        "bg-danger"
-                      }`}
-                      role="progressbar" 
-                      style={{ width: `${selectedGoal.percentage}%` }}
-                      aria-valuenow={selectedGoal.percentage}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                    ></div>
-                  </div>
-                  <div className="d-flex justify-content-between mb-3">
-                    <div>Current: {formatCurrency(selectedGoal.current_amount)}</div>
-                    <div>Target: {formatCurrency(selectedGoal.target_amount)}</div>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="contributionAmount">Contribution Amount</label>
-                    <div className="input-group">
-                      <div className="input-group-prepend">
-                        <span className="input-group-text">$</span>
-                      </div>
-                      <input 
-                        type="number" 
-                        className="form-control" 
-                        id="contributionAmount" 
-                        value={contributionAmount}
-                        onChange={(e) => setContributionAmount(e.target.value)}
-                        min="0.01"
-                        step="0.01"
-                        required
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="form-group">
-                    <label htmlFor="accountSelect">Select Account</label>
-                    <select
-                      className="form-control"
-                      id="accountSelect"
-                      value={selectedAccountId}
-                      onChange={(e) => setSelectedAccountId(e.target.value)}
-                      disabled={isContributing}
-                    >
-                      {userAccounts.map(account => (
-                        <option key={account.id} value={account.id}>
-                          {account.account_name}
-                        </option>
-                      ))}
-                    </select>
-                    <small className="form-text text-muted">
-                      Choose the account from which to make this contribution.
-                    </small>
-                  </div>
-                </div>
-                <div className="modal-footer">
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary" 
-                    onClick={closeContributeModal}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="button" 
-                    className="btn btn-primary"
-                    disabled={isContributing || !contributionAmount}
-                    onClick={handleContribute}
-                  >
-                    {isContributing ? (
+      <ContributionModal
+        isOpen={showContributeModal}
+        goals={familyGoals.map(g => ({ ...g, target_date: g.target_date || g.deadline })) as MainGoalType[]}
+        preSelectedGoal={preSelectedGoal ? { ...preSelectedGoal, target_date: preSelectedGoal.target_date || preSelectedGoal.deadline } as MainGoalType : undefined}
+        onClose={() => {
+          setShowContributeModal(false);
+          setPreSelectedGoal(undefined);
+        }}
+        onContributionSuccess={async () => {
+          if (familyData?.id) {
+            await fetchGoals(familyData.id);
+          }
+          setShowContributeModal(false);
+          setPreSelectedGoal(undefined);
+        }}
+      />
+
+      {/* Mobile Page Heading - Floating action buttons */}
+      <div className="block md:hidden mb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-bold text-gray-800 truncate">
+              {familyData?.family_name || "Family"}
+            </h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {isCreator && (
+                <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 text-[9px] font-semibold rounded-full">Creator</span>
+              )}
+              {familyData && (
+                <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded-full ${familyData.is_public ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-600'}`}>
+                  <i className={`fas ${familyData.is_public ? 'fa-globe' : 'fa-lock'} mr-0.5 text-[8px]`}></i>
+                  {familyData.is_public ? 'Public' : 'Private'}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefreshActiveTab}
+              disabled={isRefreshing}
+              className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95 disabled:opacity-50"
+              aria-label="Refresh"
+            >
+              <i className={`fas fa-sync text-xs ${isRefreshing ? 'fa-spin' : ''}`}></i>
+            </button>
+            {/* More Actions Dropdown */}
+            <div className="dropdown">
+              <button
+                className="w-9 h-9 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+                type="button"
+                id="mobileActionsDropdown"
+                data-toggle="dropdown"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-label="More actions"
+              >
+                <i className="fas fa-ellipsis-v text-xs"></i>
+              </button>
+              <div className="dropdown-menu dropdown-menu-right shadow" aria-labelledby="mobileActionsDropdown">
+                {familyData && (
+                  <>
+                    <Link to={`/family/${familyData.id}/invite`} className="dropdown-item text-sm">
+                      <i className="fas fa-user-plus fa-sm fa-fw mr-2 text-success"></i>Invite Member
+                    </Link>
+                    {isCreator ? (
                       <>
-                        <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-                        Contributing...
+                        <button className="dropdown-item text-sm" onClick={navigateToEdit}>
+                          <i className="fas fa-edit fa-sm fa-fw mr-2 text-primary"></i>Edit Family
+                        </button>
+                        <div className="dropdown-divider"></div>
+                        <button className="dropdown-item text-sm text-danger" onClick={openDeleteModal}>
+                          <i className="fas fa-trash fa-sm fa-fw mr-2"></i>Delete Family
+                        </button>
                       </>
                     ) : (
-                      'Contribute Now'
+                      <>
+                        <div className="dropdown-divider"></div>
+                        <button className="dropdown-item text-sm text-warning" onClick={openDeleteModal}>
+                          <i className="fas fa-sign-out-alt fa-sm fa-fw mr-2"></i>Leave Family
+                        </button>
+                      </>
                     )}
-                  </button>
-                </div>
+                  </>
+                )}
+                {!familyData && (
+                  <Link to="/family/create" className="dropdown-item text-sm">
+                    <i className="fas fa-home fa-sm fa-fw mr-2 text-success"></i>Create Family
+                  </Link>
+                )}
               </div>
             </div>
           </div>
-          <div className="modal-backdrop fade show" style={{ zIndex: 1040 }}></div>
-        </>
-      )}
+        </div>
+      </div>
 
-      {/* Header */}
-      <div className="d-sm-flex align-items-center justify-content-between mb-4">
+      {/* Desktop Header */}
+      <div className="d-none d-md-flex align-items-center justify-content-between mb-4">
         <h1 className="h3 mb-0 text-gray-800 animate__animated animate__fadeIn">
           {familyData?.family_name || "Family Dashboard"}
           {isCreator && (
@@ -1542,8 +1529,68 @@ const FamilyDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="row">
+      {/* Mobile Summary Cards - Modern stacked design */}
+      <div className="block md:hidden mb-4">
+        {/* Main family overview card */}
+        <div className={`bg-gradient-to-br ${(summaryData?.savingsRate || 0) >= 75 ? 'from-emerald-500 via-teal-500 to-cyan-500' : (summaryData?.savingsRate || 0) >= 50 ? 'from-blue-500 via-indigo-500 to-purple-500' : 'from-amber-500 via-orange-500 to-rose-500'} rounded-2xl p-4 mb-3 shadow-lg`}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-white/80 text-xs font-medium">Goals Progress</span>
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <i className={`fas fa-${(summaryData?.savingsRate || 0) >= 75 ? 'trophy' : (summaryData?.savingsRate || 0) >= 50 ? 'chart-line' : 'flag'} text-white text-sm`}></i>
+            </div>
+          </div>
+          <div className="text-white text-2xl font-bold mb-1">
+            {summaryData ? formatPercentage(summaryData.savingsRate) : "0%"}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className={`text-xs font-medium ${(summaryData?.savingsRate || 0) >= 75 ? 'text-green-200' : (summaryData?.savingsRate || 0) >= 50 ? 'text-blue-200' : 'text-amber-200'}`}>
+              <i className={`fas fa-${(summaryData?.savingsRate || 0) >= 75 ? 'check-circle' : (summaryData?.savingsRate || 0) >= 50 ? 'arrow-up' : 'info-circle'} text-[10px] mr-1`}></i>
+              {(summaryData?.savingsRate || 0) >= 75 ? 'Excellent Progress' : (summaryData?.savingsRate || 0) >= 50 ? 'Good Progress' : 'Getting Started'}
+            </span>
+          </div>
+          {/* Mini progress bar */}
+          <div className="mt-3 w-full bg-white/20 rounded-full h-1.5">
+            <div
+              className="bg-white h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(summaryData?.savingsRate || 0, 100)}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Secondary cards grid */}
+        <div className="grid grid-cols-3 gap-2">
+          {/* Savings Target */}
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center mb-2">
+              <i className="fas fa-bullseye text-blue-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Target</p>
+            <p className="text-sm font-bold text-gray-800 truncate">{summaryData ? formatCurrency(summaryData.income) : formatCurrency(0)}</p>
+          </div>
+
+          {/* Current Progress */}
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center mb-2">
+              <i className="fas fa-piggy-bank text-emerald-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Saved</p>
+            <p className="text-sm font-bold text-gray-800 truncate">{summaryData ? formatCurrency(summaryData.expenses) : formatCurrency(0)}</p>
+          </div>
+
+          {/* Remaining */}
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center mb-2">
+              <i className="fas fa-hourglass-half text-amber-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Left</p>
+            <p className={`text-sm font-bold truncate ${(summaryData?.balance || 0) < 0 ? 'text-rose-600' : 'text-gray-800'}`}>{summaryData ? formatCurrency(summaryData.balance) : formatCurrency(0)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Summary Cards */}
+      <div className="d-none d-md-block">
+        <div className="row">
         <div className="col-xl-3 col-md-6 mb-4">
           <div className="card border-left-primary shadow h-100 py-2">
             <div className="card-body">
@@ -1654,6 +1701,7 @@ const FamilyDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      </div>
       
       {/* Tooltip */}
       {activeTip && tooltipPosition && tooltipContent[activeTip as keyof typeof tooltipContent] && (
@@ -1678,106 +1726,227 @@ const FamilyDashboard: React.FC = () => {
         </div>
       )}
       
-      {/* Tabs */}
-      <div className="card shadow mb-4">
-        <div className="card-header py-3 d-flex justify-content-between align-items-center">
-          <ul className="nav nav-tabs card-header-tabs mb-0">
-            <li className="nav-item">
-              <button className={`nav-link btn btn-link ${activeTab === "overview" ? "active" : ""}`} onClick={() => handleTabChange("overview")}>
-                <i className="fas fa-chart-pie mr-1"></i> Overview
-              </button>
-            </li>
-            <li className="nav-item">
-              <button className={`nav-link btn btn-link ${activeTab === "goals" ? "active" : ""}`} onClick={() => handleTabChange("goals")}>
-                <i className="fas fa-flag-checkered mr-1"></i> Family Goals
-              </button>
-            </li>
-            <li className="nav-item">
-              <button className={`nav-link btn btn-link ${activeTab === "members" ? "active" : ""}`} onClick={() => handleTabChange("members")}>
-                <i className="fas fa-users mr-1"></i> Members ({members.length})
-              </button>
-            </li>
-            <li className="nav-item">
-              <button className={`nav-link btn btn-link ${activeTab === "activity" ? "active" : ""}`} onClick={() => handleTabChange("activity")}>
-                <i className="fas fa-history mr-1"></i> Recent Activity
-              </button>
-            </li>
-          </ul>
-          
-          {/* Refresh Button */}
-          <button 
-            onClick={handleRefreshActiveTab}
-            disabled={isRefreshing}
-            className="btn btn-primary shadow-sm mr-2 d-inline-flex align-items-center"
-            style={{ minWidth: "100px" }}
-          >
-            {isRefreshing ? (
-              <>
-                <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <i className="fas fa-sync-alt mr-2"></i>
-                Refresh
-              </>
+      {/* Mobile Tabs - Horizontal scrollable pills */}
+      <div className="block md:hidden mb-4">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          {/* Tab header */}
+          <div className="flex bg-slate-50 overflow-x-auto scrollbar-hide">
+            <button
+              onClick={() => handleTabChange("overview")}
+              className={`flex-shrink-0 flex-1 min-w-[80px] py-3 text-[11px] font-semibold transition-all relative ${
+                activeTab === 'overview'
+                  ? 'text-indigo-600 bg-white'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <i className="fas fa-chart-pie mr-1 text-[10px]"></i>
+              Overview
+              {activeTab === 'overview' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+              )}
+            </button>
+            <button
+              onClick={() => handleTabChange("goals")}
+              className={`flex-shrink-0 flex-1 min-w-[80px] py-3 text-[11px] font-semibold transition-all relative ${
+                activeTab === 'goals'
+                  ? 'text-indigo-600 bg-white'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <i className="fas fa-flag-checkered mr-1 text-[10px]"></i>
+              Goals
+              {activeTab === 'goals' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+              )}
+            </button>
+            <button
+              onClick={() => handleTabChange("members")}
+              className={`flex-shrink-0 flex-1 min-w-[80px] py-3 text-[11px] font-semibold transition-all relative ${
+                activeTab === 'members'
+                  ? 'text-indigo-600 bg-white'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <i className="fas fa-users mr-1 text-[10px]"></i>
+              Members
+              <span className="ml-1 bg-gray-200 text-gray-600 px-1 py-0.5 rounded-full text-[9px]">{members.length}</span>
+              {activeTab === 'members' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+              )}
+            </button>
+            <button
+              onClick={() => handleTabChange("activity")}
+              className={`flex-shrink-0 flex-1 min-w-[80px] py-3 text-[11px] font-semibold transition-all relative ${
+                activeTab === 'activity'
+                  ? 'text-indigo-600 bg-white'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <i className="fas fa-history mr-1 text-[10px]"></i>
+              Activity
+              {activeTab === 'activity' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+              )}
+            </button>
+          </div>
+
+          {/* Tab content */}
+          <div className="p-3">
+            {activeTab === "overview" && (
+              <OverviewTab
+                chartData={chartData}
+                familyId={familyData?.id!}
+                expenseChartRef={categoryChartRef}
+                budgetChartRef={budgetPerformanceChartRef}
+                goalChartRef={goalPerformanceChartRef}
+                goalBreakdownChartRef={goalBreakdownChartRef}
+                toggleTip={toggleTip}
+                refreshKey={chartRefreshKey}
+              />
             )}
-          </button>
+
+            {activeTab === "members" && (
+              <MembersTab
+                isCreator={isCreator}
+                familyData={familyData}
+                members={members}
+                getMemberRoleBadge={getMemberRoleBadge}
+                familyId={familyData?.id}
+                onMembersUpdate={() => {
+                  if (familyData?.id) {
+                    fetchFamilyMembers(familyData.id);
+                  }
+                }}
+              />
+            )}
+
+            {activeTab === "activity" && (
+              <ActivityTab recentActivity={recentActivity} />
+            )}
+
+            {activeTab === "goals" && (
+              <GoalsTab
+                familyGoals={familyGoals}
+                isCreator={isCreator}
+                loadingFamilyGoals={loadingFamilyGoals}
+                selectedGoalForContributions={selectedGoalForContributions}
+                loadingContributions={loadingContributions}
+                goalContributions={goalContributions}
+                contributionChartData={contributionChartData}
+                contributionPieChartData={contributionPieChartData || []}
+                contributionBarChartRef={contributionBarChartRef}
+                contributionPieChartRef={contributionPieChartRef}
+                openContributeModal={openContributeModal}
+                fetchGoalContributions={fetchGoalContributions}
+                toggleTip={toggleTip}
+                getRemainingDays={getRemainingDays}
+                onRefresh={handleRefreshActiveTab}
+              />
+            )}
+          </div>
         </div>
-        <div className="card-body">
-          {activeTab === "overview" && (
-            <OverviewTab
-              chartData={chartData}
-              familyId={familyData?.id!}
-              expenseChartRef={categoryChartRef}
-              budgetChartRef={budgetPerformanceChartRef}
-              goalChartRef={goalPerformanceChartRef}
-              goalBreakdownChartRef={goalBreakdownChartRef}
-              toggleTip={toggleTip}
-              refreshKey={chartRefreshKey}
-            />
-          )}
+      </div>
 
-          {activeTab === "members" && (
-            <MembersTab
-              isCreator={isCreator}
-              familyData={familyData}
-              members={members}
-              getMemberRoleBadge={getMemberRoleBadge}
-              familyId={familyData?.id}
-              onMembersUpdate={() => {
-                // Refresh family members when roles are updated
-                if (familyData?.id) {
-                  fetchFamilyMembers(familyData.id);
-                }
-              }}
-            />
-          )}
+      {/* Desktop Tabs */}
+      <div className="d-none d-md-block">
+        <div className="card shadow mb-4">
+          <div className="card-header py-3 d-flex justify-content-between align-items-center">
+            <ul className="nav nav-tabs card-header-tabs mb-0">
+              <li className="nav-item">
+                <button className={`nav-link btn btn-link ${activeTab === "overview" ? "active" : ""}`} onClick={() => handleTabChange("overview")}>
+                  <i className="fas fa-chart-pie mr-1"></i> Overview
+                </button>
+              </li>
+              <li className="nav-item">
+                <button className={`nav-link btn btn-link ${activeTab === "goals" ? "active" : ""}`} onClick={() => handleTabChange("goals")}>
+                  <i className="fas fa-flag-checkered mr-1"></i> Family Goals
+                </button>
+              </li>
+              <li className="nav-item">
+                <button className={`nav-link btn btn-link ${activeTab === "members" ? "active" : ""}`} onClick={() => handleTabChange("members")}>
+                  <i className="fas fa-users mr-1"></i> Members ({members.length})
+                </button>
+              </li>
+              <li className="nav-item">
+                <button className={`nav-link btn btn-link ${activeTab === "activity" ? "active" : ""}`} onClick={() => handleTabChange("activity")}>
+                  <i className="fas fa-history mr-1"></i> Recent Activity
+                </button>
+              </li>
+            </ul>
+            
+            {/* Refresh Button */}
+            <button 
+              onClick={handleRefreshActiveTab}
+              disabled={isRefreshing}
+              className="btn btn-primary shadow-sm mr-2 d-inline-flex align-items-center"
+              style={{ minWidth: "100px" }}
+            >
+              {isRefreshing ? (
+                <>
+                  <span className="spinner-border spinner-border-sm mr-2" role="status" aria-hidden="true"></span>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-sync-alt mr-2"></i>
+                  Refresh
+                </>
+              )}
+            </button>
+          </div>
+          <div className="card-body">
+            {activeTab === "overview" && (
+              <OverviewTab
+                chartData={chartData}
+                familyId={familyData?.id!}
+                expenseChartRef={categoryChartRef}
+                budgetChartRef={budgetPerformanceChartRef}
+                goalChartRef={goalPerformanceChartRef}
+                goalBreakdownChartRef={goalBreakdownChartRef}
+                toggleTip={toggleTip}
+                refreshKey={chartRefreshKey}
+              />
+            )}
 
-          {activeTab === "activity" && (
-            <ActivityTab recentActivity={recentActivity} />
-          )}
+            {activeTab === "members" && (
+              <MembersTab
+                isCreator={isCreator}
+                familyData={familyData}
+                members={members}
+                getMemberRoleBadge={getMemberRoleBadge}
+                familyId={familyData?.id}
+                onMembersUpdate={() => {
+                  if (familyData?.id) {
+                    fetchFamilyMembers(familyData.id);
+                  }
+                }}
+              />
+            )}
 
+            {activeTab === "activity" && (
+              <ActivityTab recentActivity={recentActivity} />
+            )}
 
-          {activeTab === "goals" && (
-            <GoalsTab
-              familyGoals={familyGoals}
-              isCreator={isCreator}
-              loadingFamilyGoals={loadingFamilyGoals}
-              selectedGoalForContributions={selectedGoalForContributions}
-              loadingContributions={loadingContributions}
-              goalContributions={goalContributions}
-              contributionChartData={contributionChartData}
-              contributionPieChartData={contributionPieChartData || []}
-              contributionBarChartRef={contributionBarChartRef}
-              contributionPieChartRef={contributionPieChartRef}
-              openContributeModal={openContributeModal}
-              fetchGoalContributions={fetchGoalContributions}
-              toggleTip={toggleTip}
-              getRemainingDays={getRemainingDays}
-              onRefresh={handleRefreshActiveTab}
-            />
-          )}
+            {activeTab === "goals" && (
+              <GoalsTab
+                familyGoals={familyGoals}
+                isCreator={isCreator}
+                loadingFamilyGoals={loadingFamilyGoals}
+                selectedGoalForContributions={selectedGoalForContributions}
+                loadingContributions={loadingContributions}
+                goalContributions={goalContributions}
+                contributionChartData={contributionChartData}
+                contributionPieChartData={contributionPieChartData || []}
+                contributionBarChartRef={contributionBarChartRef}
+                contributionPieChartRef={contributionPieChartRef}
+                openContributeModal={openContributeModal}
+                fetchGoalContributions={fetchGoalContributions}
+                toggleTip={toggleTip}
+                getRemainingDays={getRemainingDays}
+                onRefresh={handleRefreshActiveTab}
+              />
+            )}
+          </div>
         </div>
       </div>
 

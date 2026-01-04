@@ -1,4 +1,4 @@
-import React, { FC, useEffect } from "react";
+import React, { FC, useEffect, memo } from "react";
 
 interface MetaProps {
   title?: string;
@@ -40,4 +40,5 @@ const Meta: FC<MetaProps> = ({ title = "BudgetMe - Personal Finance Tracker" }) 
   return null;
 };
 
-export default Meta; 
+// Memoize Meta component for performance
+export default memo(Meta); 

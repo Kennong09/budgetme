@@ -1,1208 +1,858 @@
-import React, { useState, useEffect, ChangeEvent } from "react";
-import { Link } from "react-router-dom";
-import {
-  formatCurrency,
-  formatDate,
-  formatPercentage,
-} from "../../../utils/helpers";
-import { supabase, supabaseAdmin } from "../../../utils/supabaseClient";
+import React, { useState, useEffect, FC, useCallback } from "react";
 import { useToast } from "../../../utils/ToastContext";
-import { RealtimeChannel } from "@supabase/supabase-js";
+import { Family, FamilyFilters } from "./types";
+import { useFamilyData } from "./useFamilyData";
+import FamilyStatsCards from "./FamilyStatsCards";
+import AddFamilyModal from "./AddFamilyModal";
+import ViewFamilyModal from "./ViewFamilyModal";
+import EditFamilyModal from "./EditFamilyModal";
+import DeleteFamilyModal from "./DeleteFamilyModal";
+import { formatDate } from "../../../utils/helpers";
 
-// Import any necessary CSS
-import "../admin.css";
-
-// Interface for Supabase user profile
-interface UserProfile {
-  id: string;
-  full_name: string;
-  email: string;
-  avatar_url?: string;
-}
-
-// Interface for Supabase family group
-interface SupabaseFamily {
-  id: string;
-  family_name: string;
-  description?: string;
-  created_by: string;
-  created_at: string;
-  updated_at?: string;
-  currency_pref: string;
-  is_public: boolean;
-  status: "active" | "inactive";
-  members_count?: number;
-  owner?: UserProfile;
-}
-
-// Interface for family member
-interface FamilyMember {
-  id: string;
-  user_id: string;
-  family_id: string;
-  role: "admin" | "viewer";
-  status: "active" | "pending" | "inactive";
-  created_at: string;
-  updated_at?: string;
-  user?: UserProfile;
-}
-
-const AdminFamily: React.FC = () => {
-  // State for family groups data
-  const [familyGroups, setFamilyGroups] = useState<SupabaseFamily[]>([]);
-  const [filteredGroups, setFilteredGroups] = useState<SupabaseFamily[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [isFiltering, setIsFiltering] = useState<boolean>(false);
-  const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null);
-  const [selectedFamilyMembers, setSelectedFamilyMembers] = useState<FamilyMember[]>([]);
-  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
-  const [showMembersModal, setShowMembersModal] = useState<boolean>(false);
+const AdminFamily: FC = () => {
   const { showSuccessToast, showErrorToast } = useToast();
   
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(5);
-  const [totalItems, setTotalItems] = useState<number>(0);
-  
-  // Real-time subscription state
-  const [subscription, setSubscription] = useState<any>(null);
-  
-  // User profiles map for quick lookup
-  const [userProfiles, setUserProfiles] = useState<{[key: string]: UserProfile}>({});
+  // Use the family data hook
+  const {
+    families,
+    users,
+    stats,
+    loading,
+    refreshing,
+    totalPages,
+    totalItems,
+    fetchFamilies,
+    refreshFamilyData,
+    deleteFamily,
+    getFamilyMembers,
+    removeFamilyMember,
+  } = useFamilyData();
 
-  // State for summary data
-  const [summary, setSummary] = useState({
-    totalFamilies: 0,
-    activeFamilies: 0,
-    totalMembers: 0,
-    avgMembersPerFamily: 0,
-  });
+  // Modal states
+  const [selectedFamily, setSelectedFamily] = useState<Family | null>(null);
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showViewModal, setShowViewModal] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  
+  // Mobile dropdown state
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
-  // Set up filter state
-  const [filter, setFilter] = useState({
+  // Filter and pagination state
+  const [filters, setFilters] = useState<FamilyFilters>({
     name: "",
     status: "all",
     minMembers: "",
     maxMembers: "",
     sortBy: "created_at",
-    sortOrder: "desc" as "asc" | "desc"
+    sortOrder: "desc",
+    currentPage: 1,
+    pageSize: 10
   });
 
-  // Fetch families on component mount and when filters change
-  useEffect(() => {
-    fetchFamilies();
-    fetchUserProfiles();
-  }, [currentPage, filter.name, filter.status, filter.minMembers, filter.maxMembers, filter.sortBy, filter.sortOrder, pageSize]);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
 
-  // Set up real-time subscription
+  // Mobile dropdown functions
+  const closeDropdown = () => setActiveDropdown(null);
+  const toggleDropdown = (familyId: string) => {
+    setActiveDropdown(activeDropdown === familyId ? null : familyId);
+  };
+
+  // Close dropdown when clicking outside
   useEffect(() => {
-    // Create channel reference outside to ensure we can clean it up
-    let channel: RealtimeChannel | undefined;
-    
-    try {
-      channel = supabaseAdmin.channel('admin-families-channel');
-      
-      // Set up the subscription
-      channel
-        .on('postgres_changes', 
-          { event: '*', schema: 'public', table: 'families' }, 
-          () => {
-            // Refresh family data when families table changes
-            fetchFamilies();
-          }
-        )
-        .subscribe();
-      
-      // Store subscription reference
-      setSubscription(channel);
-    } catch (error: any) {
-      console.error('Error setting up real-time subscription:', error);
-      // Don't let subscription errors block the UI
-    }
-    
-    // Cleanup subscription on component unmount
-    return () => {
-      if (channel) {
-        try {
-          supabaseAdmin.removeChannel(channel);
-        } catch (error: any) {
-          console.error('Error removing channel:', error);
-        }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (activeDropdown && !(event.target as Element).closest('.dropdown-menu')) {
+        closeDropdown();
       }
     };
-  }, []); // Empty dependency array means this runs once on mount
-
-  // Fetch user profiles
-  const fetchUserProfiles = async () => {
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('profiles')
-        .select('id, full_name, email, avatar_url');
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Create a map of user profiles by ID for quick access
-      const profilesMap: {[key: string]: UserProfile} = {};
-      data?.forEach(profile => {
-        profilesMap[profile.id] = {
-          id: profile.id,
-          full_name: profile.full_name || 'Unknown User',
-          email: profile.email || 'No Email',
-          avatar_url: profile.avatar_url
-        };
-      });
-      
-      setUserProfiles(profilesMap);
-    } catch (error: any) {
-      console.error("Error fetching user profiles:", error);
-      showErrorToast("Failed to load user data");
+    if (activeDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  };
+  }, [activeDropdown]);
 
-  // Fetch families from Supabase
-  const fetchFamilies = async () => {
-    try {
-      setLoading(true);
-      
-      // Base query for counting total items
-      let countQuery = supabaseAdmin
-        .from('families')
-        .select('id', { count: 'exact' });
-      
-      // Apply filters for count query
-      applyFiltersToQuery(countQuery);
-      
-      // Get total count with filters applied
-      const { count: totalCount, error: countError } = await countQuery;
-      
-      if (countError) {
-        throw countError;
-      }
-      
-      // Construct query for families with all data
-      // Use a simpler query first to avoid 400 errors if schema is incomplete
-      let dataQuery = supabaseAdmin
-        .from('families')
-        .select('id, family_name, description, created_by, created_at, updated_at, currency_pref');
-      
-      // Apply sorting
-      if (filter.sortBy === "name") {
-        dataQuery = dataQuery.order('family_name', { ascending: filter.sortOrder === 'asc' });
-      } else if (filter.sortBy !== "members") { // Handle members sorting separately
-        dataQuery = dataQuery.order(filter.sortBy, { ascending: filter.sortOrder === 'asc' });
-      }
-      
-      // Apply same filters to main query
-      applyFiltersToQuery(dataQuery);
-      
-      // Apply pagination
-      const from = (currentPage - 1) * pageSize;
-      const to = from + pageSize - 1;
-      
-      // Final query with pagination
-      const { data: familiesData, error: familiesError } = await dataQuery
-        .range(from, to);
-      
-      if (familiesError) {
-        throw familiesError;
-      }
-      
-      if (!familiesData) {
-        setFamilyGroups([]);
-        setFilteredGroups([]);
-        setTotalItems(0);
-        setTotalPages(1);
-        calculateSummary([]);
-        setLoading(false);
-        return;
-      }
-      
-      // Get member counts for each family
-      const familyIds = familiesData.map(family => family.id);
-      
-      // Create a map of member counts by family ID
-      const memberCountMap: {[key: string]: number} = {};
-      
-      // Fetch member counts for each family separately
-      await Promise.all(
-        familyIds.map(async (familyId) => {
-          try {
-            const { count, error } = await supabaseAdmin
-              .from('family_members')
-              .select('*', { count: 'exact', head: true })
-              .eq('family_id', familyId)
-              .eq('status', 'active');
-              
-            if (!error && count !== null) {
-              memberCountMap[familyId] = count;
-            }
-          } catch (err) {
-            console.warn(`Error getting count for family ${familyId}:`, err);
-          }
-        })
-      );
-      
-      // Define a type for the raw family data from Supabase
-      type RawFamilyData = {
-        id: string;
-        family_name: string;
-        description?: string;
-        created_by: string;
-        created_at: string;
-        updated_at?: string;
-        currency_pref: string;
-        is_public?: boolean;
-        status?: "active" | "inactive";
-      };
-      
-      // Add creator info and member counts to families
-      const processedFamilies = await Promise.all(familiesData.map(async (family) => {
-        // Get creator profile
-        const creatorProfile = userProfiles[family.created_by];
-        
-        // Cast family to the right type for proper property access
-        const typedFamily = family as RawFamilyData;
-        
-        // Create a properly typed family object with all required properties
-        return {
-          ...typedFamily,
-          // Add default values for potentially missing columns
-          is_public: typedFamily.is_public !== undefined ? typedFamily.is_public : false,
-          status: typedFamily.status || 'active',
-          members_count: memberCountMap[typedFamily.id] || 0,
-          owner: creatorProfile
-        } as SupabaseFamily;
-      }));
-      
-      // Apply member count filtering here (client-side)
-      let filteredFamilies = [...processedFamilies];
-      
-      // Apply status filtering client-side since the column might be missing
-      if (filter.status !== "all") {
-        filteredFamilies = filteredFamilies.filter(family => 
-          family.status === filter.status
-        );
-      }
-      
-      if (filter.minMembers) {
-        const minMembers = parseInt(filter.minMembers);
-        filteredFamilies = filteredFamilies.filter(family => 
-          (family.members_count || 0) >= minMembers
-        );
-      }
-      
-      if (filter.maxMembers) {
-        const maxMembers = parseInt(filter.maxMembers);
-        filteredFamilies = filteredFamilies.filter(family => 
-          (family.members_count || 0) <= maxMembers
-        );
-      }
-      
-      // Apply member count sorting if selected
-      if (filter.sortBy === "members") {
-        filteredFamilies = filteredFamilies.sort((a, b) => {
-          const countA = a.members_count || 0;
-          const countB = b.members_count || 0;
-          return filter.sortOrder === 'asc' ? countA - countB : countB - countA;
-        });
-      }
-      
-      // Set families data
-      setFamilyGroups(filteredFamilies);
-      setFilteredGroups(filteredFamilies);
-      
-      // Calculate summary data
-      calculateSummary(filteredFamilies);
-      
-      // Calculate pagination
-      setTotalItems(totalCount || 0);
-      setTotalPages(Math.max(1, Math.ceil((totalCount || 0) / pageSize)));
-      
-      setLoading(false);
-    } catch (error: any) {
-      console.error("Error fetching families:", error);
-      showErrorToast("Failed to load family data");
-      setLoading(false);
-    }
-  };
-  
-  // Helper function to apply filters to a query
-  const applyFiltersToQuery = (query: any) => {
-    // Filter by name (search)
-    if (filter.name) {
-      query = query.ilike('family_name', `%${filter.name}%`);
-    }
-    
-    // Don't filter by status on server side anymore since we handle it client-side
-    // This prevents 400 errors if the status column doesn't exist
-    
-    // Note: Member count filtering is handled client-side after fetching data
-    // since it requires a join or separate query
-    
-    return query;
-  };
-
-  // Function to calculate family groups summary
-  const calculateSummary = (groups: SupabaseFamily[]) => {
-    const activeFamilies = groups.filter(group => group.status === 'active').length;
-    const totalMembers = groups.reduce((sum, group) => sum + (group.members_count || 0), 0);
-    
-    setSummary({
-      totalFamilies: groups.length,
-      activeFamilies,
-      totalMembers,
-      avgMembersPerFamily: groups.length > 0 ? totalMembers / groups.length : 0,
-    });
-  };
-
-  // Apply filters when filter state changes
+  // Load data on component mount
   useEffect(() => {
-    if (familyGroups.length === 0) return;
-    
-    // Show loading indicator
-    setIsFiltering(true);
-    
-    setTimeout(() => {
-      let result = [...familyGroups];
-      
-      // Filter by name
-      if (filter.name) {
-        const searchTerm = filter.name.toLowerCase();
-        result = result.filter(group => 
-          group.family_name.toLowerCase().includes(searchTerm) || 
-          (group.owner?.full_name?.toLowerCase() || '').includes(searchTerm)
-        );
-      }
-      
-      // Filter by status
-      if (filter.status !== "all") {
-        result = result.filter(group => group.status === filter.status);
-      }
-      
-      // Filter by min members
-      if (filter.minMembers) {
-        result = result.filter(group => (group.members_count || 0) >= parseInt(filter.minMembers));
-      }
-      
-      // Filter by max members
-      if (filter.maxMembers) {
-        result = result.filter(group => (group.members_count || 0) <= parseInt(filter.maxMembers));
-      }
-      
-      // Sort results
-      result = sortFamilyGroups(result, filter.sortBy, filter.sortOrder);
-      
-      setFilteredGroups(result);
-      calculateSummary(result);
-      setIsFiltering(false);
-    }, 300);
-  }, [filter, familyGroups]);
+    fetchFamilies(filters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Function to sort family groups
-  const sortFamilyGroups = (groupsToSort: SupabaseFamily[], sortBy: string, sortOrder: "asc" | "desc"): SupabaseFamily[] => {
-    return [...groupsToSort].sort((a, b) => {
-      const dateA = new Date(a.created_at).getTime();
-      const dateB = new Date(b.created_at).getTime();
+  // Update filters when search or status changes
+  useEffect(() => {
+    const newFilters = {
+      ...filters,
+      name: searchTerm,
+      status: filterStatus,
+      currentPage: 1 // Reset to first page when filtering
+    };
+    setFilters(newFilters);
+    fetchFamilies(newFilters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterStatus]);
 
-      if (sortBy === "created_at") {
-        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
-      }
-      if (sortBy === "name") {
-        return sortOrder === "asc" ? a.family_name.localeCompare(b.family_name) : b.family_name.localeCompare(a.family_name);
-      }
-      if (sortBy === "members") {
-        return sortOrder === "asc" ? (a.members_count || 0) - (b.members_count || 0) : (b.members_count || 0) - (a.members_count || 0);
-      }
-      return 0;
-    });
+  // Handle refresh
+  const handleRefresh = useCallback(async () => {
+    await refreshFamilyData(filters);
+    setLastUpdated(new Date());
+  }, [refreshFamilyData, filters]);
+
+  // Modal handlers
+  const openViewModal = (family: Family) => {
+    setSelectedFamily(family);
+    setShowViewModal(true);
   };
 
-  // Handle filter changes
-  const handleFilterChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ): void => {
-    const { name, value } = e.target;
-    
-    setIsFiltering(true);
-    
-    setFilter(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    
-    // Reset to first page when filtering
-    setCurrentPage(1);
+  const openEditModal = (family: Family) => {
+    setSelectedFamily(family);
+    setShowEditModal(true);
   };
 
-  // Reset filters to default
-  const resetFilters = (): void => {
-    setIsFiltering(true);
-    
-    setFilter({
+  const openDeleteModal = (family: Family) => {
+    setSelectedFamily(family);
+    setShowDeleteModal(true);
+  };
+
+  const closeAllModals = () => {
+    setSelectedFamily(null);
+    setShowAddModal(false);
+    setShowViewModal(false);
+    setShowEditModal(false);
+    setShowDeleteModal(false);
+  };
+
+  // Handle family addition
+  const handleFamilyAdded = useCallback(() => {
+    fetchFamilies(filters);
+    setLastUpdated(new Date());
+  }, [fetchFamilies, filters]);
+
+  // Handle family update
+  const handleFamilyUpdated = useCallback((updatedFamily: Family) => {
+    fetchFamilies(filters);
+    setLastUpdated(new Date());
+  }, [fetchFamilies, filters]);
+
+  // Handle family deletion
+  const handleDeleteFamily = useCallback(async (familyId: string): Promise<boolean> => {
+    const success = await deleteFamily(familyId);
+    if (success) {
+      setLastUpdated(new Date());
+    }
+    return success;
+  }, [deleteFamily]);
+
+  // Handle pagination
+  const handlePageChange = (page: number) => {
+    const newFilters = { ...filters, currentPage: page };
+    setFilters(newFilters);
+    fetchFamilies(newFilters);
+  };
+
+  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newSize = parseInt(e.target.value, 10);
+    const newFilters = { ...filters, pageSize: newSize, currentPage: 1 };
+    setFilters(newFilters);
+    fetchFamilies(newFilters);
+  };
+
+  // Clear filters
+  const clearFilters = () => {
+    setSearchTerm("");
+    setFilterStatus("all");
+    const newFilters: FamilyFilters = {
       name: "",
       status: "all",
       minMembers: "",
       maxMembers: "",
       sortBy: "created_at",
-      sortOrder: "desc"
-    });
-    
-    // Reset to first page
-    setCurrentPage(1);
+      sortOrder: "desc",
+      currentPage: 1,
+      pageSize: 10
+    };
+    setFilters(newFilters);
+    fetchFamilies(newFilters);
   };
 
-  // Handle family group deletion
-  const handleDeleteClick = (familyId: string): void => {
-    setSelectedFamilyId(familyId);
-    setShowDeleteModal(true);
-  };
-
-  const confirmDelete = async (): Promise<void> => {
-    if (selectedFamilyId) {
-      try {
-        const { error } = await supabaseAdmin
-          .from("families")
-          .delete()
-          .eq("id", selectedFamilyId);
-
-        if (error) {
-          showErrorToast(`Failed to delete family group: ${error.message}`);
-          return;
-        }
-
-        showSuccessToast("Family group deleted successfully!");
-      
-      // Filter out the deleted family group
-      const updatedGroups = familyGroups.filter(group => group.id !== selectedFamilyId);
-      setFamilyGroups(updatedGroups);
-      setFilteredGroups(filteredGroups.filter(group => group.id !== selectedFamilyId));
-      calculateSummary(updatedGroups);
-      
-      // Close modal
-      setShowDeleteModal(false);
-      setSelectedFamilyId(null);
-      } catch (error: any) {
-        console.error("Error deleting family group:", error);
-        showErrorToast("Failed to delete family group");
-      }
-    }
-  };
-
-  // Handle viewing family members
-  const handleViewMembers = async (familyId: string): Promise<void> => {
-    setSelectedFamilyId(familyId);
-    
-    try {
-      // First fetch the family members
-      const { data: membersData, error: membersError } = await supabaseAdmin
-        .from("family_members")
-        .select("*")
-        .eq("family_id", familyId)
-        .eq("status", "active") // Only active members
-        .order("role", { ascending: false }) // Sort by role (admin first)
-        .order("created_at", { ascending: true }); // Then by join date
-      
-      if (membersError) {
-        showErrorToast("Failed to fetch family members");
-        console.error("Error fetching family members:", membersError);
-        return;
-      }
-      
-      if (!membersData || membersData.length === 0) {
-        setSelectedFamilyMembers([]);
-        setShowMembersModal(true);
-        return;
-      }
-      
-      // Get all user IDs to fetch their profiles
-      const userIds = membersData.map(member => member.user_id);
-      
-      // Fetch user profiles for these members
-      const { data: profilesData, error: profilesError } = await supabaseAdmin
-        .from("profiles")
-        .select("id, full_name, email, avatar_url")
-        .in("id", userIds);
-      
-      if (profilesError) {
-        console.warn("Error fetching member profiles:", profilesError);
-        // Continue with limited data
-      }
-      
-      // Create a map of profiles by user ID
-      const profileMap: {[key: string]: UserProfile} = {};
-      profilesData?.forEach(profile => {
-        profileMap[profile.id] = {
-          id: profile.id,
-          full_name: profile.full_name || 'Unknown User',
-          email: profile.email || 'No Email',
-          avatar_url: profile.avatar_url
-        };
-      });
-      
-      // Combine member data with user profiles
-      const membersWithProfiles = membersData.map(member => ({
-        ...member,
-        user: profileMap[member.user_id] || undefined
-      }));
-      
-      setSelectedFamilyMembers(membersWithProfiles);
-    setShowMembersModal(true);
-    } catch (error: any) {
-      showErrorToast("Failed to fetch family members");
-      console.error("Error in handleViewMembers:", error);
-    }
-  };
-
-  // Get family group by ID
-  const getSelectedFamily = (): SupabaseFamily | undefined => {
-    return familyGroups.find(group => group.id === selectedFamilyId);
-  };
-
-  // Handle page change
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  // Handle page size change
-  const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newSize = parseInt(e.target.value, 10);
-    setPageSize(newSize);
-    setCurrentPage(1); // Reset to first page when changing page size
-  };
-
-  // Manual refresh function
-  const refreshFamilyData = async () => {
-    setLoading(true);
-    try {
-      await fetchFamilies();
-      await fetchUserProfiles();
-      showSuccessToast("Family data refreshed successfully");
-    } catch (error: any) {
-      showErrorToast("Failed to refresh family data");
-      console.error("Error refreshing family data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle removing a family member
-  const handleRemoveMember = async (memberId: string, userId: string) => {
-    if (!selectedFamilyId) return;
-    
-    try {
-      // Delete the family member record
-      const { error } = await supabaseAdmin
-        .from('family_members')
-        .delete()
-        .eq('id', memberId);
-      
-      if (error) {
-        console.error("Error removing family member:", error);
-        showErrorToast("Failed to remove family member");
-        return;
-      }
-      
-      // Update the local state
-      setSelectedFamilyMembers(prev => prev.filter(member => member.id !== memberId));
-      
-      // Show success message
-      showSuccessToast("Family member removed successfully");
-      
-      // Refresh family data to update member counts
-      fetchFamilies();
-    } catch (error: any) {
-      console.error("Error in handleRemoveMember:", error);
-      showErrorToast("Failed to remove family member");
-    }
-  };
-
-  if (loading && familyGroups.length === 0) {
+  // Loading state
+  if (loading) {
     return (
-      <div className="admin-loader-container">
-        <div className="admin-loader-spinner"></div>
-        <h2 className="admin-loader-title">Loading Family Groups</h2>
-        <p className="admin-loader-subtitle">Please wait while we fetch your family connections...</p>
+      <div className="modern-user-management">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">Loading families...</p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="hidden md:block">
+          {/* Header Skeleton */}
+          <div className="user-management-header mb-5">
+            <div className="d-flex justify-content-between align-items-center">
+              <div className="d-flex align-items-center">
+                <div className="skeleton-icon mr-3"></div>
+                <div>
+                  <div className="skeleton-line skeleton-header-title mb-2"></div>
+                  <div className="skeleton-line skeleton-header-subtitle"></div>
+                </div>
+              </div>
+              <div className="skeleton-line" style={{width: '120px', height: '40px'}}></div>
+            </div>
+          </div>
+
+          {/* Stats Cards Skeleton */}
+          <div className="stats-cards-container mb-5">
+            <FamilyStatsCards stats={{
+              totalFamilies: 0,
+              activeFamilies: 0,
+              totalMembers: 0,
+              avgMembersPerFamily: 0,
+            }} loading={true} />
+          </div>
+
+          {/* Controls Skeleton */}
+          <div className="controls-section mb-4">
+            <div className="row">
+              <div className="col-md-6">
+                <div className="skeleton-line skeleton-search-bar"></div>
+              </div>
+              <div className="col-md-3">
+                <div className="skeleton-line skeleton-filter"></div>
+              </div>
+              <div className="col-md-3">
+                <div className="skeleton-line skeleton-filter"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Table Skeleton */}
+          <div className="table-section">
+            <div className="card shadow">
+              <div className="card-header">
+                <div className="skeleton-line skeleton-table-header"></div>
+              </div>
+              <div className="card-body">
+                <div className="table-responsive">
+                  <table className="table modern-table">
+                    <thead className="table-header">
+                      <tr>
+                        {Array.from({ length: 5 }).map((_, index) => (
+                          <th key={index}>
+                            <div className="skeleton-line skeleton-th"></div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 5 }).map((_, index) => (
+                        <tr key={index} className="table-row">
+                          {Array.from({ length: 5 }).map((_, colIndex) => (
+                            <td key={colIndex}>
+                              <div className="skeleton-line skeleton-td"></div>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container-fluid">
-      {/* Page Heading */}
-      <div className="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 className="h3 mb-0 text-gray-800">Family Group Management</h1>
-        <div>
-          <button className="btn btn-sm btn-danger shadow-sm mr-2">
-            <i className="fas fa-download fa-sm text-white-50 mr-1"></i> Export Data
-          </button>
-          <Link to="/admin/family/create" className="btn btn-sm btn-success shadow-sm">
-            <i className="fas fa-plus fa-sm text-white-50 mr-1"></i> Create Family Group
-          </Link>
-        </div>
-      </div>
-
-      {/* Summary Stats Cards Row */}
-      <div className="row">
-        {/* Total Family Groups Card */}
-        <div className="col-xl-3 col-md-6 mb-4">
-          <div className="card border-left-danger shadow h-100 py-2">
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                    Total Family Groups
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {summary.totalFamilies}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-users fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Active Family Groups Card */}
-        <div className="col-xl-3 col-md-6 mb-4">
-          <div className="card border-left-success shadow h-100 py-2">
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-success text-uppercase mb-1">
-                    Active Family Groups
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {summary.activeFamilies}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-user-check fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Total Members Card */}
-        <div className="col-xl-3 col-md-6 mb-4">
-          <div className="card border-left-info shadow h-100 py-2">
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
-                    Total Members
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {summary.totalMembers}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-user-friends fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Average Members Per Family Card */}
-        <div className="col-xl-3 col-md-6 mb-4">
-          <div className="card border-left-warning shadow h-100 py-2">
-            <div className="card-body">
-              <div className="row no-gutters align-items-center">
-                <div className="col mr-2">
-                  <div className="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                    Avg. Members Per Family
-                  </div>
-                  <div className="h5 mb-0 font-weight-bold text-gray-800">
-                    {summary.avgMembersPerFamily.toFixed(1)}
-                  </div>
-                </div>
-                <div className="col-auto">
-                  <i className="fas fa-chart-line fa-2x text-gray-300"></i>
-                </div>
-              </div>
-            </div>
+    <div className="modern-user-management">
+      {/* Mobile Page Heading - Floating action buttons */}
+      <div className="block md:hidden mb-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-bold text-gray-800">Families</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRefresh}
+              className="w-9 h-9 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95 disabled:opacity-50"
+              disabled={refreshing}
+              aria-label="Refresh data"
+            >
+              <i className={`fas fa-sync text-xs ${refreshing ? 'fa-spin' : ''}`}></i>
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="w-9 h-9 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+              aria-label="Add family"
+            >
+              <i className="fas fa-plus text-xs"></i>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Filters Card */}
-      <div className="card shadow mb-4">
-        <div className="card-header py-3 admin-card-header d-flex flex-row align-items-center justify-content-between">
-          <h6 className="m-0 font-weight-bold text-danger">Filter Family Groups</h6>
-          <button onClick={resetFilters} className="btn btn-sm btn-outline-danger">
-            <i className="fas fa-redo-alt fa-sm mr-1"></i> Reset
-          </button>
+      {/* Enhanced Header - Desktop */}
+      <div className="user-management-header mb-5 hidden md:block">
+        <div className="d-flex justify-content-between align-items-start flex-wrap">
+          <div className="header-content">
+            <div className="d-flex align-items-center mb-2">
+              <div className="header-icon-container mr-3">
+                <i className="fas fa-users"></i>
+              </div>
+              <div>
+                <h1 className="header-title mb-1">Family Management</h1>
+                <p className="header-subtitle mb-0">
+                  Manage family groups, members, and shared financial access across the platform
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="header-actions d-flex align-items-center">
+            <div className="last-updated-info mr-3">
+              <small className="text-muted">
+                <i className="far fa-clock mr-1"></i>
+                Last updated: {lastUpdated.toLocaleTimeString()}
+              </small>
+            </div>
+            <button 
+              className="btn btn-outline-danger btn-sm shadow-sm refresh-btn mr-2"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <i className={`fas fa-sync-alt mr-1 ${refreshing ? 'fa-spin' : ''}`}></i>
+              {refreshing ? 'Updating...' : 'Refresh'}
+            </button>
+            <button 
+              className="btn btn-danger btn-sm shadow-sm"
+              onClick={() => setShowAddModal(true)}
+            >
+              <i className="fas fa-plus mr-1"></i>
+              Add Family
+            </button>
+          </div>
         </div>
-        <div className="card-body">
-          <div className="row">
-            <div className="col-md-4 mb-3">
-              <label htmlFor="name" className="font-weight-bold text-gray-800">Search</label>
-              <div className="input-group">
+      </div>
+
+      {/* Stats Cards */}
+      <div className="stats-cards-container mb-5">
+        <FamilyStatsCards stats={stats} loading={refreshing} />
+      </div>
+
+      {/* Mobile Controls & Family List */}
+      <div className="block md:hidden mb-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Mobile Header */}
+          <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+              <i className="fas fa-users text-red-500 text-[10px]"></i>
+              Family List
+              {totalItems > 0 && (
+                <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full text-[9px]">
+                  {totalItems}
+                </span>
+              )}
+            </h6>
+            <button 
+              className="text-[10px] text-gray-500 flex items-center gap-1"
+              onClick={clearFilters}
+            >
+              <i className="fas fa-undo text-[8px]"></i>
+              Reset
+            </button>
+          </div>
+          
+          {/* Mobile Search & Filters */}
+          <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+            <div className="relative mb-2">
+              <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-[10px]"></i>
               <input
                 type="text"
-                id="name"
-                name="name"
-                value={filter.name}
-                onChange={handleFilterChange}
-                  placeholder="Search by family name..."
-                className="form-control"
+                className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none"
+                placeholder="Search families..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
-                <div className="input-group-append">
-                  <button 
-                    className="btn btn-danger" 
-                    type="button"
-                    onClick={() => fetchFamilies()}
-                  >
-                    <i className="fas fa-search fa-sm"></i>
-                  </button>
-                </div>
-              </div>
             </div>
-
-            <div className="col-md-2 mb-3">
-              <label htmlFor="status" className="font-weight-bold text-gray-800">Status</label>
+            <div className="flex gap-2">
               <select
-                id="status"
-                name="status"
-                value={filter.status}
-                onChange={handleFilterChange}
-                className="form-control"
+                className="flex-1 px-2 py-1.5 text-[10px] bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-200 focus:border-red-400 outline-none"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
               >
-                <option value="all">All Statuses</option>
+                <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </div>
+          </div>
+          
+          {/* Mobile Family Cards List */}
+          <div className="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
+            {refreshing ? (
+              <div className="px-3 py-8 text-center">
+                <div className="flex items-center justify-center gap-1 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-2 h-2 rounded-full bg-red-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+                <p className="text-xs text-gray-500">Loading families...</p>
+              </div>
+            ) : families.length > 0 ? (
+              families.map((family) => (
+                <div 
+                  key={family.id} 
+                  className="px-3 py-3 hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                  onClick={() => openViewModal(family)}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Family Icon */}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                        <i className="fas fa-users text-red-500 text-sm"></i>
+                      </div>
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${
+                        family.status === 'active' ? 'bg-emerald-500' : 'bg-gray-400'
+                      }`}></div>
+                    </div>
+                    
+                    {/* Family Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-semibold text-gray-800 truncate">
+                          {family.family_name}
+                        </p>
+                        <span className={`flex-shrink-0 px-1 py-0.5 rounded text-[8px] font-semibold ${
+                          family.status === 'active' 
+                            ? 'bg-emerald-100 text-emerald-600' 
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {family.status?.toUpperCase()}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 truncate">
+                        Owner: {family.owner?.full_name || 'Unknown'}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded text-[8px] font-medium">
+                          <i className="fas fa-user-friends mr-1"></i>
+                          {family.members_count || 0} members
+                        </span>
+                        <span className="text-[9px] text-gray-400">
+                          {formatDate(family.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Actions - Mobile Dropdown */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <div className="relative">
+                        <button
+                          className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); toggleDropdown(family.id); }}
+                          onTouchEnd={(e) => { e.stopPropagation(); toggleDropdown(family.id); }}
+                          aria-label="More actions"
+                        >
+                          <i className="fas fa-ellipsis-v text-[10px]"></i>
+                        </button>
+                        
+                        {/* Dropdown Menu */}
+                        {activeDropdown === family.id && (
+                          <div className="dropdown-menu fixed w-32 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden" style={{ display: 'block', zIndex: 9999, transform: 'translateX(-100px) translateY(4px)' }}>
+                            <button
+                              className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); closeDropdown(); openViewModal(family); }}
+                              onTouchEnd={(e) => { e.stopPropagation(); closeDropdown(); openViewModal(family); }}
+                            >
+                              <i className="fas fa-eye text-gray-500 text-[10px]"></i>
+                              <span className="text-gray-700">View</span>
+                            </button>
+                            <button
+                              className="w-full px-3 py-2 text-left text-xs hover:bg-gray-50 active:bg-gray-100 flex items-center gap-2 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); closeDropdown(); openEditModal(family); }}
+                              onTouchEnd={(e) => { e.stopPropagation(); closeDropdown(); openEditModal(family); }}
+                            >
+                              <i className="fas fa-edit text-gray-500 text-[10px]"></i>
+                              <span className="text-gray-700">Edit</span>
+                            </button>
+                            <div className="border-t border-gray-200"></div>
+                            <button
+                              className="w-full px-3 py-2 text-left text-xs hover:bg-red-50 active:bg-red-100 flex items-center gap-2 transition-colors"
+                              onClick={(e) => { e.stopPropagation(); closeDropdown(); openDeleteModal(family); }}
+                              onTouchEnd={(e) => { e.stopPropagation(); closeDropdown(); openDeleteModal(family); }}
+                            >
+                              <i className="fas fa-trash text-red-500 text-[10px]"></i>
+                              <span className="text-red-600">Delete</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-8 text-center">
+                <div className="w-12 h-12 mx-auto rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                  <i className="fas fa-users text-gray-400 text-lg"></i>
+                </div>
+                <p className="text-xs font-medium text-gray-600">No families found</p>
+                <p className="text-[10px] text-gray-400 mt-1">Try adjusting your filters</p>
+              </div>
+            )}
+          </div>
+          
+          {/* Mobile Pagination */}
+          {totalPages > 1 && (
+            <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+              <span className="text-[9px] text-gray-500">
+                Page {filters.currentPage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handlePageChange(filters.currentPage - 1)}
+                  disabled={filters.currentPage === 1}
+                >
+                  <i className="fas fa-chevron-left text-[10px]"></i>
+                </button>
+                <span className="px-2 py-1 bg-red-500 text-white text-[10px] font-medium rounded-lg min-w-[24px] text-center">
+                  {filters.currentPage}
+                </span>
+                <button
+                  className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handlePageChange(filters.currentPage + 1)}
+                  disabled={filters.currentPage === totalPages}
+                >
+                  <i className="fas fa-chevron-right text-[10px]"></i>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
-            <div className="col-md-2 mb-3">
-              <label htmlFor="minMembers" className="font-weight-bold text-gray-800">Min Members</label>
-              <input
-                type="number"
-                id="minMembers"
-                name="minMembers"
-                value={filter.minMembers}
-                onChange={handleFilterChange}
-                placeholder="Min"
-                className="form-control"
-                min="1"
-              />
-            </div>
-
-            <div className="col-md-2 mb-3">
-              <label htmlFor="maxMembers" className="font-weight-bold text-gray-800">Max Members</label>
-              <input
-                type="number"
-                id="maxMembers"
-                name="maxMembers"
-                value={filter.maxMembers}
-                onChange={handleFilterChange}
-                placeholder="Max"
-                className="form-control"
-                min="1"
-              />
-            </div>
-
-            <div className="col-md-2 mb-3">
-              <label htmlFor="sortBy" className="font-weight-bold text-gray-800">Sort By</label>
-              <select
-                id="sortBy"
-                name="sortBy"
-                value={filter.sortBy}
-                onChange={handleFilterChange}
-                className="form-control"
-              >
-                <option value="created_at">Date Created</option>
-                <option value="name">Family Name</option>
-                <option value="members">Member Count</option>
-              </select>
-            </div>
-            
-            <div className="col-md-2 mb-3">
-              <label htmlFor="sortOrder" className="font-weight-bold text-gray-800">Sort Order</label>
-              <select
-                id="sortOrder"
-                name="sortOrder"
-                value={filter.sortOrder}
-                onChange={handleFilterChange}
-                className="form-control"
-              >
-                <option value="desc">Descending</option>
-                <option value="asc">Ascending</option>
-              </select>
-            </div>
-            
-            <div className="col-md-12 mt-2 text-center">
-              <button 
-                className="btn btn-danger" 
-                onClick={() => fetchFamilies()}
-                disabled={loading}
-              >
-                <i className="fas fa-filter mr-1"></i> Apply Filters
-              </button>
+      {/* Desktop Controls Section */}
+      <div className="controls-section mb-4 hidden md:block">
+        <div className="card shadow-sm">
+          <div className="card-body">
+            <div className="row align-items-center">
+              <div className="col-md-6 col-lg-4 mb-3 mb-md-0">
+                <div className="search-container">
+                  <div className="input-group">
+                    <div className="input-group-prepend">
+                      <span className="input-group-text bg-white border-right-0">
+                        <i className="fas fa-search text-muted"></i>
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      className="form-control border-left-0 modern-input"
+                      placeholder="Search families by name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="col-md-3 col-lg-2 mb-3 mb-md-0">
+                <select
+                  className="form-control modern-select"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div className="col-md-3 col-lg-2 mb-3 mb-md-0">
+                <div className="page-size-selector">
+                  <small className="text-muted mr-2">Show:</small>
+                  <select
+                    className="form-control form-control-sm d-inline-block w-auto"
+                    value={filters.pageSize}
+                    onChange={handlePageSizeChange}
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <small className="text-muted ml-2">per page</small>
+                </div>
+              </div>
+              <div className="col-md-12 col-lg-4">
+                <div className="d-flex justify-content-between align-items-center">
+                  {(searchTerm || filterStatus !== "all") && (
+                    <button 
+                      className="btn btn-outline-secondary btn-sm"
+                      onClick={clearFilters}
+                    >
+                      <i className="fas fa-times mr-1"></i>
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Family Groups Table */}
-      <div className="card shadow mb-4">
-        <div className="card-header py-3 admin-card-header">
-          <div className="d-flex justify-content-between align-items-center">
-            <h6 className="m-0 font-weight-bold text-danger">
-              All Family Groups
-              {loading && (
-                <span className="ml-2">
-                  <i className="fas fa-spinner fa-spin fa-sm"></i>
-                </span>
-              )}
-            </h6>
-            <div className="d-flex align-items-center">
-              <div className="input-group input-group-sm mr-3" style={{ width: "auto" }}>
-                <div className="input-group-prepend">
-                  <span 
-                    className="input-group-text border-right-0" 
-                    style={{ 
-                      backgroundColor: "#e74a3b", 
-                      color: "white", 
-                      borderColor: "#e74a3b"
-                    }}
-                  >Show</span>
-                </div>
-                <select 
-                  className="form-control form-control-sm border-left-0 border-right-0" 
-                  style={{ width: "70px" }}
-                  value={pageSize}
-                  onChange={handlePageSizeChange}
-                >
-                  <option value="5">5</option>
-                  <option value="10">10</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </select>
-                <div className="input-group-append">
-                  <span 
-                    className="input-group-text border-left-0" 
-                    style={{ 
-                      backgroundColor: "#e74a3b", 
-                      color: "white", 
-                      borderColor: "#e74a3b" 
-                    }}
-                  >entries</span>
-                </div>
+      {/* Desktop Families Table */}
+      <div className="table-section hidden md:block">
+        <div className="card shadow">
+          <div className="card-header bg-white border-0 py-3">
+            <div className="d-flex justify-content-between align-items-center">
+              <h6 className="m-0 font-weight-bold text-danger">
+                <i className="fas fa-table mr-2"></i>
+                Families ({totalItems})
+              </h6>
+              <div className="table-actions">
+                <small className="text-muted">
+                  Showing {Math.min((filters.currentPage - 1) * filters.pageSize + 1, totalItems)} to {Math.min(filters.currentPage * filters.pageSize, totalItems)} of {totalItems} entries
+                </small>
               </div>
-              <button 
-                className="btn btn-sm btn-outline-danger" 
-                onClick={refreshFamilyData}
-                disabled={loading}
-                title="Refresh Family Data"
-              >
-                <i className="fas fa-sync-alt"></i>
-              </button>
             </div>
           </div>
-        </div>
-        <div className="card-body">
-          {isFiltering || loading ? (
-            <div className="text-center my-4">
-              <div className="spinner-border text-primary" role="status">
-                <span className="sr-only">Loading...</span>
+        
+          <div className="card-body p-0">
+            {refreshing ? (
+              <div className="text-center py-5">
+                <div className="spinner-border text-primary mb-3" role="status">
+                  <span className="sr-only">Loading...</span>
+                </div>
+                <h6 className="text-muted mb-2">Refreshing families...</h6>
+                <p className="text-sm text-muted">Fetching latest family data and statistics</p>
               </div>
-            </div>
-          ) : filteredGroups.length === 0 ? (
-            <div className="text-center p-4">
-              <div className="mb-3">
-                <i className="fas fa-search fa-3x text-gray-300"></i>
+            ) : families.length === 0 ? (
+              <div className="text-center py-5">
+                <div className="empty-state-container">
+                  <i className="fas fa-users fa-4x text-gray-300 mb-4"></i>
+                  <h4 className="text-gray-700 mb-3">
+                    {searchTerm || filterStatus !== "all" 
+                      ? 'No Matching Families' 
+                      : 'No Families Yet'
+                    }
+                  </h4>
+                  <p className="text-muted mb-4 max-width-sm mx-auto">
+                    {searchTerm || filterStatus !== "all"
+                      ? 'Try adjusting your filters or search criteria to find the families you\'re looking for.' 
+                      : 'No family groups have been created yet. Create the first family to get started.'
+                    }
+                  </p>
+                  <div className="d-flex justify-content-center gap-2">
+                    {(searchTerm || filterStatus !== "all") && (
+                      <button className="btn btn-outline-primary btn-sm mr-2" onClick={clearFilters}>
+                        <i className="fas fa-filter mr-2"></i>
+                        Clear Filters
+                      </button>
+                    )}
+                    <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+                      <i className="fas fa-plus mr-2"></i>
+                      Create First Family
+                    </button>
+                  </div>
+                </div>
               </div>
-              <p className="text-gray-600 mb-0">No family groups found matching your criteria.</p>
-            </div>
-          ) : (
-            <>
-            <div className="table-responsive">
-              <table className="table table-bordered" width="100%" cellSpacing="0">
-                <thead>
-                  <tr>
-                    <th>Family Name</th>
-                    <th>Owner</th>
-                    <th>Members</th>
-                    <th>Created</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredGroups.map((group) => {
-                    return (
-                      <tr key={group.id}>
-                          <td className="font-weight-bold">{group.family_name}</td>
-                        <td>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-hover modern-table mb-0">
+                  <thead className="table-header">
+                    <tr>
+                      <th className="border-0">Family Name</th>
+                      <th className="border-0">Owner</th>
+                      <th className="border-0">Members</th>
+                      <th className="border-0">Status</th>
+                      <th className="border-0">Created</th>
+                      <th className="border-0 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {families.map((family) => (
+                      <tr key={family.id} className="table-row">
+                        <td className="py-3">
                           <div className="d-flex align-items-center">
-                            <img 
-                                src={group.owner?.avatar_url || "/images/placeholder.png"} 
-                              className="rounded-circle mr-2" 
-                              width="30" 
-                              height="30"
-                                alt={group.owner?.full_name}
-                            />
+                            <div className="family-icon mr-3">
+                              <i className="fas fa-users text-primary fa-2x"></i>
+                            </div>
                             <div>
-                                <div>{group.owner?.full_name}</div>
-                              <div className="small text-gray-600">{group.owner?.email}</div>
+                              <div className="family-name font-weight-medium">
+                                {family.family_name}
+                              </div>
+                              <div className="family-desc text-muted small">
+                                {family.description || 'No description'}
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td>
-                            <span className="badge badge-primary p-2">{group.members_count || 0}</span>
+                        <td className="py-3">
+                          <div className="d-flex align-items-center">
+                            <img 
+                              src={family.owner?.avatar_url || "../images/placeholder.png"} 
+                              className="rounded-circle mr-2" 
+                              width="30" 
+                              height="30"
+                              alt={family.owner?.full_name || "Owner"}
+                              onError={(e) => {
+                                e.currentTarget.src = "../images/placeholder.png";
+                              }}
+                            />
+                            <div>
+                              <div className="owner-name text-sm font-weight-medium">
+                                {family.owner?.full_name || 'Unknown Owner'}
+                              </div>
+                              <div className="owner-email text-muted small">
+                                {family.owner?.email || 'No email'}
+                              </div>
+                            </div>
+                          </div>
                         </td>
-                        <td>{formatDate(group.created_at)}</td>
-                        <td>
-                          <span className={`badge badge-${group.status === 'active' ? 'success' : 'danger'} p-2`}>
-                            {group.status === 'active' ? 'Active' : 'Inactive'}
+                        <td className="py-3">
+                          <span className="badge badge-primary p-2">
+                            <i className="fas fa-user-friends mr-1"></i>
+                            {family.members_count || 0}
                           </span>
                         </td>
-                        <td>
-                          <div className="btn-group">
-                            <button 
-                              onClick={() => handleViewMembers(group.id)} 
-                              className="btn btn-sm btn-outline-primary mr-1" 
-                              title="View Members"
+                        <td className="py-3">
+                          <span className={`status-badge status-${family.status === 'active' ? 'success' : 'danger'}`}>
+                            <i className={`fas ${family.status === 'active' ? 'fa-check-circle' : 'fa-pause-circle'} mr-1`}></i>
+                            {family.status === 'active' ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="py-3">
+                          <div className="created-date text-sm">
+                            {formatDate(family.created_at)}
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          <div className="action-buttons">
+                            <button
+                              className="btn btn-sm btn-outline-primary mr-1"
+                              onClick={() => openViewModal(family)}
+                              title="View Details"
                             >
-                              <i className="fas fa-users"></i>
+                              <i className="fas fa-eye"></i>
                             </button>
-                            <Link to={`/admin/family/${group.id}/edit`} className="btn btn-sm btn-outline-warning mr-1" title="Edit">
+                            <button
+                              className="btn btn-sm btn-outline-warning mr-1"
+                              onClick={() => openEditModal(family)}
+                              title="Edit Family"
+                            >
                               <i className="fas fa-edit"></i>
-                            </Link>
-                            <button 
-                              onClick={() => handleDeleteClick(group.id)} 
-                              className="btn btn-sm btn-outline-danger" 
-                              title="Delete"
+                            </button>
+                            <button
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => openDeleteModal(family)}
+                              title="Delete Family"
                             >
                               <i className="fas fa-trash"></i>
                             </button>
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-              
-              {/* Pagination */}
-              <div className="d-flex justify-content-between align-items-center mt-3">
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="card-footer bg-light">
+              <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <span className="text-muted">
-                    {filteredGroups.length === 0 ? (
-                      "Showing 0 to 0 of 0 entries"
-                    ) : (
-                      `Showing ${Math.min((currentPage - 1) * pageSize + 1, totalItems)} to ${Math.min(currentPage * pageSize, totalItems)} of ${totalItems} entries`
-                    )}
-                  </span>
+                  <small className="text-muted">
+                    Page {filters.currentPage} of {totalPages}
+                  </small>
                 </div>
-                {totalPages > 0 && (
-                  <nav>
-                    <ul className="pagination admin-pagination">
-                      <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-                        <button 
-                          className="page-link"
-                          onClick={() => handlePageChange(currentPage - 1)}
-                          disabled={currentPage === 1}
-                        >
-                          <i className="fas fa-chevron-left"></i>
-                        </button>
-                      </li>
-                      {Array.from({ length: Math.min(5, totalPages) }).map((_, index) => {
-                        // Show pages around current page
-                        let pageNumber: number;
-                        if (totalPages <= 5) {
-                          pageNumber = index + 1;
-                        } else if (currentPage <= 3) {
-                          pageNumber = index + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNumber = totalPages - 4 + index;
-                        } else {
-                          pageNumber = currentPage - 2 + index;
-                        }
-                        
-                        if (pageNumber <= totalPages) {
-                          return (
-                            <li
-                              key={index}
-                              className={`page-item ${pageNumber === currentPage ? "active" : ""}`}
+                <nav>
+                  <ul className="pagination pagination-sm mb-0">
+                    <li className={`page-item ${filters.currentPage === 1 ? 'disabled' : ''}`}>
+                      <button
+                        className="page-link"
+                        onClick={() => handlePageChange(filters.currentPage - 1)}
+                        disabled={filters.currentPage === 1}
+                      >
+                        <i className="fas fa-chevron-left"></i>
+                      </button>
+                    </li>
+                    
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      const page = Math.max(1, Math.min(totalPages - 4, filters.currentPage - 2)) + i;
+                      if (page <= totalPages) {
+                        return (
+                          <li key={page} className={`page-item ${filters.currentPage === page ? 'active' : ''}`}>
+                            <button
+                              className="page-link"
+                              onClick={() => handlePageChange(page)}
                             >
-                              <button 
-                                className="page-link"
-                                onClick={() => handlePageChange(pageNumber)}
-                              >
-                                {pageNumber}
-                              </button>
-                            </li>
-                          );
-                        }
-                        return null;
-                      })}
-                      <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
-                        <button 
-                          className="page-link"
-                          onClick={() => handlePageChange(currentPage + 1)}
-                          disabled={currentPage === totalPages}
-                        >
-                          <i className="fas fa-chevron-right"></i>
-                        </button>
-                      </li>
-                    </ul>
-                  </nav>
-                )}
+                              {page}
+                            </button>
+                          </li>
+                        );
+                      }
+                      return null;
+                    })}
+                    
+                    <li className={`page-item ${filters.currentPage === totalPages ? 'disabled' : ''}`}>
+                      <button
+                        className="page-link"
+                        onClick={() => handlePageChange(filters.currentPage + 1)}
+                        disabled={filters.currentPage === totalPages}
+                      >
+                        <i className="fas fa-chevron-right"></i>
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
               </div>
-            </>
+            </div>
           )}
-            </div>
-          </div>
-
-      {/* Family Members Modal */}
-      {showMembersModal && (
-        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  {getSelectedFamily()?.family_name} - Members ({selectedFamilyMembers.length})
-                </h5>
-                <button 
-                  type="button" 
-                  className="close" 
-                  onClick={() => setShowMembersModal(false)}
-                >
-                  <span>&times;</span>
-                </button>
-              </div>
-              <div className="modal-body">
-                {selectedFamilyMembers.length === 0 ? (
-                  <div className="text-center p-4">
-                    <div className="mb-3">
-                      <i className="fas fa-users fa-3x text-gray-300"></i>
-                    </div>
-                    <p className="text-gray-600 mb-0">No members found for this family group.</p>
-                  </div>
-                ) : (
-                  <div className="table-responsive">
-                    <table className="table table-bordered" width="100%" cellSpacing="0">
-                      <thead>
-                        <tr>
-                          <th>User</th>
-                          <th>Role</th>
-                          <th>Join Date</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedFamilyMembers.map((member) => (
-                          <tr key={member.id}>
-                            <td>
-                              <div className="d-flex align-items-center">
-                                <img 
-                                  src={member.user?.avatar_url || "/images/placeholder.png"} 
-                                  className="rounded-circle mr-2" 
-                                  width="30" 
-                                  height="30"
-                                  alt={member.user?.full_name}
-                                />
-                                <div>
-                                  <div>{member.user?.full_name || "Unknown User"}</div>
-                                  <div className="small text-gray-600">{member.user?.email || "No email"}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <span className={`badge badge-${member.role === 'admin' ? 'primary' : 'secondary'} p-2`}>
-                                {member.role === 'admin' ? 'Admin' : 'Viewer'}
-                              </span>
-                            </td>
-                            <td>{formatDate(member.created_at)}</td>
-                            <td>
-                              <div className="btn-group">
-                                <Link to={`/admin/users/${member.user_id}`} className="btn btn-sm btn-outline-info mr-1" title="View User">
-                                  <i className="fas fa-user"></i>
-                                </Link>
-                                <button 
-                                  className="btn btn-sm btn-outline-danger" 
-                                  title="Remove from Family"
-                                  onClick={() => handleRemoveMember(member.id, member.user_id)}
-                                >
-                                  <i className="fas fa-user-minus"></i>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setShowMembersModal(false)}
-                >
-                  Close
-                </button>
-                <Link to={`/admin/family/${selectedFamilyId}/add-member`} className="btn btn-primary">
-                  <i className="fas fa-user-plus mr-1"></i> Add Member
-                </Link>
-              </div>
-            </div>
-          </div>
         </div>
-      )}
+      </div>
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="modal show d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
-          <div className="modal-dialog">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Confirm Delete</h5>
-                <button 
-                  type="button" 
-                  className="close" 
-                  onClick={() => setShowDeleteModal(false)}
-                >
-                  <span>&times;</span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <p>Are you sure you want to delete this family group? This action cannot be undone.</p>
-                <p className="text-danger font-weight-bold">Note: This will remove all family connections and shared financial data.</p>
-              </div>
-              <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  onClick={() => setShowDeleteModal(false)}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="button" 
-                  className="btn btn-danger" 
-                  onClick={confirmDelete}
-                >
-                  Delete Family Group
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modals */}
+      <AddFamilyModal
+        show={showAddModal}
+        onClose={closeAllModals}
+        onFamilyAdded={handleFamilyAdded}
+        users={users}
+      />
+
+      <ViewFamilyModal
+        show={showViewModal}
+        family={selectedFamily}
+        onClose={closeAllModals}
+        onEdit={openEditModal}
+        onDelete={openDeleteModal}
+        onGetMembers={getFamilyMembers}
+        onRemoveMember={removeFamilyMember}
+      />
+
+      <EditFamilyModal
+        show={showEditModal}
+        family={selectedFamily}
+        onClose={closeAllModals}
+        onFamilyUpdated={handleFamilyUpdated}
+      />
+
+      <DeleteFamilyModal
+        show={showDeleteModal}
+        family={selectedFamily}
+        onClose={closeAllModals}
+        onConfirmDelete={handleDeleteFamily}
+      />
     </div>
   );
 };
 
-export default AdminFamily; 
+export default AdminFamily;

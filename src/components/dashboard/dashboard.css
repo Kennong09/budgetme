@@ -95,7 +95,7 @@ h6 {
   .sidebar {
     width: 85% !important;
     position: fixed !important;
-    z-index: 1050 !important;
+    z-index: 40 !important; /* Well below modals but above content */
     height: 100vh !important;
     top: 0 !important;
     left: 0 !important;
@@ -118,7 +118,7 @@ h6 {
     align-items: center !important;
     justify-content: center !important;
     box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
-    z-index: 1060 !important;
+    z-index: 50 !important; /* Below modals but above sidebar */
     border-radius: 50% !important;
     margin-right: 1rem !important;
     position: relative !important;
@@ -229,12 +229,30 @@ h6 {
   }
 }
 
-.refresh-btn {
-  transition: transform 0.2s ease;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.refresh-btn:hover {
-  transform: rotate(180deg);
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.refresh-btn {
+  transition: transform 0.2s ease;
 }
 
 .insight-action {
@@ -721,12 +739,410 @@ a {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+  /* General card spacing - ULTRA COMPACT */
   .card {
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem !important;
+    border-radius: 0.5rem !important;
   }
   
+  /* Compact card body padding - ULTRA COMPACT */
+  .card-body {
+    padding: 0.5rem !important;
+  }
+  
+  /* Smaller font sizes for mobile - ULTRA COMPACT */
+  .h6-mobile {
+    font-size: 0.8rem !important;
+  }
+  
+  .h5-md {
+    font-size: 0.9rem !important;
+  }
+  
+  .h6.h5-md {
+    font-size: 0.9rem !important;
+  }
+  
+  /* Text utility classes for mobile - ULTRA COMPACT */
+  .text-sm-mobile {
+    font-size: 0.7rem !important;
+  }
+  
+  .text-md-base {
+    font-size: 0.8rem !important;
+  }
+  
+  .text-xs-mobile {
+    font-size: 0.65rem !important;
+  }
+  
+  /* Hide transaction dates on mobile */
   .transaction-date {
-    display: none;
+    display: none !important;
+  }
+  
+  /* Compact transaction items - ULTRA COMPACT */
+  .transaction-item {
+    padding: 0.5rem !important;
+    margin-bottom: 0 !important;
+  }
+  
+  .transaction-icon {
+    width: 28px !important;
+    height: 28px !important;
+    margin-right: 0.5rem !important;
+  }
+  
+  .transaction-amount {
+    font-size: 0.75rem !important;
+    margin: 0 0.25rem !important;
+  }
+  
+  .transaction-title {
+    font-size: 0.8rem !important;
+    line-height: 1.2 !important;
+  }
+  
+  .transaction-category {
+    font-size: 0.7rem !important;
+    margin-top: 0.1rem !important;
+  }
+  
+  /* Summary cards - 2 columns on mobile - ULTRA COMPACT */
+  .summary-cards .col-6 {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+  
+  .summary-cards .card {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .summary-cards .card-body {
+    padding: 0.5rem !important;
+  }
+  
+  .summary-cards .text-xs {
+    font-size: 0.65rem !important;
+  }
+  
+  /* Budget progress mobile adjustments - ULTRA COMPACT */
+  .progress-bar {
+    height: 4px !important;
+  }
+  
+  /* Compact spacing - ULTRA COMPACT */
+  .mb-3.mb-md-4 {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .py-2.py-md-3 {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+  }
+  
+  .p-2.p-md-3 {
+    padding: 0.35rem !important;
+  }
+  
+  .p-3.p-md-4 {
+    padding: 0.5rem !important;
+  }
+  
+  /* Icon sizing for mobile - ULTRA COMPACT */
+  .fa-2x.fa-md-3x {
+    font-size: 1.25rem !important;
+  }
+  
+  .fa-2x {
+    font-size: 1.25rem !important;
+  }
+  
+  /* Chart containers - make them more compact - ULTRA COMPACT */
+  .chart-container,
+  .pie-chart-container {
+    min-height: 180px !important;
+  }
+  
+  /* Button text spacing - ULTRA COMPACT */
+  .btn {
+    font-size: 0.7rem !important;
+    padding: 0.3rem 0.6rem !important;
+  }
+  
+  .btn-sm {
+    font-size: 0.7rem !important;
+    padding: 0.2rem 0.4rem !important;
+  }
+  
+  /* Alert headings - ULTRA COMPACT */
+  .alert-heading {
+    font-size: 0.9rem !important;
+  }
+  
+  .alert {
+    padding: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  
+  /* Compact card headers - ULTRA COMPACT */
+  .card-header {
+    padding: 0.4rem 0.5rem !important;
+  }
+  
+  .card-header h6 {
+    font-size: 0.75rem !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Filter controls - stack inputs - ULTRA COMPACT */
+  .filter-controls .form-control {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+  
+  .filter-controls .form-label {
+    font-size: 0.7rem !important;
+    margin-bottom: 0.15rem !important;
+  }
+  
+  /* Badge sizing - ULTRA COMPACT */
+  .badge {
+    font-size: 0.6rem !important;
+    padding: 0.15em 0.3em !important;
+  }
+  
+  /* Insight cards - full width on mobile - ULTRA COMPACT */
+  .insight-card .card-body {
+    padding: 0.5rem !important;
+  }
+  
+  .insight-card .text-xs {
+    font-size: 0.65rem !important;
+  }
+  
+  .insight-card .h6 {
+    font-size: 0.8rem !important;
+  }
+  
+  /* Compact welcome message - ULTRA COMPACT */
+  .welcome-icon {
+    width: 35px !important;
+    height: 35px !important;
+  }
+  
+  /* Reduce tooltip box size - ULTRA COMPACT */
+  .tip-box {
+    max-width: 180px !important;
+    font-size: 0.65rem !important;
+    padding: 6px 10px !important;
+  }
+  
+  /* Dashboard actions spacing - ULTRA COMPACT */
+  .dashboard-actions {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .dashboard-actions h1 {
+    font-size: 1.1rem !important;
+  }
+  
+  /* Gap utility for mobile - ULTRA COMPACT */
+  .gap-2 {
+    gap: 0.35rem !important;
+  }
+  
+  /* Container fluid padding - ULTRA COMPACT */
+  .container-fluid {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  
+  /* Flexbox utilities for mobile */
+  .flex-wrap {
+    flex-wrap: wrap !important;
+  }
+  
+  /* Mobile font awesome icon sizing - ULTRA COMPACT */
+  .fa-sm {
+    font-size: 0.7rem !important;
+  }
+  
+  /* Progress bar text - ULTRA COMPACT */
+  .progress-container {
+    margin-top: 0.15rem !important;
+    margin-bottom: 0.15rem !important;
+  }
+  
+  /* Trend cards spacing - ULTRA COMPACT */
+  .trend-card {
+    margin-bottom: 0.35rem !important;
+  }
+  
+  /* Chart spacing on mobile - ULTRA COMPACT */
+  .highcharts-container {
+    width: 100% !important;
+  }
+  
+  /* Budget item spacing - ULTRA COMPACT */
+  .space-y-5 > div {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  /* Compact spacing utilities - ULTRA COMPACT */
+  .mb-2.mb-md-3 {
+    margin-bottom: 0.35rem !important;
+  }
+  
+  .mt-2.mt-md-3 {
+    margin-top: 0.35rem !important;
+  }
+  
+  .mt-3.mt-md-4 {
+    margin-top: 0.5rem !important;
+  }
+  
+  .pt-2.pt-md-3 {
+    padding-top: 0.35rem !important;
+  }
+  
+  .pb-2 {
+    padding-bottom: 0.35rem !important;
+  }
+  
+  /* Hide less important text on mobile */
+  .d-none.d-md-inline {
+    display: none !important;
+  }
+  
+  .d-none.d-md-block {
+    display: none !important;
+  }
+  
+  .d-inline.d-md-none {
+    display: inline !important;
+  }
+  
+  .d-block.d-md-none {
+    display: block !important;
+  }
+  
+  /* Compact border styling - ULTRA COMPACT */
+  .border-left-primary,
+  .border-left-danger,
+  .border-left-info,
+  .border-left-success,
+  .border-left-warning {
+    border-left-width: 0.15rem !important;
+  }
+  
+  /* Make cards less padded - ULTRA COMPACT */
+  .py-2 {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+  }
+  
+  /* Adjust shadow for mobile - ULTRA COMPACT */
+  .shadow-sm {
+    box-shadow: 0 0.05rem 0.3rem rgba(0, 0, 0, 0.05) !important;
+  }
+  
+  .shadow {
+    box-shadow: 0 0.1rem 0.5rem rgba(0, 0, 0, 0.08) !important;
+  }
+  
+  /* Smaller row gutters - ULTRA COMPACT */
+  .row {
+    margin-left: -0.25rem;
+    margin-right: -0.25rem;
+  }
+  
+  .row > [class*='col-'] {
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+  
+  /* Compact no-gutters */
+  .no-gutters {
+    margin-right: 0;
+    margin-left: 0;
+  }
+  
+  /* Mobile-friendly button groups - ULTRA COMPACT */
+  .btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+  }
+  
+  /* Smaller alert padding - ULTRA COMPACT */
+  .alert {
+    padding: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  
+  /* Compact list items - ULTRA COMPACT */
+  .list-group-item {
+    padding: 0.35rem 0.5rem !important;
+  }
+  
+  /* Additional ultra compact utilities */
+  .h5 {
+    font-size: 0.9rem !important;
+  }
+  
+  .h6 {
+    font-size: 0.8rem !important;
+  }
+  
+  /* Small text everywhere */
+  .small,
+  small {
+    font-size: 0.7rem !important;
+  }
+  
+  /* Progress percentage text */
+  .progress-container .text-xs {
+    font-size: 0.65rem !important;
+  }
+  
+  /* Chart empty states - ULTRA COMPACT */
+  .text-center.py-4,
+  .text-center.py-5 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+  
+  /* Recent transactions list - ULTRA COMPACT */
+  .recent-transactions .card-body {
+    padding: 0 !important;
+  }
+  
+  /* Budget category names - ULTRA COMPACT */
+  .font-semibold {
+    font-size: 0.8rem !important;
+  }
+  
+  /* Flex items spacing - ULTRA COMPACT */
+  .flex.items-center {
+    gap: 0.25rem;
+  }
+  
+  /* Input field heights - ULTRA COMPACT */
+  .form-control,
+  .form-control-sm {
+    height: calc(1.5em + 0.5rem) !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Select dropdowns - ULTRA COMPACT */
+  select.form-control {
+    padding: 0.25rem 0.5rem !important;
+  }
+  
+  /* Date inputs - ULTRA COMPACT */
+  input[type="date"] {
+    font-size: 0.7rem !important;
   }
 }
 
@@ -1043,4 +1459,505 @@ a {
 
 .progress:hover .progress-tooltip {
   opacity: 1;
+}
+
+/* ========================================
+   ENHANCED MOBILE RESPONSIVENESS
+   Optimized for compact mobile app experience
+   ======================================== */
+
+@media (max-width: 768px) {
+  /* ===== MODAL ENHANCEMENTS ===== */
+  .modal-dialog {
+    margin: 0.5rem !important;
+    max-width: calc(100% - 1rem) !important;
+  }
+  
+  .modal-content {
+    border-radius: 0.75rem !important;
+  }
+  
+  .modal-header {
+    padding: 0.75rem !important;
+    border-bottom: 1px solid #e3e6f0 !important;
+  }
+  
+  .modal-title {
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+  }
+  
+  .modal-body {
+    padding: 0.75rem !important;
+    max-height: calc(100vh - 200px) !important;
+    overflow-y: auto !important;
+  }
+  
+  .modal-footer {
+    padding: 0.5rem 0.75rem !important;
+    gap: 0.5rem !important;
+  }
+  
+  .modal-footer .btn {
+    flex: 1 !important;
+    margin: 0 !important;
+  }
+  
+  /* ===== TABLE ENHANCEMENTS ===== */
+  .table {
+    font-size: 0.75rem !important;
+  }
+  
+  .table thead th {
+    padding: 0.4rem 0.3rem !important;
+    font-size: 0.7rem !important;
+    white-space: nowrap !important;
+  }
+  
+  .table tbody td {
+    padding: 0.4rem 0.3rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .table-responsive {
+    border-radius: 0.5rem !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  .table-hover tbody tr:hover {
+    background-color: rgba(99, 102, 241, 0.03) !important;
+  }
+  
+  /* Compact table cells */
+  .table-sm th,
+  .table-sm td {
+    padding: 0.25rem !important;
+  }
+  
+  /* ===== FORM ENHANCEMENTS ===== */
+  .form-group {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .form-label,
+  label {
+    font-size: 0.75rem !important;
+    margin-bottom: 0.25rem !important;
+    font-weight: 600 !important;
+  }
+  
+  .form-control,
+  .form-select,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  textarea {
+    font-size: 0.8rem !important;
+    padding: 0.4rem 0.6rem !important;
+    border-radius: 0.4rem !important;
+    height: auto !important;
+    min-height: 2rem !important;
+  }
+  
+  textarea.form-control {
+    min-height: 4rem !important;
+  }
+  
+  .form-control:focus,
+  .form-select:focus {
+    box-shadow: 0 0 0 0.15rem rgba(99, 102, 241, 0.25) !important;
+  }
+  
+  .form-check {
+    padding-left: 1.25rem !important;
+    margin-bottom: 0.35rem !important;
+  }
+  
+  .form-check-input {
+    width: 1rem !important;
+    height: 1rem !important;
+    margin-top: 0.15rem !important;
+  }
+  
+  .form-check-label {
+    font-size: 0.75rem !important;
+    padding-left: 0.25rem !important;
+  }
+  
+  /* Input groups */
+  .input-group {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .input-group-text {
+    font-size: 0.75rem !important;
+    padding: 0.4rem 0.6rem !important;
+  }
+  
+  /* ===== DROPDOWN ENHANCEMENTS ===== */
+  .dropdown-menu {
+    font-size: 0.75rem !important;
+    min-width: 10rem !important;
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+    border-radius: 0.5rem !important;
+  }
+  
+  .dropdown-item {
+    padding: 0.4rem 0.75rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .dropdown-header {
+    font-size: 0.7rem !important;
+    padding: 0.3rem 0.75rem !important;
+  }
+  
+  .dropdown-divider {
+    margin: 0.25rem 0 !important;
+  }
+  
+  /* ===== BUTTON ENHANCEMENTS ===== */
+  .btn-group {
+    gap: 0.25rem !important;
+  }
+  
+  .btn-group .btn {
+    padding: 0.3rem 0.6rem !important;
+    font-size: 0.7rem !important;
+  }
+  
+  .btn-lg {
+    padding: 0.5rem 1rem !important;
+    font-size: 0.85rem !important;
+  }
+  
+  .btn-block {
+    width: 100% !important;
+    display: block !important;
+  }
+  
+  /* Icon buttons */
+  .btn-icon-only {
+    padding: 0.35rem !important;
+    width: 2rem !important;
+    height: 2rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  
+  /* ===== TOAST/ALERT ENHANCEMENTS ===== */
+  .toast {
+    font-size: 0.75rem !important;
+    max-width: calc(100vw - 1rem) !important;
+    margin: 0.5rem !important;
+  }
+  
+  .toast-header {
+    padding: 0.4rem 0.6rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .toast-body {
+    padding: 0.5rem 0.6rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* ===== PAGINATION ENHANCEMENTS ===== */
+  .pagination {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .page-link {
+    padding: 0.3rem 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .page-item:first-child .page-link,
+  .page-item:last-child .page-link {
+    border-radius: 0.3rem !important;
+  }
+  
+  /* ===== NAV TABS/PILLS ENHANCEMENTS ===== */
+  .nav-tabs .nav-link,
+  .nav-pills .nav-link {
+    padding: 0.4rem 0.6rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .nav-tabs {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  /* ===== BREADCRUMB ENHANCEMENTS ===== */
+  .breadcrumb {
+    padding: 0.4rem 0.6rem !important;
+    margin-bottom: 0.5rem !important;
+    font-size: 0.7rem !important;
+  }
+  
+  .breadcrumb-item + .breadcrumb-item::before {
+    padding: 0 0.3rem !important;
+  }
+  
+  /* ===== ACCORDION ENHANCEMENTS ===== */
+  .accordion-button {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.8rem !important;
+  }
+  
+  .accordion-body {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* ===== LIST GROUP ENHANCEMENTS ===== */
+  .list-group-item {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  .list-group-item-action:hover {
+    background-color: rgba(99, 102, 241, 0.05) !important;
+  }
+  
+  /* ===== OFFCANVAS ENHANCEMENTS ===== */
+  .offcanvas {
+    max-width: 85% !important;
+  }
+  
+  .offcanvas-header {
+    padding: 0.75rem !important;
+  }
+  
+  .offcanvas-title {
+    font-size: 0.95rem !important;
+  }
+  
+  .offcanvas-body {
+    padding: 0.75rem !important;
+  }
+  
+  /* ===== CARD DECK/GRID ENHANCEMENTS ===== */
+  .card-deck .card {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .card-columns {
+    column-count: 1 !important;
+  }
+  
+  /* ===== SPINNER ENHANCEMENTS ===== */
+  .spinner-border,
+  .spinner-grow {
+    width: 1.5rem !important;
+    height: 1.5rem !important;
+  }
+  
+  .spinner-border-sm,
+  .spinner-grow-sm {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
+  
+  /* ===== UTILITIES ===== */
+  /* Compact spacing utilities */
+  .p-mobile-1 { padding: 0.25rem !important; }
+  .p-mobile-2 { padding: 0.5rem !important; }
+  .p-mobile-3 { padding: 0.75rem !important; }
+  .m-mobile-1 { margin: 0.25rem !important; }
+  .m-mobile-2 { margin: 0.5rem !important; }
+  .m-mobile-3 { margin: 0.75rem !important; }
+  
+  /* Font size utilities */
+  .fs-mobile-xs { font-size: 0.65rem !important; }
+  .fs-mobile-sm { font-size: 0.75rem !important; }
+  .fs-mobile-md { font-size: 0.85rem !important; }
+  .fs-mobile-lg { font-size: 0.95rem !important; }
+  
+  /* Hide scrollbars on mobile but keep functionality */
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none !important;
+  }
+  .scrollbar-hidden {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+  
+  /* Touch-friendly tap targets */
+  .tap-target {
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+  
+  /* Prevent text selection on buttons and interactive elements */
+  .btn,
+  button,
+  [role="button"] {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  
+  /* Smooth scrolling */
+  * {
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* Remove focus outline on mobile for cleaner look */
+  .btn:focus,
+  .form-control:focus,
+  .form-select:focus {
+    outline: none !important;
+  }
+  
+  /* Optimized hover states for touch devices */
+  @media (hover: none) {
+    .card:hover,
+    .btn:hover,
+    .transaction-item:hover {
+      transform: none !important;
+    }
+  }
+}
+
+/* ===== MOBILE COMPACT VIEW UTILITIES ===== */
+
+/* Scrollbar hide utility */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Line clamp utilities */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Mobile-specific transaction list styles */
+@media (max-width: 767px) {
+  .transaction-item {
+    padding: 0.5rem !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  
+  .transaction-icon {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 0.7rem !important;
+  }
+  
+  .transaction-title {
+    font-size: 0.7rem !important;
+    line-height: 1.3 !important;
+  }
+  
+  .transaction-category {
+    font-size: 0.6rem !important;
+  }
+  
+  .transaction-amount {
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+  }
+  
+  /* Compact summary cards on mobile */
+  .summary-cards .card {
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .summary-cards .card-body {
+    padding: 0.5rem !important;
+  }
+  
+  /* Insight cards mobile horizontal scroll */
+  .insight-card {
+    min-height: auto !important;
+  }
+  
+  /* Compact chart containers */
+  .highcharts-container {
+    max-height: 180px !important;
+  }
+  
+  /* Mobile budget progress compact styles */
+  .progress-container .progress-bar {
+    height: 6px !important;
+  }
+  
+  /* Remove card hover effects on mobile */
+  .card:hover {
+    transform: none !important;
+  }
+  
+  /* Compact filter controls */
+  .form-control-sm {
+    height: calc(1.5em + 0.5rem + 2px) !important;
+    padding: 0.25rem 0.5rem !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Smaller badges on mobile */
+  .badge {
+    font-size: 0.6rem !important;
+    padding: 0.2em 0.4em !important;
+  }
+}
+
+/* Snap scroll utilities for mobile carousels */
+.snap-x {
+  scroll-snap-type: x mandatory;
+}
+
+.snap-center {
+  scroll-snap-align: center;
+}
+
+.snap-mandatory {
+  scroll-snap-type: x mandatory;
+}
+
+/* Mobile animation optimizations */
+@media (max-width: 767px) {
+  .animate__animated {
+    --animate-duration: 0.3s !important;
+  }
+  
+  .animate__fadeIn {
+    animation-duration: 0.2s !important;
+  }
+  
+  /* Reduce motion for users who prefer it */
+  @media (prefers-reduced-motion: reduce) {
+    .animate__animated {
+      animation: none !important;
+    }
+  }
 }

@@ -1,7 +1,42 @@
 # DFD Level 0 - Context Diagram: BudgetMe Financial Management System
 
 ## Overview
-This Level 0 Data Flow Diagram (Context Diagram) shows the BudgetMe Financial Management System as a single process and its interactions with external entities. It provides a high-level view of the system boundaries and the main data flows between the system and its environment.
+
+This Level 0 Data Flow Diagram (Context Diagram) presents the BudgetMe Financial Management System as a unified process boundary, illustrating its comprehensive interactions with all external entities in the system ecosystem. The context diagram serves as the foundational architectural view, establishing clear boundaries between internal system functionality and external actors, services, and data sources.
+
+### Purpose of This Diagram
+
+The Context Diagram provides stakeholders with:
+- **System Scope Definition**: Clear delineation of what functionality resides within BudgetMe versus external dependencies
+- **Integration Map**: Visualization of all external entity touchpoints requiring interface design and maintenance
+- **Data Flow Overview**: High-level understanding of information exchange patterns between the system and its environment
+- **Security Boundary**: Identification of trust boundaries for security architecture decisions
+
+### System Positioning
+
+BudgetMe operates as a **centralized personal and family finance management platform**, receiving financial data from users and external sources, processing it through intelligent algorithms, and delivering actionable insights back to stakeholders. The system maintains a clear separation between:
+
+## Database Overview (Supabase)
+
+The BudgetMe system uses Supabase (PostgreSQL) with **40+ tables** organized across modules:
+
+| Module | Primary Tables | Key Columns |
+|--------|---------------|-------------|
+| **Authentication** | `profiles`, `user_sessions`, `verification_tokens` | id, user_id, email, role, is_active, session_token, token_type |
+| **Budget** | `budgets` | id, user_id, budget_name, amount, spent, period, start_date, end_date, category_id, alert_threshold |
+| **Transaction** | `transactions`, `accounts`, `income_categories`, `expense_categories` | id, user_id, date, amount, type, account_id, goal_id, category_id |
+| **Goals** | `goals`, `goal_contributions` | id, user_id, goal_name, target_amount, current_amount, family_id, is_family_goal, milestones |
+| **Family** | `families`, `family_members`, `family_invitations`, `family_join_requests` | id, family_id, user_id, role, status, can_create_goals, can_contribute_goals, invitation_token |
+| **Reports** | `ai_reports`, `dashboard_layouts`, `dashboard_insights`, `widget_data_cache` | id, user_id, report_type, timeframe, insights, widget_config, cached_data |
+| **AI Prediction** | `prediction_requests`, `prophet_predictions`, `ai_insights`, `prediction_usage_limits` | id, user_id, predictions, confidence_score, expires_at, tier, daily_limit |
+| **Chatbot** | `chat_sessions`, `chat_messages`, `user_chat_preferences` | id, session_id, user_id, message_text, message_type, response_style, context_data |
+| **Admin** | `admin_settings`, `admin_notifications`, `admin_anomalies`, `admin_actions`, `backup_logs`, `feature_flags`, `system_activity_log` | id, admin_id, action_type, severity, setting_key, feature_key, is_enabled |
+
+### Database Statistics
+- **Total Tables**: 40+ across all modules
+- **Active Users**: 60+ registered profiles
+- **AI Reports**: 27+ cached reports with 7-day expiration
+- **Prediction Cache**: 30-minute insight cache, 24-hour prediction cache
 
 ## Context Diagram
 
@@ -13,9 +48,10 @@ graph TB
         C[System Administrators]
         D[Bank/Financial Institutions]
         E[Email Service Provider]
-        F[AI Service Providers]
+        F[AI Service Providers<br/>OpenRouter API]
         G[Mobile Devices]
         H[Web Browsers]
+        I[Prophet Prediction API]
     end
     
     subgraph "BudgetMe Financial Management System"

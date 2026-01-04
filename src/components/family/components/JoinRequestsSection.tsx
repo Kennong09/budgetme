@@ -131,27 +131,52 @@ const JoinRequestsSection: React.FC<JoinRequestsSectionProps> = ({ familyId }) =
       }
       
       if (action === 'approve') {
-        // First create a family member entry
-        const { error: memberError } = await supabase
+        // Check if user is already a family member
+        const { data: existingMember, error: checkError } = await supabase
           .from('family_members')
-          .insert({
-            family_id: familyId,
-            user_id: request.user_id,
-            role: 'viewer', // Default role for joined members
-            status: 'active',
-            created_at: new Date().toISOString()
-          });
+          .select('id, status')
+          .eq('family_id', familyId)
+          .eq('user_id', request.user_id)
+          .single();
           
-        if (memberError) {
-          throw new Error(`Error adding family member: ${memberError.message}`);
+        if (checkError && checkError.code !== 'PGRST116') {
+          throw new Error(`Error checking existing membership: ${checkError.message}`);
+        }
+        
+        if (existingMember) {
+          // User is already a member, just update their status if needed
+          if (existingMember.status !== 'active') {
+            const { error: updateError } = await supabase
+              .from('family_members')
+              .update({ status: 'active' })
+              .eq('id', existingMember.id);
+              
+            if (updateError) {
+              throw new Error(`Error updating member status: ${updateError.message}`);
+            }
+          }
+        } else {
+          // Create a new family member entry
+          const { error: memberError } = await supabase
+            .from('family_members')
+            .insert({
+              family_id: familyId,
+              user_id: request.user_id,
+              role: 'member', // Default role for joined members
+              status: 'active',
+              created_at: new Date().toISOString()
+            });
+            
+          if (memberError) {
+            throw new Error(`Error adding family member: ${memberError.message}`);
+          }
         }
         
         // Then update the request status
         const { error: requestError } = await supabase
           .from('family_join_requests')
           .update({ 
-            status: 'approved',
-            processed_at: new Date().toISOString()
+            status: 'approved'
           })
           .eq('id', requestId);
           
@@ -159,14 +184,13 @@ const JoinRequestsSection: React.FC<JoinRequestsSectionProps> = ({ familyId }) =
           throw new Error(`Error updating request status: ${requestError.message}`);
         }
         
-        showSuccessToast("Join request approved successfully! User added as a viewer.");
+        showSuccessToast("Join request approved successfully! User added as a member.");
       } else {
         // Update request status to rejected
         const { error: requestError } = await supabase
           .from('family_join_requests')
           .update({ 
-            status: 'rejected',
-            processed_at: new Date().toISOString()
+            status: 'rejected'
           })
           .eq('id', requestId);
           
@@ -243,7 +267,7 @@ const JoinRequestsSection: React.FC<JoinRequestsSectionProps> = ({ familyId }) =
         <h6 className="m-0 font-weight-bold text-primary">
           Pending Join Requests <span className="badge badge-warning ml-2">{pendingRequests.length}</span>
           <small className="ml-2 text-muted font-weight-normal">
-            (All approved users join as viewers)
+            (All approved users join as members)
           </small>
         </h6>
         <button 
@@ -291,14 +315,14 @@ const JoinRequestsSection: React.FC<JoinRequestsSectionProps> = ({ familyId }) =
                       className="btn btn-success btn-sm mr-2" 
                       onClick={() => handleRequestAction(request.id, 'approve')}
                       disabled={processingRequestId === request.id}
-                      title="Approve request and add user as a viewer"
+                      title="Approve request and add user as a member"
                     >
                       {processingRequestId === request.id ? (
                         <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                       ) : (
                         <i className="fas fa-check mr-1"></i>
                       )}
-                      Approve as Viewer
+                      Approve as Member
                     </button>
                     <button 
                       className="btn btn-danger btn-sm" 

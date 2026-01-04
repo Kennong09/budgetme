@@ -13,7 +13,6 @@ import { BudgetService, BudgetItem as ServiceBudgetItem } from "../../services/d
 import LoadingSpinner from "./components/shared/LoadingSpinner";
 import ErrorMessage from "./components/shared/ErrorMessage";
 import BudgetErrorBoundary from "./components/shared/BudgetErrorBoundary";
-import DataSourceNotification from "./components/shared/DataSourceNotification";
 
 // Import types
 import { BudgetItem, Transaction, TooltipPosition } from "./types";
@@ -57,6 +56,9 @@ const BudgetDetails: FC = () => {
   // Delete modal states
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  
+  // Mobile UI state for tabbed charts
+  const [mobileActiveChart, setMobileActiveChart] = useState<'allocation' | 'distribution'>('allocation');
   
   // Helper functions to extract month and year from dates
   const getMonthYear = (budget: BudgetItem) => {
@@ -516,18 +518,60 @@ const BudgetDetails: FC = () => {
   };
 
   if (loading) {
-    return <LoadingSpinner message="Loading budget details..." />;
+    return (
+      <div className="container-fluid">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">Loading budget details...</p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="hidden md:block">
+          <LoadingSpinner message="Loading budget details..." />
+        </div>
+      </div>
+    );
   }
 
   if (error || !budget) {
     return (
-      <ErrorMessage
-        title="Budget not found"
-        message={error || "The budget you're looking for does not exist or has been deleted."}
-        showBackButton={true}
-        backTo="/budgets"
-        backLabel="Back to Budgets"
-      />
+      <div className="container-fluid">
+        {/* Mobile Not Found State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center text-center px-4">
+            <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+              <i className="fas fa-exclamation-triangle text-amber-500 text-2xl"></i>
+            </div>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Budget not found</h2>
+            <p className="text-sm text-gray-500 mb-4">{error || "The budget you're looking for does not exist or has been deleted."}</p>
+            <Link 
+              to="/budgets" 
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors"
+            >
+              <i className="fas fa-arrow-left text-xs"></i>
+              Back to Budgets
+            </Link>
+          </div>
+        </div>
+
+        {/* Desktop Not Found State */}
+        <div className="hidden md:block">
+          <ErrorMessage
+            title="Budget not found"
+            message={error || "The budget you're looking for does not exist or has been deleted."}
+            showBackButton={true}
+            backTo="/budgets"
+            backLabel="Back to Budgets"
+          />
+        </div>
+      </div>
     );
   }
 
@@ -547,35 +591,358 @@ const BudgetDetails: FC = () => {
   return (
     <BudgetErrorBoundary>
       <div className="container-fluid">
-        {/* Data Source Notification */}
-        <DataSourceNotification 
-          source={dataSource} 
-          className="mb-3" 
-          showDetails={process.env.NODE_ENV === 'development'}
-        />
         
-        {/* Page Heading */}
-        <div className="d-sm-flex align-items-center justify-content-between mb-4 animate__animated animate__fadeInDown">
-          <h1 className="h3 mb-0 text-gray-800">Budget Details</h1>
-          <div className="d-flex">
-            <button onClick={openDeleteModal} className="btn btn-primary btn-sm shadow-sm mr-2" style={{ backgroundColor: "#e74a3b", borderColor: "#e74a3b" }}>
-              <i className="fas fa-trash fa-sm mr-2"></i> Delete Budget
+        {/* Mobile Page Heading - Floating action buttons */}
+        <div className="block md:hidden mb-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-base font-bold text-gray-800">Budget Details</h1>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={openDeleteModal}
+                className="w-9 h-9 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+                aria-label="Delete budget"
+              >
+                <i className="fas fa-trash text-xs"></i>
+              </button>
+              <Link
+                to={`/budgets/${id}/edit`}
+                className="w-9 h-9 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+                aria-label="Edit budget"
+              >
+                <i className="fas fa-edit text-xs"></i>
+              </Link>
+              <Link
+                to="/budgets"
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                aria-label="Back to budgets"
+              >
+                <i className="fas fa-arrow-left text-xs"></i>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Budget Summary Card */}
+        <div className="block md:hidden mb-4">
+          <div className={`bg-gradient-to-br ${
+            budget.status === 'danger' ? 'from-rose-500 via-red-500 to-orange-500' :
+            budget.status === 'warning' ? 'from-amber-500 via-orange-500 to-yellow-500' :
+            'from-emerald-500 via-teal-500 to-cyan-500'
+          } rounded-2xl p-4 shadow-lg`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/20 text-white">
+                {budget.status === 'danger' ? 'Overspent' : budget.status === 'warning' ? 'Warning' : 'On Track'}
+              </span>
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                <i className={`fas fa-${iconClass} text-white text-sm`}></i>
+              </div>
+            </div>
+            <div className="text-white text-2xl font-bold mb-1">
+              {formatCurrency(budget.amount)}
+            </div>
+            <div className="text-white/70 text-xs mb-3">
+              {budget.category_name || budget.display_category || 'Uncategorized'} • {month} {year}
+            </div>
+            {/* Progress bar */}
+            <div className="w-full bg-white/20 rounded-full h-2 mb-2">
+              <div
+                className="bg-white h-2 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(budget.percentage_used || 0, 100)}%` }}
+              ></div>
+            </div>
+            <div className="flex items-center justify-between text-white/80 text-[10px]">
+              <span>{formatPercentage(budget.percentage_used || 0)} used</span>
+              <span>{formatCurrency(budget.remaining || 0)} left</span>
+            </div>
+          </div>
+
+          {/* Mobile Details Grid */}
+          <div className="grid grid-cols-3 gap-2 mt-3">
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center mb-2">
+                <i className="fas fa-coins text-blue-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Budget</p>
+              <p className="text-[11px] font-bold text-gray-800 truncate">{formatCurrency(budget.amount)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-rose-100 flex items-center justify-center mb-2">
+                <i className="fas fa-credit-card text-rose-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Spent</p>
+              <p className="text-[11px] font-bold text-gray-800 truncate">{formatCurrency(budget.spent)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center mb-2">
+                <i className="fas fa-piggy-bank text-emerald-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Left</p>
+              <p className={`text-[11px] font-bold truncate ${(budget.remaining || 0) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {formatCurrency(budget.remaining || 0)}
+              </p>
+            </div>
+          </div>
+
+          {/* Mobile Budget Info Card */}
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mt-2">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <i className="fas fa-calendar text-indigo-500 text-xs"></i>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Period</p>
+                <p className="text-xs font-bold text-gray-800 truncate">
+                  {formatDate(budget.start_date)} - {formatDate(budget.end_date)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Charts - Tabbed interface */}
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden mt-3">
+            {/* Tab header */}
+            <div className="flex bg-slate-50">
+              <button
+                onClick={() => setMobileActiveChart('allocation')}
+                className={`flex-1 py-3.5 text-sm font-semibold transition-all relative ${
+                  mobileActiveChart === 'allocation'
+                    ? 'text-indigo-600 bg-white'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <i className="fas fa-chart-pie mr-2 text-xs"></i>
+                Allocation
+                {mobileActiveChart === 'allocation' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+                )}
+              </button>
+              <button
+                onClick={() => setMobileActiveChart('distribution')}
+                className={`flex-1 py-3.5 text-sm font-semibold transition-all relative ${
+                  mobileActiveChart === 'distribution'
+                    ? 'text-indigo-600 bg-white'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <i className="fas fa-chart-bar mr-2 text-xs"></i>
+                Distribution
+                {mobileActiveChart === 'distribution' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+                )}
+              </button>
+            </div>
+
+            {/* Chart content */}
+            <div className="p-4">
+              {mobileActiveChart === 'allocation' ? (
+                highchartsLoaded && allocationChartOptions ? (
+                  <div className="animate__animated animate__fadeIn">
+                    <HighchartsReact
+                      highcharts={Highcharts}
+                      options={{
+                        ...allocationChartOptions,
+                        chart: {
+                          ...allocationChartOptions.chart,
+                          height: 250,
+                        },
+                        plotOptions: {
+                          ...allocationChartOptions.plotOptions,
+                          pie: {
+                            ...allocationChartOptions.plotOptions?.pie,
+                            dataLabels: { enabled: false },
+                            showInLegend: true,
+                            size: '70%',
+                            innerSize: '50%',
+                            center: ['50%', '40%'],
+                          },
+                        },
+                        legend: {
+                          enabled: true,
+                          layout: 'horizontal',
+                          align: 'center',
+                          verticalAlign: 'bottom',
+                          itemStyle: { 
+                            fontSize: '11px',
+                            fontWeight: 'normal',
+                            color: '#374151',
+                          },
+                          symbolRadius: 2,
+                          symbolHeight: 10,
+                          symbolWidth: 10,
+                          itemMarginTop: 8,
+                        },
+                        title: { text: null },
+                      }}
+                      ref={allocationChartRef}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                      <i className="fas fa-chart-pie text-gray-400 text-2xl"></i>
+                    </div>
+                    <p className="text-sm text-gray-500">No allocation data available</p>
+                  </div>
+                )
+              ) : (
+                highchartsLoaded && categoryDistributionOptions ? (
+                  <div className="animate__animated animate__fadeIn">
+                    <HighchartsReact
+                      highcharts={Highcharts}
+                      options={{
+                        ...categoryDistributionOptions,
+                        chart: {
+                          ...categoryDistributionOptions.chart,
+                          height: 280,
+                        },
+                        xAxis: {
+                          ...categoryDistributionOptions.xAxis,
+                          labels: {
+                            ...categoryDistributionOptions.xAxis?.labels,
+                            style: { fontSize: '10px', color: '#6b7280' },
+                          },
+                        },
+                        yAxis: {
+                          ...categoryDistributionOptions.yAxis,
+                          labels: {
+                            ...categoryDistributionOptions.yAxis?.labels,
+                            style: { fontSize: '10px', color: '#6b7280' },
+                          },
+                        },
+                      }}
+                      ref={categoryDistributionRef}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                      <i className="fas fa-chart-bar text-gray-400 text-2xl"></i>
+                    </div>
+                    <p className="text-sm text-gray-500">No distribution data available</p>
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Mobile Related Transactions */}
+          {relatedTransactions.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden mt-3">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h6 className="text-xs font-bold text-gray-800 flex items-center gap-2">
+                  <i className="fas fa-list text-indigo-500 text-[10px]"></i>
+                  Budget Expenses
+                  <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full text-[9px]">
+                    {relatedTransactions.length}
+                  </span>
+                </h6>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {relatedTransactions.slice(0, 5).map((tx) => (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center">
+                        <i className="fas fa-arrow-down text-xs text-rose-500"></i>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-800">{formatCurrency(tx.amount)}</p>
+                        <p className="text-[10px] text-gray-500">{formatDate(tx.date)}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-gray-500">
+                      {formatPercentage((tx.amount / budget.amount) * 100)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Related Budgets */}
+          {relatedBudgets.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden mt-3 mb-4">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h6 className="text-xs font-bold text-gray-800 flex items-center gap-2">
+                  <i className="fas fa-folder text-indigo-500 text-[10px]"></i>
+                  Related Budgets
+                  <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full text-[9px]">
+                    {relatedBudgets.length}
+                  </span>
+                </h6>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {relatedBudgets.slice(0, 3).map((b) => {
+                  const budgetMonthYear = getMonthYear(b);
+                  return (
+                    <Link
+                      key={b.id}
+                      to={`/budgets/${b.id}`}
+                      className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          b.status === 'danger' ? 'bg-rose-100' :
+                          b.status === 'warning' ? 'bg-amber-100' :
+                          'bg-emerald-100'
+                        }`}>
+                          <i className={`fas fa-${
+                            b.status === 'danger' ? 'exclamation-circle' :
+                            b.status === 'warning' ? 'exclamation-triangle' :
+                            'check-circle'
+                          } text-xs ${
+                            b.status === 'danger' ? 'text-rose-500' :
+                            b.status === 'warning' ? 'text-amber-500' :
+                            'text-emerald-500'
+                          }`}></i>
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-gray-800">{budgetMonthYear.month} {budgetMonthYear.year}</p>
+                          <p className="text-[10px] text-gray-500">{formatCurrency(b.amount)}</p>
+                        </div>
+                      </div>
+                      <i className="fas fa-chevron-right text-gray-400 text-[10px]"></i>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Budget ID */}
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mb-4">
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide mb-1">Budget ID</p>
+            <p className="text-[10px] text-gray-600 font-mono truncate">{budget.id}</p>
+          </div>
+        </div>
+
+        {/* Desktop Page Heading */}
+        <div className="d-none d-md-flex align-items-center justify-content-between mb-2 mb-md-4 animate__animated animate__fadeInDown">
+          <h1 className="h5 h-md-3 mb-1 mb-md-0 text-gray-800" style={{ fontSize: '1.1rem' }}>Budget Details</h1>
+          <div className="d-flex gap-2">
+            <button onClick={openDeleteModal} className="btn btn-sm btn-danger shadow-sm d-flex align-items-center" style={{ padding: '0.25rem 0.5rem' }}>
+              <i className="fas fa-trash fa-sm" style={{ fontSize: '0.7rem' }}></i>
+              <span className="d-none d-md-inline ml-2">Delete Budget</span>
             </button>
-            <Link to={`/budgets/${id}/edit`} className="btn btn-primary btn-sm mr-2 shadow-sm">
-              <i className="fas fa-edit fa-sm mr-2"></i> Edit Budget
+            <Link to={`/budgets/${id}/edit`} className="btn btn-sm btn-primary shadow-sm d-flex align-items-center" style={{ padding: '0.25rem 0.5rem' }}>
+              <i className="fas fa-edit fa-sm" style={{ fontSize: '0.7rem' }}></i>
+              <span className="d-none d-md-inline ml-2">Edit Budget</span>
             </Link>
-            <Link to="/budgets" className="btn btn-sm btn-secondary shadow-sm">
-              <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Budgets
+            <Link to="/budgets" className="btn btn-sm btn-secondary shadow-sm d-flex align-items-center" style={{ padding: '0.25rem 0.5rem' }}>
+              <i className="fas fa-arrow-left fa-sm" style={{ fontSize: '0.7rem' }}></i>
+              <span className="d-none d-md-inline ml-2">Back to Budgets</span>
             </Link>
           </div>
         </div>
 
-        {/* Budget Overview Row */}
-        <div className="row">
+        {/* Budget Overview Row - Desktop Only */}
+        <div className="row d-none d-md-flex">
           {/* Budget Amount Card */}
-          <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.1s" }}>
+          <div className="col-xl-4 col-md-6 col-12 mb-3 mb-md-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.1s" }}>
             <div className={`card border-left-${colorClass} shadow h-100 py-2`}>
-              <div className="card-body">
+              <div className="card-body p-3">
                 <div className="row no-gutters align-items-center">
                   <div className="col mr-2">
                     <div className={`text-xs font-weight-bold text-${colorClass} text-uppercase mb-1 d-flex align-items-center`}>
@@ -588,11 +955,11 @@ const BudgetDetails: FC = () => {
                         ></i>
                       </div>
                     </div>
-                    <div className="h5 mb-0 font-weight-bold text-gray-800">
+                    <div className="h5 h6-mobile mb-0 font-weight-bold text-gray-800">
                       {formatCurrency(budget.amount)}
                     </div>
                   </div>
-                  <div className="col-auto">
+                  <div className="col-auto d-none d-md-block">
                     <i className="fas fa-coins fa-2x text-gray-300"></i>
                   </div>
                 </div>
@@ -601,12 +968,12 @@ const BudgetDetails: FC = () => {
           </div>
 
           {/* Category Card */}
-          <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
+          <div className="col-xl-4 col-md-6 col-12 mb-3 mb-md-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.2s" }}>
             <div className="card border-left-info shadow h-100 py-2">
-              <div className="card-body">
+              <div className="card-body p-3">
                 <div className="row no-gutters align-items-center">
                   <div className="col mr-2">
-                    <div className="text-xs font-weight-bold text-info text-uppercase mb-1 d-flex align-items-center">
+                    <div className="text-xs font-weight-bold text-info text-uppercase mb-1 d-flex align-items-center" style={{ fontSize: '0.65rem' }}>
                       Category
                       <div className="ml-2 position-relative">
                         <i 
@@ -616,7 +983,7 @@ const BudgetDetails: FC = () => {
                         ></i>
                       </div>
                     </div>
-                    <div className="h5 mb-0 font-weight-bold text-gray-800">
+                    <div className="h5 h6-mobile mb-0 font-weight-bold text-gray-800">
                       {budget.category_name || budget.display_category || (
                         <span className="text-warning">
                           <i className="fas fa-exclamation-triangle mr-1"></i>
@@ -625,7 +992,7 @@ const BudgetDetails: FC = () => {
                       )}
                     </div>
                   </div>
-                  <div className="col-auto">
+                  <div className="col-auto d-none d-md-block">
                     <i className="fas fa-tag fa-2x text-gray-300"></i>
                   </div>
                 </div>
@@ -634,12 +1001,12 @@ const BudgetDetails: FC = () => {
           </div>
 
           {/* Period Card */}
-          <div className="col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.3s" }}>
+          <div className="col-xl-4 col-md-6 col-12 mb-3 mb-md-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.3s" }}>
             <div className="card border-left-primary shadow h-100 py-2">
-              <div className="card-body">
+              <div className="card-body p-3">
                 <div className="row no-gutters align-items-center">
                   <div className="col mr-2">
-                    <div className="text-xs font-weight-bold text-primary text-uppercase mb-1 d-flex align-items-center">
+                    <div className="text-xs font-weight-bold text-primary text-uppercase mb-1 d-flex align-items-center" style={{ fontSize: '0.65rem' }}>
                       Budget Period
                       <div className="ml-2 position-relative">
                         <i 
@@ -649,11 +1016,11 @@ const BudgetDetails: FC = () => {
                         ></i>
                       </div>
                     </div>
-                    <div className="h5 mb-0 font-weight-bold text-gray-800">
+                    <div className="h5 h6-mobile mb-0 font-weight-bold text-gray-800">
                       {month} {year}
                     </div>
                   </div>
-                  <div className="col-auto">
+                  <div className="col-auto d-none d-md-block">
                     <i className="fas fa-calendar fa-2x text-gray-300"></i>
                   </div>
                 </div>
@@ -662,12 +1029,12 @@ const BudgetDetails: FC = () => {
           </div>
         </div>
 
-        <div className="row">
+        <div className="row d-none d-md-flex">
           {/* Budget Details Card */}
-          <div className="col-lg-8 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.4s" }}>
+          <div className="col-lg-8 mb-3 mb-md-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.4s" }}>
             <div className="card shadow">
-              <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
+              <div className="card-header py-2 d-flex flex-row align-items-center justify-content-between">
+                <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center" style={{ fontSize: '0.875rem' }}>
                   Budget Details
                   <div className="ml-2 position-relative">
                     <i 
@@ -679,7 +1046,7 @@ const BudgetDetails: FC = () => {
                 </h6>
                 <div className={`badge badge-${colorClass}`}>{budget.status === 'danger' ? 'Overspent' : budget.status === 'warning' ? 'Warning' : 'On Track'}</div>
               </div>
-              <div className="card-body">
+              <div className="card-body p-3">
                 <div className="mb-4">
                   <div className="mb-2">
                     <h4 className="small font-weight-bold">Budget Name</h4>
@@ -898,11 +1265,11 @@ const BudgetDetails: FC = () => {
           </div>
 
           {/* Budget Analysis Sidebar */}
-          <div className="col-lg-4 mb-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.5s" }}>
+          <div className="col-lg-4 mb-3 mb-md-4 animate__animated animate__fadeIn" style={{ animationDelay: "0.5s" }}>
             {/* Budget Allocation Chart */}
-            <div className="card shadow mb-4">
-              <div className="card-header py-3">
-                <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
+            <div className="card shadow mb-3 mb-md-4">
+              <div className="card-header py-2">
+                <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center" style={{ fontSize: '0.875rem' }}>
                   Budget Allocation
                   <div className="ml-2 position-relative">
                     <i 
@@ -913,7 +1280,7 @@ const BudgetDetails: FC = () => {
                   </div>
                 </h6>
               </div>
-              <div className="card-body">
+              <div className="card-body p-3">
                 {highchartsLoaded && allocationChartOptions ? (
                   <div className="chart-pie">
                     <HighchartsReact
@@ -934,9 +1301,9 @@ const BudgetDetails: FC = () => {
             </div>
 
             {/* Budget Info Card */}
-            <div className="card shadow mb-4">
-              <div className="card-header py-3">
-                <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center">
+            <div className="card shadow mb-3 mb-md-4">
+              <div className="card-header py-2">
+                <h6 className="m-0 font-weight-bold text-primary d-flex align-items-center" style={{ fontSize: '0.875rem' }}>
                   Budget Info
                   <div className="ml-2 position-relative">
                     <i 
@@ -947,7 +1314,7 @@ const BudgetDetails: FC = () => {
                   </div>
                 </h6>
               </div>
-              <div className="card-body">
+              <div className="card-body p-3">
                 <div className="p-3 bg-light rounded mb-3">
                   <div className="small text-gray-500">Budget ID</div>
                   <div className="font-weight-bold">{budget.id}</div>

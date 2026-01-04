@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabaseAdmin } from "../../../utils/supabaseClient";
 import { useToast } from "../../../utils/ToastContext";
-import { Budget, Category, BudgetStats, UserProfile, SupabaseBudget, BudgetFilters } from "./types";
+import { Budget, Category, BudgetStats, BudgetUser, SupabaseBudget, BudgetFilters } from "./types";
 import { RealtimeChannel } from "@supabase/supabase-js";
 
 export const useBudgetData = () => {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [userProfiles, setUserProfiles] = useState<{[key: string]: UserProfile}>({});
+  const [users, setUsers] = useState<BudgetUser[]>([]);
   const [stats, setStats] = useState<BudgetStats>({
     totalBudgets: 0,
     activeBudgets: 0,
@@ -22,6 +22,35 @@ export const useBudgetData = () => {
   const [totalItems, setTotalItems] = useState<number>(0);
   const [subscription, setSubscription] = useState<any>(null);
   const { showSuccessToast, showErrorToast } = useToast();
+
+  // Fetch users from Supabase (matching transaction pattern)
+  const fetchUsers = useCallback(async (): Promise<BudgetUser[]> => {
+    try {
+      if (!supabaseAdmin) {
+        throw new Error('Admin client not available');
+      }
+      
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000
+      });
+
+      if (error) throw error;
+
+      const formattedUsers = (data?.users || []).map((user: any) => ({
+        id: user.id,
+        email: user.email || '',
+        user_metadata: user.user_metadata || {}
+      }));
+
+      setUsers(formattedUsers);
+      return formattedUsers;
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      showErrorToast("Failed to load users");
+      return [];
+    }
+  }, [showErrorToast]);
 
   // Fetch categories from Supabase
   const fetchCategories = useCallback(async () => {
@@ -54,26 +83,8 @@ export const useBudgetData = () => {
         throw new Error('Admin client not available');
       }
       
-      // Fetch all user profiles for displaying names
-      const { data: profilesData, error: profilesError } = await supabaseAdmin
-        .from('profiles')
-        .select('id, full_name, email');
-      
-      if (profilesError) {
-        throw profilesError;
-      }
-      
-      // Create a map of user profiles by ID for quick access
-      const profilesMap: {[key: string]: UserProfile} = {};
-      profilesData?.forEach(profile => {
-        profilesMap[profile.id] = {
-          id: profile.id,
-          full_name: profile.full_name || 'Unknown User',
-          email: profile.email || 'No Email'
-        };
-      });
-      
-      setUserProfiles(profilesMap);
+      // Fetch users first and get the returned data directly
+      const fetchedUsers = await fetchUsers();
       
       // Determine valid sort field
       let validSortField = "created_at";
@@ -152,35 +163,41 @@ export const useBudgetData = () => {
       }
       
       if (filters.searchTerm) {
-        // Search in user profiles and categories
-        const { data: matchingProfiles, error: searchProfileError } = await supabaseAdmin
-          .from('profiles')
+        // Search in multiple places: user profiles, categories, and budget names
+        const searchTerm = filters.searchTerm.toLowerCase().trim();
+        
+        // Find matching user IDs from fetchedUsers array
+        const matchingUserIds: string[] = [];
+        fetchedUsers.forEach(user => {
+          const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || '';
+          if (
+            fullName.toLowerCase().includes(searchTerm) ||
+            (user.email && user.email.toLowerCase().includes(searchTerm))
+          ) {
+            matchingUserIds.push(user.id);
+          }
+        });
+        
+        // Find matching categories
+        const { data: matchingCategories, error: categorySearchError } = await supabaseAdmin
+          .from('expense_categories')
           .select('id')
-          .or(`full_name.ilike.%${filters.searchTerm}%,email.ilike.%${filters.searchTerm}%`);
+          .ilike('category_name', `%${searchTerm}%`);
           
-        if (searchProfileError) {
-          throw searchProfileError;
+        if (categorySearchError) {
+          throw categorySearchError;
         }
         
-        if (matchingProfiles && matchingProfiles.length > 0) {
-          const userIds = matchingProfiles.map(p => p.id);
-          dataQuery = dataQuery.in('user_id', userIds);
-        } else {
-          // Try to find categories that match the search term
-          const { data: matchingCategories, error: categorySearchError } = await supabaseAdmin
-            .from('expense_categories')
-            .select('id')
-            .ilike('category_name', `%${filters.searchTerm}%`);
-            
-          if (categorySearchError) {
-            throw categorySearchError;
-          }
-      
-          if (matchingCategories && matchingCategories.length > 0) {
-            const categoryIds = matchingCategories.map(c => c.id);
-            dataQuery = dataQuery.in('category_id', categoryIds);
+        const matchingCategoryIds = matchingCategories?.map(c => c.id) || [];
+        
+        // Apply search filter using OR conditions
+        if (matchingUserIds.length > 0 || matchingCategoryIds.length > 0) {
+          if (matchingUserIds.length > 0) {
+            dataQuery = dataQuery.in('user_id', matchingUserIds);
+          } else if (matchingCategoryIds.length > 0) {
+            dataQuery = dataQuery.in('category_id', matchingCategoryIds);
           } else {
-            // No matches, return empty result
+            // No matches found, return empty result
             setBudgets([]);
             setStats({
               totalBudgets: 0,
@@ -196,6 +213,22 @@ export const useBudgetData = () => {
             setLoading(false);
             return;
           }
+        } else {
+          // No matches found, return empty result
+          setBudgets([]);
+          setStats({
+            totalBudgets: 0,
+            activeBudgets: 0,
+            budgetCategories: 0,
+            usersWithBudgets: 0,
+            budgetsByCategory: {},
+            budgetsByStatus: { active: 0, completed: 0, archived: 0 },
+            budgetsByUser: {}
+          });
+          setTotalItems(0);
+          setTotalPages(1);
+          setLoading(false);
+          return;
         }
       }
       
@@ -226,7 +259,7 @@ export const useBudgetData = () => {
       // Fetch all related transactions to calculate spent amounts
       const { data: transactions, error: transactionsError } = await supabaseAdmin
         .from('transactions')
-        .select('amount, category_id, type, date')
+        .select('amount, expense_category_id, type, date')
         .eq('type', 'expense');
         
       if (transactionsError) {
@@ -235,11 +268,7 @@ export const useBudgetData = () => {
       
       for (const budget of budgetData || []) {
         const categoryName = budget.expense_categories?.category_name || 'Uncategorized';
-        const userProfile = profilesMap[budget.user_id] || {
-          id: budget.user_id,
-          full_name: 'Unknown User',
-          email: 'No Email'
-        };
+        const user = fetchedUsers.find(u => u.id === budget.user_id);
         
         // Calculate spent amount from transactions
         const startDate = new Date(budget.start_date);
@@ -247,7 +276,7 @@ export const useBudgetData = () => {
         
         // Filter transactions that match this budget's category and date range
         const budgetTransactions = transactions?.filter(tx => 
-          tx.category_id === budget.category_id && 
+          tx.expense_category_id === budget.category_id && 
           tx.type === 'expense' &&
           new Date(tx.date) >= startDate && 
           new Date(tx.date) <= endDate
@@ -274,7 +303,7 @@ export const useBudgetData = () => {
         const month = new Date(budget.start_date).toLocaleString('default', { month: 'long' });
         const year = new Date(budget.start_date).getFullYear();
         
-        // Create processed budget object
+        // Create processed budget object (using transaction pattern for user data)
         const processedBudget: Budget = {
           id: budget.id,
           name: `${categoryName} Budget`,
@@ -285,8 +314,9 @@ export const useBudgetData = () => {
           category: categoryName,
           category_id: budget.category_id,
           user_id: budget.user_id,
-          user_name: userProfile.full_name,
-          user_email: userProfile.email,
+          user_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Unknown User',
+          user_email: user?.email || '',
+          user_avatar: user?.user_metadata?.avatar_url || '',
           status,
           month,
           year,
@@ -306,10 +336,11 @@ export const useBudgetData = () => {
         
         statusStats[status] += 1;
         
-        if (userProfile.full_name in userStats) {
-          userStats[userProfile.full_name] += 1;
+        const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Unknown User';
+        if (userName in userStats) {
+          userStats[userName] += 1;
         } else {
-          userStats[userProfile.full_name] = 1;
+          userStats[userName] = 1;
         }
       }
       
@@ -340,6 +371,7 @@ export const useBudgetData = () => {
   const refreshBudgetData = useCallback(async (filters: BudgetFilters) => {
     setLoading(true);
     try {
+      await fetchUsers();
       await fetchBudgets(filters);
       await fetchCategories();
       showSuccessToast("Budget data refreshed successfully");
@@ -348,7 +380,7 @@ export const useBudgetData = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchBudgets, fetchCategories, showSuccessToast, showErrorToast]);
+  }, [fetchUsers, fetchBudgets, fetchCategories, showSuccessToast, showErrorToast]);
 
   // Handle budget status change
   const changeBudgetStatus = useCallback(async (budget: Budget, newStatus: "active" | "completed" | "archived") => {
@@ -439,13 +471,14 @@ export const useBudgetData = () => {
   return {
     budgets,
     categories,
-    userProfiles,
+    users,
     stats,
     loading,
     totalPages,
     totalItems,
     fetchBudgets,
     fetchCategories,
+    fetchUsers,
     refreshBudgetData,
     changeBudgetStatus
   };

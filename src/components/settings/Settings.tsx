@@ -1,7 +1,6 @@
 import React, { useState, useEffect, FC } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../utils/AuthContext";
-import { useCurrency } from "../../utils/CurrencyContext";
 import { getCurrentUserData } from "../../data/mockData";
 import { UserOnboardingService } from "../../services/userOnboardingService";
 import { supabase } from "../../utils/supabaseClient";
@@ -24,13 +23,32 @@ import TabNavigation from './components/shared/TabNavigation';
 // Import settings components
 import ProfileSettings from './components/ProfileSettings';
 import PreferencesSettings from './components/PreferencesSettings';
-import NotificationSettings from './components/NotificationSettings';
 import AccountsSettings from './components/accounts/AccountsSettings';
+
+// Mobile Tab Button Component
+interface MobileTabButtonProps {
+  tab: SettingsTab;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+const MobileTabButton: FC<MobileTabButtonProps> = ({ tab, isActive, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+      isActive
+        ? 'bg-indigo-500 text-white shadow-md'
+        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+    }`}
+  >
+    <i className={`fas ${tab.icon} text-[10px]`}></i>
+    {tab.label}
+  </button>
+);
 
 const Settings: FC = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { setCurrency: setGlobalCurrency } = useCurrency();
   const [activeTab, setActiveTab] = useState<string>("profile");
   const [loading, setLoading] = useState<boolean>(true);
   const [successMessage, setSuccessMessage] = useState<string>("");
@@ -54,7 +72,6 @@ const Settings: FC = () => {
     { id: "profile", label: "Profile", icon: "fa-user" },
     { id: "accounts", label: "Accounts", icon: "fa-wallet" },
     { id: "preferences", label: "Preferences", icon: "fa-sliders-h" },
-    { id: "notifications", label: "Notifications", icon: "fa-bell" },
   ];
 
   // Fetch accounts from Supabase
@@ -164,10 +181,6 @@ const Settings: FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-
-    // Currency change removed - always PHP
-    // Global currency context is now fixed to PHP
-
     setProfile(prev => ({ ...prev, [name]: value }));
   };
 
@@ -206,32 +219,132 @@ const Settings: FC = () => {
 
   // Render loading state
   if (loading) {
-    return <LoadingState />;
+    return (
+      <div className="container-fluid">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">Loading your settings...</p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="hidden md:block">
+          <LoadingState />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="container-fluid animate__animated animate__fadeIn animate__faster">
-      <h1 className="h3 mb-4 text-gray-800">
+      {/* Mobile Page Heading */}
+      <div className="block md:hidden mb-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-bold text-gray-800">
+            <i className="fas fa-cog text-indigo-500 mr-2"></i>
+            Settings
+          </h1>
+        </div>
+      </div>
+
+      {/* Desktop Page Heading */}
+      <h1 className="h3 mb-4 text-gray-800 hidden md:block">
         <i className="fas fa-cog mr-2"></i>
         Settings
       </h1>
 
-      {/* Alert Messages */}
+      {/* Mobile Alert Messages */}
       {successMessage && (
-        <div className="alert alert-success animate__animated animate__fadeIn" role="alert">
+        <div className="block md:hidden mb-3">
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex items-center gap-2 animate__animated animate__fadeIn">
+            <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+              <i className="fas fa-check text-emerald-500 text-[10px]"></i>
+            </div>
+            <span className="text-xs text-emerald-700">{successMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="block md:hidden mb-3">
+          <div className="bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center gap-2 animate__animated animate__fadeIn">
+            <div className="w-6 h-6 rounded-full bg-rose-100 flex items-center justify-center flex-shrink-0">
+              <i className="fas fa-exclamation text-rose-500 text-[10px]"></i>
+            </div>
+            <span className="text-xs text-rose-700">{errorMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Desktop Alert Messages */}
+      {successMessage && (
+        <div className="alert alert-success animate__animated animate__fadeIn hidden md:block" role="alert">
           <i className="fas fa-check-circle mr-2"></i>
           {successMessage}
         </div>
       )}
 
       {errorMessage && (
-        <div className="alert alert-danger animate__animated animate__fadeIn" role="alert">
+        <div className="alert alert-danger animate__animated animate__fadeIn hidden md:block" role="alert">
           <i className="fas fa-exclamation-circle mr-2"></i>
           {errorMessage}
         </div>
       )}
 
-      <div className="row">
+      {/* Mobile Tab Navigation - Horizontal scrollable pills */}
+      <div className="block md:hidden mb-4">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          {tabs.map((tab) => (
+            <MobileTabButton
+              key={tab.id}
+              tab={tab}
+              isActive={activeTab === tab.id}
+              onClick={() => handleTabChange(tab.id)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile Settings Content */}
+      <div className="block md:hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div>
+            {/* Profile Settings */}
+            {activeTab === "profile" && (
+              <ProfileSettings 
+                profile={profile} 
+                onInputChange={handleInputChange}
+                setSuccessMessage={setSuccessMessage}
+                setErrorMessage={setErrorMessage}
+              />
+            )}
+            
+            {/* Accounts Settings */}
+            {activeTab === "accounts" && (
+              <AccountsSettings 
+                profile={profile}
+                setProfile={setProfile}
+                setSuccessMessage={setSuccessMessage}
+                setErrorMessage={setErrorMessage}
+              />
+            )}
+
+            {/* Preferences Settings */}
+            {activeTab === "preferences" && (
+              <PreferencesSettings profile={profile} onInputChange={handleInputChange} />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Layout - Hidden on mobile, visible on md and up */}
+      <div className="row" style={{ display: 'none' }} id="desktop-settings-layout">
         {/* Settings Navigation */}
         <div className="col-lg-3 mb-4">
           <div className="card shadow border-0">
@@ -261,56 +374,12 @@ const Settings: FC = () => {
               <div>
                 {/* Profile Settings */}
                 {activeTab === "profile" && (
-                  <div className="settings-section animate__animated animate__fadeIn animate__faster">
-                    <h2 className="h5 mb-4 text-gray-700">Profile Settings</h2>
-                    
-                    <div className="mb-4 text-center">
-                      <div className="profile-picture-container mx-auto">
-                        <img
-                          src={profile.profilePicture || "https://via.placeholder.com/150"}
-                          alt="Profile"
-                          className="profile-picture rounded-circle img-thumbnail"
-                        />
-                        <div className="profile-picture-overlay">
-                          <button type="button" className="btn btn-sm btn-primary">
-                            <i className="fas fa-camera mr-1"></i> Change
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="form-group row">
-                      <label htmlFor="name" className="col-sm-3 col-form-label">Full Name</label>
-                      <div className="col-sm-9">
-                        <input
-                          type="text"
-                          className="form-control"
-                          id="name"
-                          name="name"
-                          value={profile.name}
-                          onChange={handleInputChange}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="form-group row">
-                      <label htmlFor="email" className="col-sm-3 col-form-label">Email Address</label>
-                      <div className="col-sm-9">
-                        <input
-                          type="email"
-                          className="form-control"
-                          id="email"
-                          name="email"
-                          value={profile.email}
-                          onChange={handleInputChange}
-                          disabled
-                        />
-                        <small className="form-text text-muted">
-                          Contact support to change your email address
-                        </small>
-                      </div>
-                    </div>
-                  </div>
+                  <ProfileSettings 
+                    profile={profile} 
+                    onInputChange={handleInputChange}
+                    setSuccessMessage={setSuccessMessage}
+                    setErrorMessage={setErrorMessage}
+                  />
                 )}
                 
                 {/* Accounts Settings */}
@@ -328,10 +397,6 @@ const Settings: FC = () => {
                   <PreferencesSettings profile={profile} onInputChange={handleInputChange} />
                 )}
 
-                {/* Notification Settings */}
-                {activeTab === "notifications" && (
-                  <NotificationSettings profile={profile} onCheckboxChange={handleCheckboxChange} />
-                )}
               </div>
             </div>
           </div>

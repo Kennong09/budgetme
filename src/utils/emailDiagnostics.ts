@@ -6,6 +6,7 @@
 
 import { EmailMonitoringService } from '../services/emailMonitoringService';
 import { EmailDeliveryConfigService } from '../services/emailDeliveryConfigService';
+import { env } from './env';
 
 export interface EmailDiagnosticsReport {
   config: any;
@@ -130,10 +131,10 @@ export class EmailDiagnostics {
   static testConfiguration(): { valid: boolean; issues: string[] } {
     const issues: string[] = [];
     
-    // Check if REACT_APP_SITE_URL is set
-    const siteUrl = process.env.REACT_APP_SITE_URL;
-    if (!siteUrl) {
-      issues.push('REACT_APP_SITE_URL environment variable is not set');
+    // Check if SITE_URL is set
+    const siteUrl = env.SITE_URL;
+    if (!siteUrl || siteUrl === window.location.origin) {
+      issues.push('SITE_URL environment variable is not explicitly set (using window.location.origin as fallback)');
     }
 
     // Check email delivery config

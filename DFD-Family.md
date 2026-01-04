@@ -1,7 +1,34 @@
 # DFD - Family Management Module (5.0): BudgetMe Financial Management System
 
 ## Overview
-This Data Flow Diagram details the Family Management Module (Process 5.0) located at `src/components/family/`. This module enables collaborative family financial management with shared budgets, goals, and transaction visibility while maintaining privacy controls and permission management.
+
+The Family Management Module (Process 5.0) enables collaborative household financial management through shared budgets, goals, and transaction visibility, implemented in `src/components/family/`. This module provides a secure framework for family groups to coordinate finances while maintaining individual privacy controls and role-based permission management.
+
+### Core Responsibilities
+
+- **Family Group Management**: Create and manage family groups with customizable settings and member limits (max 8)
+- **Invitation System**: Email-based invitations with unique codes and expiration handling
+- **Join Request Workflow**: User-initiated join requests with admin approval process
+- **Role-Based Permissions**: Hierarchical roles (owner, admin, member) with granular permission control via JSONB
+- **Shared Resources**: Collaborative budgets, shared goals, and family transaction visibility
+- **Privacy Controls**: Member-level privacy settings for personal transaction visibility
+
+### Key Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `families` | Family group definitions with settings, invite codes, and member limits |
+| `family_members` | Membership records with roles, permissions JSONB, and status tracking |
+| `family_invitations` | Pending email invitations with expiration and status workflow |
+| `family_join_requests` | User-initiated requests with approval workflow and review tracking |
+
+### Permission Model
+
+```
+Owner: Full control (create/delete family, manage all members)
+Admin: Member management, shared resource administration
+Member: Access to shared resources based on permissions JSONB
+```
 
 ## Family Management Module Data Flow Diagram
 
@@ -45,20 +72,20 @@ graph TB
         REPORTS_MOD[6.0 Reports Module]
     end
     
-    subgraph "Data Stores"
-        D1[(D1<br/>Family Groups)]
-        D2[(D2<br/>Family Members)]
-        D3[(D3<br/>Invitations)]
-        D4[(D4<br/>Permissions)]
-        D5[(D5<br/>Family Settings)]
-        D6[(D6<br/>Shared Resources)]
+    subgraph "Data Stores (Supabase)"
+        D1[(families)]
+        D2[(family_members<br/>with permissions)]
+        D3[(family_invitations)]
+        D4[(family_join_requests)]
+        D5[(budgets<br/>goals<br/>shared resources)]
+        D6[(transactions)]
     end
     
     %% Family Creation Flow
     FAMILY_CREATOR -->|Create Family Request| CREATE_FAM
     AUTH -->|User Context| CREATE_FAM
     CREATE_FAM -->|Store Family Group| D1
-    CREATE_FAM -->|Set Creator Permissions| D4
+    CREATE_FAM -->|Set Creator as Owner| D2
     CREATE_FAM -->|Family Created| FAMILY_CREATOR
     
     %% Invitation Process
@@ -69,41 +96,41 @@ graph TB
     INVITED_USERS -->|Accept Invitation| JOIN
     JOIN -->|Validate Invite Code| D3
     JOIN -->|Add Family Member| D2
-    JOIN -->|Set Member Permissions| D4
+    JOIN -->|Process Join Request| D4
     JOIN -->|Join Confirmation| FAMILY_MEMBERS
     
     %% Permission Management
     FAMILY_CREATOR -->|Manage Permissions| PERMISSIONS
-    PERMISSIONS -->|Update Permissions| D4
+    PERMISSIONS -->|Update Member Permissions| D2
     PERMISSIONS -->|Apply Access Controls| D1
     PERMISSIONS -->|Permission Changes| FAMILY_MEMBERS
     
     %% Shared Features
     FAMILY_MEMBERS -->|Access Shared Budgets| SHARED_BUDGET
-    SHARED_BUDGET -->|Budget Permissions| D4
+    SHARED_BUDGET -->|Check Member Permissions| D2
     SHARED_BUDGET -->|Coordinate with Budget Module| BUDGET
-    BUDGET -->|Shared Budget Data| D6
+    BUDGET -->|Shared Budget Data| D5
     
     FAMILY_MEMBERS -->|Access Shared Goals| SHARED_GOALS
-    SHARED_GOALS -->|Goal Permissions| D4
+    SHARED_GOALS -->|Check Member Permissions| D2
     SHARED_GOALS -->|Coordinate with Goals Module| GOALS
-    GOALS -->|Shared Goal Data| D6
+    GOALS -->|Shared Goal Data| D5
     
     FAMILY_MEMBERS -->|View Shared Transactions| SHARED_TRANS
-    SHARED_TRANS -->|Transaction Permissions| D4
+    SHARED_TRANS -->|Check Member Permissions| D2
     SHARED_TRANS -->|Coordinate with Transaction Module| TRANS
     TRANS -->|Shared Transaction Data| D6
     
     %% Family Administration
     FAMILY_CREATOR -->|Administer Family| ADMIN
     ADMIN -->|Manage Members| D2
-    ADMIN -->|Update Settings| D5
+    ADMIN -->|Update Family Settings| D1
     ADMIN -->|Generate Reports| REPORTS
     REPORTS -->|Family Analytics| REPORTS_MOD
     
     %% Privacy Controls
     FAMILY_MEMBERS -->|Set Privacy Preferences| PRIVACY
-    PRIVACY -->|Update Privacy Settings| D5
+    PRIVACY -->|Update Privacy in Members| D2
     PRIVACY -->|Apply Data Filters| D6
     
     style CREATE_FAM fill:#e8f5e8,stroke:#4caf50,stroke-width:2px
@@ -190,43 +217,127 @@ graph TB
 - **Processing**: Aggregate family data, apply privacy controls, generate insights
 - **Outputs**: Family reports, aggregated analytics, privacy-compliant summaries
 
-## Data Store Specifications
+## Data Store Specifications (Actual Supabase Tables)
 
-### D1 - Family Groups
-- Family group records and metadata
-- Group settings and configurations
-- Administrative information
-- Group status and activity tracking
+### D1 - families
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | uuid_generate_v4() | Primary key |
+| `family_name` | varchar | NO | - | Family group name |
+| `description` | text | YES | - | Family description |
+| `currency_pref` | varchar | NO | 'PHP' | Currency preference |
+| `is_public` | boolean | YES | false | Public visibility |
+| `max_members` | integer | YES | 10 | Maximum member count |
+| `allow_goal_sharing` | boolean | YES | true | Enable goal sharing |
+| `allow_budget_sharing` | boolean | YES | true | Enable budget sharing |
+| `created_by` | uuid | NO | - | FK to auth.users (creator/owner) |
+| `status` | text | NO | 'active' | Status (active/inactive) |
+| `created_at` | timestamptz | YES | now() | Timestamp created |
+| `updated_at` | timestamptz | YES | now() | Timestamp updated |
 
-### D2 - Family Members
-- Member profile information
-- Membership status and roles
-- Join dates and activity history
-- Member preferences and settings
+### D2 - family_members
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | uuid_generate_v4() | Primary key |
+| `family_id` | uuid | NO | - | FK to families |
+| `user_id` | uuid | NO | - | FK to auth.users |
+| `role` | varchar | NO | - | Role (admin/member/viewer) |
+| `status` | varchar | NO | - | Status (active/pending/inactive/removed) |
+| `can_create_goals` | boolean | YES | false | Permission: create goals |
+| `can_view_budgets` | boolean | YES | true | Permission: view budgets |
+| `can_contribute_goals` | boolean | YES | true | Permission: contribute to goals |
+| `invited_by` | uuid | YES | - | FK to auth.users (inviter) |
+| `invited_at` | timestamptz | YES | - | Invitation timestamp |
+| `joined_at` | timestamptz | YES | - | Join timestamp |
+| `created_at` | timestamptz | YES | now() | Timestamp created |
+| `updated_at` | timestamptz | YES | now() | Timestamp updated |
 
-### D3 - Invitations
-- Invitation records and codes
-- Invitation status and expiration
-- Delivery tracking and responses
-- Invitation history and analytics
+### D3 - family_invitations
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | uuid_generate_v4() | Primary key |
+| `family_id` | uuid | NO | - | FK to families |
+| `invited_by` | uuid | NO | - | FK to auth.users (inviter) |
+| `email` | text | NO | - | Invited user's email |
+| `role` | varchar | NO | 'member' | Assigned role on acceptance |
+| `invitation_token` | text | NO | - | Unique invitation token (UNIQUE) |
+| `message` | text | YES | - | Optional invitation message |
+| `status` | varchar | NO | 'pending' | Status (pending/accepted/declined/expired) |
+| `expires_at` | timestamptz | YES | now() + 7 days | Expiration timestamp |
+| `responded_at` | timestamptz | YES | - | Response timestamp |
+| `created_at` | timestamptz | YES | now() | Timestamp created |
 
-### D4 - Permissions
-- Role-based permission definitions
-- Member access levels
-- Feature-specific permissions
-- Permission change history
+### D4 - family_join_requests
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | uuid_generate_v4() | Primary key |
+| `family_id` | uuid | NO | - | FK to families |
+| `user_id` | uuid | NO | - | FK to auth.users (requester) |
+| `message` | text | YES | - | Optional request message |
+| `status` | varchar | NO | 'pending' | Status (pending/approved/rejected) |
+| `reviewed_by` | uuid | YES | - | FK to auth.users (reviewer) |
+| `reviewed_at` | timestamptz | YES | - | Review timestamp |
+| `review_message` | text | YES | - | Review response message |
+| `created_at` | timestamptz | YES | now() | Timestamp created |
 
-### D5 - Family Settings
-- Family-wide configuration settings
-- Privacy and sharing preferences
-- Communication settings
-- Notification preferences
+### D5 - budgets (shared resources)
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | uuid_generate_v4() | Primary key |
+| `user_id` | uuid | NO | - | FK to auth.users |
+| `budget_name` | text | NO | - | Budget name |
+| `description` | text | YES | - | Budget description |
+| `amount` | numeric | NO | - | Budget amount |
+| `spent` | numeric | NO | 0 | Amount spent |
+| `currency` | text | NO | 'PHP' | Currency code |
+| `period` | text | NO | - | Budget period type |
+| `start_date` | date | NO | - | Period start date |
+| `end_date` | date | NO | - | Period end date |
+| `category_id` | uuid | YES | - | FK to expense_categories |
+| `category_name` | text | YES | - | Category name cache |
+| `status` | text | YES | 'active' | Budget status |
+| `is_recurring` | boolean | YES | false | Recurring budget flag |
+| `recurring_pattern` | jsonb | YES | '{}' | Recurring pattern config |
+| `alert_threshold` | numeric | YES | 0.80 | Alert threshold percentage |
+| `alert_enabled` | boolean | YES | true | Enable budget alerts |
+| `last_alert_sent` | timestamptz | YES | - | Last alert timestamp |
+| `rollover_enabled` | boolean | YES | false | Enable rollover |
+| `rollover_amount` | numeric | YES | 0 | Rollover amount |
+| `created_at` | timestamptz | NO | now() | Timestamp created |
+| `updated_at` | timestamptz | NO | now() | Timestamp updated |
 
-### D6 - Shared Resources
-- Shared budget data
-- Shared goal information
-- Shared transaction summaries
-- Collaborative planning data
+### D6 - goals (shared family goals)
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | uuid_generate_v4() | Primary key |
+| `user_id` | uuid | NO | - | FK to auth.users |
+| `goal_name` | text | NO | - | Name of the goal |
+| `target_amount` | numeric | NO | - | Target amount to save |
+| `current_amount` | numeric | NO | 0 | Current saved amount |
+| `family_id` | uuid | YES | - | FK to families (for shared goals) |
+| `is_family_goal` | boolean | YES | false | Whether this is a family goal |
+| `is_public` | boolean | YES | false | Public visibility flag |
+| `status` | text | NO | 'in_progress' | Status (in_progress/completed/archived) |
+| `milestones` | jsonb | YES | '[]' | Milestone tracking data |
+| `created_at` | timestamptz | NO | now() | Timestamp created |
+| `updated_at` | timestamptz | NO | now() | Timestamp updated |
+
+### D7 - transactions (family visibility)
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| `id` | uuid | NO | uuid_generate_v4() | Primary key |
+| `user_id` | uuid | NO | - | FK to auth.users |
+| `date` | date | NO | CURRENT_DATE | Transaction date |
+| `amount` | numeric | NO | - | Transaction amount |
+| `description` | text | YES | - | Transaction description |
+| `type` | text | NO | - | Transaction type |
+| `account_id` | uuid | YES | - | FK to accounts |
+| `goal_id` | uuid | YES | - | FK to goals (for contributions) |
+| `status` | text | YES | 'completed' | Transaction status |
+| `created_at` | timestamptz | NO | now() | Timestamp created |
+| `updated_at` | timestamptz | NO | now() | Timestamp updated |
+
+**Note**: Transaction visibility within families is controlled through `family_members` permissions and the `goals.family_id` relationship for contribution tracking.
 
 ## Integration Points
 

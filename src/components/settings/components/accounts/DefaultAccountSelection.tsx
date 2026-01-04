@@ -1,4 +1,5 @@
 import React, { FC, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Account } from '../../types';
 import { getCurrencySymbol } from '../../utils/currencyHelpers';
 
@@ -49,6 +50,17 @@ const DefaultAccountSelection: FC<DefaultAccountSelectionProps> = ({
     })}`;
   };
 
+  // Helper function to format balance for mobile (shorter)
+  const formatBalanceMobile = (balance: number) => {
+    const absBalance = Math.abs(balance);
+    if (absBalance >= 1000000) {
+      return `${getCurrencySymbol('PHP')}${(absBalance / 1000000).toFixed(1)}M`;
+    } else if (absBalance >= 1000) {
+      return `${getCurrencySymbol('PHP')}${(absBalance / 1000).toFixed(1)}K`;
+    }
+    return `${getCurrencySymbol('PHP')}${absBalance.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
+
   // Handle account selection
   const handleAccountSelection = (accountId: string) => {
     if (accountId === currentDefaultAccount?.id) {
@@ -76,83 +88,76 @@ const DefaultAccountSelection: FC<DefaultAccountSelectionProps> = ({
 
   if (activeAccounts.length === 0) {
     return (
-      <div className="card border-left-warning shadow h-100 py-2 mb-4 animate__animated animate__fadeIn">
-        <div className="card-body">
-          <div className="row no-gutters align-items-center">
-            <div className="col mr-2">
-              <div className="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                <i className="fas fa-bank mr-2"></i>
-                Set as Default Account
-              </div>
-              <div className="row no-gutters align-items-center">
-                <div className="col-auto">
-                  <div className="h6 mb-0 font-weight-bold text-gray-800">
-                    <i className="fas fa-exclamation-triangle text-warning mr-2"></i>
-                    No Active Accounts Available
-                  </div>
-                </div>
-              </div>
-              <p className="text-muted mt-2 mb-0">
-                Please add at least one active account to set a default.
-              </p>
+      <>
+        {/* Mobile Empty State */}
+        <div className="block md:hidden bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+              <i className="fas fa-exclamation-triangle text-amber-500 text-sm"></i>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-amber-800 mb-1">No Active Accounts</h3>
+              <p className="text-xs text-amber-600">Please add at least one active account to set a default.</p>
             </div>
           </div>
         </div>
-      </div>
+
+        {/* Desktop Empty State */}
+        <div className="hidden md:block alert alert-warning">
+          <i className="fas fa-exclamation-triangle mr-2"></i>
+          <strong>No Active Accounts</strong> - Please add at least one active account to set a default.
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="card border-left-info shadow h-100 py-2 mb-4 animate__animated animate__fadeIn">
-      <div className="card-body">
-        {/* Section Header */}
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <div className="text-xs font-weight-bold text-primary text-uppercase">
-            <i className="fas fa-bank mr-2"></i>
-            Set as Default Account
+    <>
+      {/* Mobile Default Account Selection */}
+      <div className="block md:hidden bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+              <i className="fas fa-star text-amber-500 text-sm"></i>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800">Default Account</h3>
+              <p className="text-[9px] text-gray-500">Auto-selected for transactions</p>
+            </div>
           </div>
           {onClose && (
             <button
               type="button"
-              className="btn btn-sm btn-outline-secondary"
+              className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
               onClick={onClose}
-              title="Close"
             >
-              <i className="fas fa-times"></i>
+              <i className="fas fa-times text-gray-500 text-[10px]"></i>
             </button>
           )}
         </div>
 
-        {/* Current Default Display */}
+        {/* Current Default */}
         {currentDefaultAccount && (
-          <div className="mb-4">
-            <div className="h6 mb-2 font-weight-bold text-gray-800">Current Default</div>
-            <div className="d-flex align-items-center p-3 bg-light rounded border-left-success">
+          <div className="px-4 py-3 bg-emerald-50 border-b border-emerald-100">
+            <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Current Default</p>
+            <div className="flex items-center gap-3">
               <div 
-                className="account-color-indicator rounded-circle mr-3 d-flex align-items-center justify-content-center"
-                style={{ 
-                  backgroundColor: currentDefaultAccount.color || "#4e73df", 
-                  width: "36px", 
-                  height: "36px",
-                  minWidth: "36px"
-                }}
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ backgroundColor: currentDefaultAccount.color || "#4e73df" }}
               >
-                <i className={`${getAccountTypeIcon(currentDefaultAccount.account_type)} text-white`}></i>
+                <i className={`${getAccountTypeIcon(currentDefaultAccount.account_type)} text-white text-sm`}></i>
               </div>
-              <div className="flex-grow-1">
-                <div className="font-weight-bold text-gray-800">{currentDefaultAccount.account_name}</div>
-                <small className="text-gray-600">
-                  {currentDefaultAccount.account_type === 'credit' ? 'Credit Card' : 
-                   currentDefaultAccount.account_type.charAt(0).toUpperCase() + currentDefaultAccount.account_type.slice(1)} 
-                  {currentDefaultAccount.institution_name && ` • ${currentDefaultAccount.institution_name}`}
-                </small>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">{currentDefaultAccount.account_name}</p>
+                <p className="text-[10px] text-gray-500 capitalize">
+                  {currentDefaultAccount.account_type === 'credit' ? 'Credit Card' : currentDefaultAccount.account_type}
+                </p>
               </div>
               <div className="text-right">
-                <div className="font-weight-bold text-success">
-                  {formatBalance(currentDefaultAccount.balance)}
-                </div>
-                <span className="badge badge-success">
-                  <i className="fas fa-star mr-1"></i>
+                <p className="text-sm font-bold text-emerald-600">{formatBalanceMobile(currentDefaultAccount.balance)}</p>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-600 rounded-full text-[8px] font-semibold">
+                  <i className="fas fa-star text-[6px]"></i>
                   Default
                 </span>
               </div>
@@ -161,156 +166,240 @@ const DefaultAccountSelection: FC<DefaultAccountSelectionProps> = ({
         )}
 
         {/* Account Selection */}
-        <div className="mb-4">
-          <div className="h6 mb-3 font-weight-bold text-gray-800">Choose Default Account</div>
-          <div className="form-group">
+        <div className="p-4">
+          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-2">Choose Account</p>
+          <div className="space-y-2">
             {activeAccounts.map((account, index) => (
-              <div 
-                key={account.id} 
-                className={`custom-control custom-radio mb-2 animate__animated animate__fadeIn`}
-                style={{ animationDelay: `${index * 0.1}s` }}
+              <button
+                key={account.id}
+                type="button"
+                onClick={() => account.id && handleAccountSelection(account.id)}
+                disabled={isUpdating || account.is_default}
+                className={`w-full p-3 rounded-xl border transition-all text-left ${
+                  account.is_default 
+                    ? 'border-emerald-300 bg-emerald-50 cursor-default' 
+                    : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50 active:scale-[0.98]'
+                } disabled:opacity-50`}
+                style={{ animationDelay: `${index * 0.05}s` }}
               >
-                <input
-                  type="radio"
-                  className="custom-control-input"
-                  id={`account-${account.id}`}
-                  name="defaultAccount"
-                  value={account.id}
-                  checked={account.is_default}
-                  onChange={() => account.id && handleAccountSelection(account.id)}
-                  disabled={isUpdating}
-                />
-                <label className="custom-control-label w-100" htmlFor={`account-${account.id}`}>
-                  <div className="d-flex align-items-center justify-content-between p-2 rounded border" 
-                       style={{ backgroundColor: account.is_default ? '#e3f2fd' : 'transparent' }}>
-                    <div className="d-flex align-items-center">
-                      <div 
-                        className="account-color-indicator rounded-circle mr-3 d-flex align-items-center justify-content-center"
-                        style={{ 
-                          backgroundColor: account.color || "#4e73df", 
-                          width: "32px", 
-                          height: "32px",
-                          minWidth: "32px"
-                        }}
-                      >
-                        <i className={`${getAccountTypeIcon(account.account_type)} text-white fa-sm`}></i>
-                      </div>
-                      <div>
-                        <div className="font-weight-medium text-gray-800">{account.account_name}</div>
-                        <small className="text-gray-600">
-                          {account.account_type === 'credit' ? 'Credit Card' : 
-                           account.account_type.charAt(0).toUpperCase() + account.account_type.slice(1)}
-                        </small>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-weight-medium text-gray-700">
-                        {formatBalance(account.balance)}
-                      </div>
-                      {account.is_default && (
-                        <span className="badge badge-success badge-sm">
-                          <i className="fas fa-star mr-1"></i>
-                          Current
-                        </span>
-                      )}
-                    </div>
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-9 h-9 rounded-lg flex items-center justify-center"
+                    style={{ backgroundColor: account.color || "#4e73df" }}
+                  >
+                    <i className={`${getAccountTypeIcon(account.account_type)} text-white text-xs`}></i>
                   </div>
-                </label>
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-800 truncate">{account.account_name}</p>
+                    <p className="text-[9px] text-gray-500 capitalize">
+                      {account.account_type === 'credit' ? 'Credit Card' : account.account_type}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-xs font-bold ${account.balance >= 0 ? 'text-gray-700' : 'text-rose-600'}`}>
+                      {formatBalanceMobile(account.balance)}
+                    </p>
+                    {account.is_default && (
+                      <i className="fas fa-check-circle text-emerald-500 text-xs"></i>
+                    )}
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
         </div>
 
-        {/* Benefits Explanation */}
-        <div className="alert alert-info border-left-info mb-3">
-          <div className="d-flex">
-            <div className="mr-3">
-              <i className="fas fa-info-circle text-info"></i>
-            </div>
-            <div>
-              <div className="font-weight-bold text-info mb-1">Auto-selected for new transactions</div>
-              <p className="text-info mb-2" style={{ fontSize: '0.9rem' }}>
-                When you create a new transaction, this account will be automatically selected as the default 
-                source or destination, saving you time during data entry.
+        {/* Info */}
+        <div className="px-4 pb-4">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+            <div className="flex items-start gap-2">
+              <i className="fas fa-info-circle text-blue-500 text-xs mt-0.5"></i>
+              <p className="text-[10px] text-blue-700">
+                The default account is automatically selected when creating new transactions.
               </p>
-              <div className="d-flex align-items-center text-info" style={{ fontSize: '0.85rem' }}>
-                <i className="fas fa-lock mr-2"></i>
-                <span>If not set, you'll need to manually select an account for each transaction.</span>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Loading State */}
         {isUpdating && (
-          <div className="d-flex align-items-center justify-content-center py-3">
-            <div className="spinner-border spinner-border-sm text-primary mr-2" role="status">
-              <span className="sr-only">Loading...</span>
+          <div className="px-4 pb-4">
+            <div className="flex items-center justify-center gap-2 py-2">
+              <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs text-indigo-600 font-medium">Updating...</span>
             </div>
-            <span className="text-primary">Updating default account...</span>
           </div>
         )}
       </div>
 
-      {/* Confirmation Modal */}
-      {showConfirmation && (
-        <>
-          <div className="modal fade show d-block" tabIndex={-1} role="dialog">
-            <div className="modal-dialog modal-dialog-centered" role="document">
-              <div className="modal-content animate__animated animate__fadeIn animate__faster">
-                <div className="modal-header">
-                  <h5 className="modal-title">
-                    <i className="fas fa-star text-warning mr-2"></i>
-                    Confirm Default Account Change
-                  </h5>
-                  <button 
-                    type="button" 
-                    className="close" 
-                    onClick={handleCancelChange}
-                    disabled={isUpdating}
-                  >
-                    <span>&times;</span>
-                  </button>
+      {/* Desktop Default Account Selection */}
+      <div className="hidden md:block card shadow mb-4">
+        <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+          <h6 className="m-0 font-weight-bold text-warning">
+            <i className="fas fa-star mr-2"></i>
+            Default Account
+          </h6>
+          {onClose && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={onClose}
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          )}
+        </div>
+        <div className="card-body">
+          {/* Current Default */}
+          {currentDefaultAccount && (
+            <div className="mb-4 p-3 bg-success text-white rounded">
+              <small className="text-uppercase font-weight-bold">Current Default</small>
+              <div className="d-flex align-items-center mt-2">
+                <div 
+                  className="rounded-circle mr-3 d-flex align-items-center justify-content-center"
+                  style={{ 
+                    backgroundColor: currentDefaultAccount.color || "#4e73df", 
+                    width: "40px", 
+                    height: "40px",
+                    minWidth: "40px"
+                  }}
+                >
+                  <i className={`${getAccountTypeIcon(currentDefaultAccount.account_type)} text-white`}></i>
                 </div>
-                <div className="modal-body">
-                  <p>Are you sure you want to change your default account?</p>
-                  
-                  {currentDefaultAccount && (
-                    <div className="mb-3">
-                      <strong>Current Default:</strong>
-                      <div className="mt-1 p-2 bg-light rounded">
-                        <i className={`${getAccountTypeIcon(currentDefaultAccount.account_type)} mr-2`}></i>
-                        {currentDefaultAccount.account_name}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {selectedAccountId && (
-                    <div className="mb-3">
-                      <strong>New Default:</strong>
-                      <div className="mt-1 p-2 bg-primary text-white rounded">
-                        {(() => {
-                          const selectedAccount = activeAccounts.find(acc => acc.id === selectedAccountId);
-                          return selectedAccount ? (
-                            <>
-                              <i className={`${getAccountTypeIcon(selectedAccount.account_type)} mr-2`}></i>
-                              {selectedAccount.account_name}
-                            </>
-                          ) : null;
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="alert alert-info mb-0">
-                    <i className="fas fa-info-circle mr-2"></i>
-                    This account will be automatically selected for new transactions.
+                <div>
+                  <div className="font-weight-bold">{currentDefaultAccount.account_name}</div>
+                  <small>
+                    {currentDefaultAccount.account_type === 'credit' ? 'Credit Card' : 
+                     currentDefaultAccount.account_type.charAt(0).toUpperCase() + currentDefaultAccount.account_type.slice(1)}
+                  </small>
+                </div>
+                <div className="ml-auto text-right">
+                  <div className="font-weight-bold">{formatBalance(currentDefaultAccount.balance)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Account Selection */}
+          <h6 className="text-muted text-uppercase font-weight-bold small mb-3">Choose Account</h6>
+          <div className="list-group">
+            {activeAccounts.map((account) => (
+              <button
+                key={account.id}
+                type="button"
+                onClick={() => account.id && handleAccountSelection(account.id)}
+                disabled={isUpdating || account.is_default}
+                className={`list-group-item list-group-item-action d-flex align-items-center ${
+                  account.is_default ? 'active' : ''
+                }`}
+              >
+                <div 
+                  className="rounded-circle mr-3 d-flex align-items-center justify-content-center"
+                  style={{ 
+                    backgroundColor: account.color || "#4e73df", 
+                    width: "36px", 
+                    height: "36px",
+                    minWidth: "36px"
+                  }}
+                >
+                  <i className={`${getAccountTypeIcon(account.account_type)} text-white`}></i>
+                </div>
+                <div className="flex-grow-1">
+                  <div className="font-weight-bold">{account.account_name}</div>
+                  <small className="text-muted">
+                    {account.account_type === 'credit' ? 'Credit Card' : 
+                     account.account_type.charAt(0).toUpperCase() + account.account_type.slice(1)}
+                  </small>
+                </div>
+                <div className="text-right">
+                  <div className={`font-weight-bold ${account.balance >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {formatBalance(account.balance)}
                   </div>
+                  {account.is_default && (
+                    <i className="fas fa-check-circle text-success"></i>
+                  )}
                 </div>
-                <div className="modal-footer">
+              </button>
+            ))}
+          </div>
+
+          {/* Info */}
+          <div className="alert alert-info mt-4 mb-0">
+            <i className="fas fa-info-circle mr-2"></i>
+            The default account is automatically selected when creating new transactions.
+          </div>
+
+          {/* Loading State */}
+          {isUpdating && (
+            <div className="text-center py-3">
+              <div className="spinner-border text-primary" role="status">
+                <span className="sr-only">Loading...</span>
+              </div>
+              <span className="ml-2 text-primary font-weight-medium">Updating...</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile Confirmation Modal */}
+      {showConfirmation && createPortal(
+        <>
+          <div className="block md:hidden fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center" style={{ zIndex: 1060 }}>
+            <div className="bg-white rounded-t-3xl w-full max-w-md animate__animated animate__slideInUp animate__faster" style={{ zIndex: 1065 }}>
+              <div className="p-6">
+                {/* Handle */}
+                <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
+                
+                {/* Icon */}
+                <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                  <i className="fas fa-star text-amber-500 text-2xl"></i>
+                </div>
+                
+                <h3 className="text-lg font-bold text-gray-800 text-center mb-2">Change Default Account?</h3>
+                <p className="text-xs text-gray-500 text-center mb-4">This account will be auto-selected for new transactions</p>
+                
+                {/* Current Account */}
+                {currentDefaultAccount && (
+                  <div className="mb-3">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">Current</p>
+                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                      <div 
+                        className="w-8 h-8 rounded-lg flex items-center justify-center"
+                        style={{ backgroundColor: currentDefaultAccount.color || "#4e73df" }}
+                      >
+                        <i className={`${getAccountTypeIcon(currentDefaultAccount.account_type)} text-white text-xs`}></i>
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">{currentDefaultAccount.account_name}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* New Account */}
+                {selectedAccountId && (
+                  <div className="mb-4">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mb-1.5">New Default</p>
+                    {(() => {
+                      const selectedAccount = activeAccounts.find(acc => acc.id === selectedAccountId);
+                      return selectedAccount ? (
+                        <div className="flex items-center gap-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                          <div 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center"
+                            style={{ backgroundColor: selectedAccount.color || "#4e73df" }}
+                          >
+                            <i className={`${getAccountTypeIcon(selectedAccount.account_type)} text-white text-xs`}></i>
+                          </div>
+                          <span className="text-sm font-semibold text-indigo-700">{selectedAccount.account_name}</span>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+                
+                {/* Actions */}
+                <div className="flex gap-3">
                   <button 
                     type="button" 
-                    className="btn btn-secondary"
+                    className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm"
                     onClick={handleCancelChange}
                     disabled={isUpdating}
                   >
@@ -318,19 +407,19 @@ const DefaultAccountSelection: FC<DefaultAccountSelectionProps> = ({
                   </button>
                   <button 
                     type="button" 
-                    className="btn btn-primary"
+                    className="flex-1 py-3 bg-amber-500 text-white rounded-xl font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2"
                     onClick={handleConfirmChange}
                     disabled={isUpdating}
                   >
                     {isUpdating ? (
                       <>
-                        <span className="spinner-border spinner-border-sm mr-2" role="status"></span>
-                        Updating...
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Setting...
                       </>
                     ) : (
                       <>
-                        <i className="fas fa-star mr-1"></i>
-                        Set as Default
+                        <i className="fas fa-star text-xs"></i>
+                        Set Default
                       </>
                     )}
                   </button>
@@ -338,10 +427,109 @@ const DefaultAccountSelection: FC<DefaultAccountSelectionProps> = ({
               </div>
             </div>
           </div>
-          <div className="modal-backdrop fade show"></div>
-        </>
+
+          {/* Desktop Confirmation Modal */}
+          <div className="hidden md:flex fixed inset-0 bg-black bg-opacity-50 items-center justify-center" style={{ zIndex: 1060 }}>
+            <div className="bg-white rounded-lg shadow-2xl border border-gray-200 max-w-md w-full mx-4" style={{ zIndex: 1065 }}>
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+                  <i className="fas fa-star text-yellow-500 mr-2"></i>
+                  Change Default Account
+                </h3>
+                <button 
+                  type="button" 
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  onClick={handleCancelChange}
+                  disabled={isUpdating}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6">
+                <p className="text-gray-600 mb-4">This account will be auto-selected for new transactions.</p>
+                
+                {/* Current Account */}
+                {currentDefaultAccount && (
+                  <div className="mb-4">
+                    <small className="text-muted text-uppercase font-weight-bold">Current</small>
+                    <div className="d-flex align-items-center mt-2 p-3 bg-light rounded">
+                      <div 
+                        className="rounded-circle mr-3 d-flex align-items-center justify-content-center"
+                        style={{ 
+                          backgroundColor: currentDefaultAccount.color || "#4e73df", 
+                          width: "36px", 
+                          height: "36px" 
+                        }}
+                      >
+                        <i className={`${getAccountTypeIcon(currentDefaultAccount.account_type)} text-white`}></i>
+                      </div>
+                      <span className="font-weight-medium">{currentDefaultAccount.account_name}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* New Account */}
+                {selectedAccountId && (
+                  <div className="mb-4">
+                    <small className="text-muted text-uppercase font-weight-bold">New Default</small>
+                    {(() => {
+                      const selectedAccount = activeAccounts.find(acc => acc.id === selectedAccountId);
+                      return selectedAccount ? (
+                        <div className="d-flex align-items-center mt-2 p-3 bg-primary text-white rounded">
+                          <div 
+                            className="rounded-circle mr-3 d-flex align-items-center justify-content-center bg-white"
+                            style={{ width: "36px", height: "36px" }}
+                          >
+                            <i className={`${getAccountTypeIcon(selectedAccount.account_type)}`} style={{ color: selectedAccount.color || "#4e73df" }}></i>
+                          </div>
+                          <span className="font-weight-bold">{selectedAccount.account_name}</span>
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex justify-end space-x-3 p-6 border-t border-gray-200">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary"
+                  onClick={handleCancelChange}
+                  disabled={isUpdating}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-warning"
+                  onClick={handleConfirmChange}
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm mr-2" role="status"></span>
+                      Setting...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-star mr-1"></i>
+                      Set as Default
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body
       )}
-    </div>
+    </>
   );
 };
 

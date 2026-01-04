@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { FC, memo } from 'react';
 import { DeleteConfirmationModalProps } from '../types';
 
-const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
+const DeleteConfirmationModal: FC<DeleteConfirmationModalProps> = memo(({
   show,
   isDeleting,
   onConfirm,
@@ -86,45 +86,17 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
           <div className="modal-footer border-0 pb-4 pt-0 justify-content-center">
             <button 
               type="button" 
-              className="btn" 
+              className="inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-2.5 bg-white hover:bg-blue-50 text-[#4e73df] border border-[#4e73df] text-sm md:text-base font-medium rounded-full shadow-sm transition-colors mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={onCancel}
               disabled={isDeleting}
-              style={{
-                padding: '0.5rem 1.5rem',
-                backgroundColor: 'transparent',
-                color: '#4e73df',
-                border: '1px solid #4e73df',
-                borderRadius: '30px',
-                fontWeight: 500,
-                transition: 'all 0.2s ease',
-                marginRight: '1rem'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(78, 115, 223, 0.1)'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               Cancel
             </button>
             <button 
               type="button" 
-              className="btn btn-danger" 
+              className="inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-2.5 bg-[#e74a3b] hover:bg-[#d52a1a] text-white border border-[#e74a3b] text-sm md:text-base font-medium rounded-full shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={onConfirm}
               disabled={isDeleting}
-              style={{
-                padding: '0.5rem 1.5rem',
-                backgroundColor: '#e74a3b',
-                borderColor: '#e74a3b',
-                borderRadius: '30px',
-                fontWeight: 500,
-                transition: 'all 0.2s ease'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = '#d52a1a';
-                e.currentTarget.style.borderColor = '#d52a1a';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = '#e74a3b';
-                e.currentTarget.style.borderColor = '#e74a3b';
-              }}
             >
               {isDeleting ? (
                 <>
@@ -138,6 +110,8 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
       </div>
     </div>
   );
-};
+});
+
+DeleteConfirmationModal.displayName = 'DeleteConfirmationModal';
 
 export default DeleteConfirmationModal;

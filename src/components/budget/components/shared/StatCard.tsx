@@ -1,4 +1,4 @@
-import React, { FC, ReactElement } from "react";
+import React, { FC, memo } from "react";
 
 interface StatCardProps {
   title: string;
@@ -11,7 +11,7 @@ interface StatCardProps {
   tooltipId?: string;
 }
 
-const StatCard: FC<StatCardProps> = ({
+const StatCard: FC<StatCardProps> = memo(({
   title,
   value,
   icon,
@@ -23,14 +23,14 @@ const StatCard: FC<StatCardProps> = ({
 }) => {
   return (
     <div 
-      className={`col-xl-4 col-md-6 mb-4 animate__animated animate__fadeIn`} 
+      className={`col-xl-4 col-md-6 mb-3 md:mb-4 animate__animated animate__fadeIn`} 
       style={{ animationDelay }}
     >
-      <div className={`card border-left-${borderColor} shadow h-100 py-2`}>
+      <div className={`card border-left-${borderColor} shadow h-100 py-2 md:py-3`}>
         <div className="card-body">
           <div className="row no-gutters align-items-center">
             <div className="col mr-2">
-              <div className={`text-xs font-weight-bold text-${borderColor} text-uppercase mb-1 d-flex align-items-center`}>
+              <div className={`text-xs md:text-sm font-weight-bold text-${borderColor} text-uppercase mb-1 d-flex align-items-center`}>
                 {title}
                 {showTooltip && onClick && (
                   <div className="ml-2 position-relative">
@@ -42,18 +42,20 @@ const StatCard: FC<StatCardProps> = ({
                   </div>
                 )}
               </div>
-              <div className="h5 mb-0 font-weight-bold text-gray-800">
+              <div className="text-lg md:text-xl lg:h5 mb-0 font-weight-bold text-gray-800">
                 {value}
               </div>
             </div>
             <div className="col-auto">
-              <i className={`fas fa-${icon} fa-2x text-gray-300`}></i>
+              <i className={`fas fa-${icon} fa-lg md:fa-2x text-gray-300`}></i>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
+});
+
+StatCard.displayName = 'StatCard';
 
 export default StatCard;

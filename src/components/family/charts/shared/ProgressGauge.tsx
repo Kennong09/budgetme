@@ -1,9 +1,10 @@
 import React from 'react';
 import HighchartsReact from 'highcharts-react-official';
 import Highcharts from 'highcharts';
+import solidGauge from 'highcharts/modules/solid-gauge';
 
-// Import required Highcharts modules
-require('highcharts/modules/solid-gauge')(Highcharts);
+// Initialize Highcharts modules
+solidGauge(Highcharts);
 
 interface ProgressGaugeProps {
   value: number;

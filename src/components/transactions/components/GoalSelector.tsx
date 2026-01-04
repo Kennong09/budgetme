@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../../../utils/AuthContext";
 import { useToast } from "../../../utils/ToastContext";
 import { supabase } from "../../../utils/supabaseClient";
 import { goalsDataService } from "../../goals/services/goalsDataService";
 import { useFamilyPermissions } from "../../../hooks/useFamilyPermissions";
 import PermissionErrorModal from "../../common/PermissionErrorModal";
+import { formatCurrency } from "../../../utils/currencyUtils";
 
 export interface Goal {
   id: string;
@@ -58,6 +60,41 @@ const GoalSelector: React.FC<GoalSelectorProps> = ({
     suggestedActions?: string[];
     userRole?: string;
   }>({ isOpen: false, title: '', message: '' });
+  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
+
+  // Mobile modal handlers
+  const handleMobileOpen = () => {
+    if (!disabled && !loading) {
+      setIsMobileModalOpen(true);
+      setSearchTerm("");
+    }
+  };
+
+  const handleMobileClose = () => {
+    setIsMobileModalOpen(false);
+    setSearchTerm("");
+  };
+
+  const handleMobileGoalSelect = async (goal: Goal) => {
+    await handleGoalSelect(goal);
+    setIsMobileModalOpen(false);
+  };
+
+  // Calculate progress percentage
+  const getProgressPercentage = (goal: Goal) => {
+    if (goal.target_amount <= 0) return 0;
+    return Math.min((goal.current_amount / goal.target_amount) * 100, 100);
+  };
+
+  // Get priority color
+  const getPriorityColor = (priority: string) => {
+    switch (priority?.toLowerCase()) {
+      case 'high': return { bg: 'rose', text: 'rose' };
+      case 'medium': return { bg: 'amber', text: 'amber' };
+      case 'low': return { bg: 'emerald', text: 'emerald' };
+      default: return { bg: 'gray', text: 'gray' };
+    }
+  };
 
   // Filter goals based on search term
   const filteredGoals = goals.filter((goal: Goal) =>
@@ -253,15 +290,215 @@ const GoalSelector: React.FC<GoalSelectorProps> = ({
     fetchGoals();
   }, [user?.id, showErrorToast, validateFamilyGoalAccess, familyPermissions.loading, familyPermissions.hasBasicAccess, familyPermissions.hasContributionAccess, isContributionType]);
 
-  return (
-    <div className={`form-group selector-container ${className}`}>
-      <label className="font-weight-bold text-gray-800">
-        {label} {required && <span className="text-danger">*</span>}   
-      </label>
-      
-      <div className="position-relative">
-        {/* Selected Goal Display */}
-        <div
+// Mobile Modal Component
+const MobileGoalModal = () => {
+if (!isMobileModalOpen) return null;
+  
+return createPortal(
+<div 
+className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 animate__animated animate__fadeIn animate__faster"
+onClick={handleMobileClose}
+>
+<div 
+className="w-full max-h-[85vh] bg-white rounded-t-2xl shadow-xl animate__animated animate__slideInUp animate__faster overflow-hidden"
+onClick={(e) => e.stopPropagation()}
+>
+<div className="flex justify-center pt-2 pb-1">
+<div className="w-10 h-1 bg-gray-300 rounded-full"></div>
+</div>
+<div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+<h6 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+<i className="fas fa-flag text-indigo-500 text-xs"></i>
+Select Goal
+</h6>
+<button 
+onClick={handleMobileClose}
+className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center"
+>
+<i className="fas fa-times text-xs"></i>
+</button>
+</div>
+<div className="px-4 py-2.5 border-b border-gray-100">
+<div className="relative">
+<i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+<input
+type="text"
+className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-indigo-400"
+placeholder="Search goals..."
+value={searchTerm}
+onChange={(e) => setSearchTerm(e.target.value)}
+autoFocus
+/>
+</div>
+</div>
+<div className="overflow-y-auto max-h-[60vh] pb-4">
+{filteredGoals.length === 0 ? (
+<div className="px-4 py-8 text-center">
+<i className="fas fa-flag text-gray-300 text-2xl mb-2"></i>
+<p className="text-sm text-gray-500">{searchTerm ? 'No goals found' : 'No goals available'}</p>
+</div>
+) : (
+<div className="px-3 py-2 space-y-1.5">
+{filteredGoals.map((goal) => {
+const progress = getProgressPercentage(goal);
+return (
+<div
+key={goal.id}
+className={`p-3 rounded-xl border transition-all active:scale-[0.98] ${
+selectedGoal?.id === goal.id 
+? 'bg-indigo-50 border-indigo-300 shadow-sm' 
+: 'bg-white border-gray-100'
+}`}
+onClick={() => handleMobileGoalSelect(goal)}
+>
+<div className="flex items-start justify-between mb-2">
+<div className="flex items-center gap-2.5 flex-1 min-w-0">
+<div className={`w-9 h-9 rounded-full flex items-center justify-center ${
+goal.is_family_goal ? 'bg-blue-100' : 'bg-indigo-100'
+}`}>
+<i className={`${goal.is_family_goal ? 'fas fa-users text-blue-500' : 'fas fa-flag text-indigo-500'} text-xs`}></i>
+</div>
+<div className="flex-1 min-w-0">
+<span className="text-sm font-semibold text-gray-800 truncate block">{goal.goal_name}</span>
+<span className={`text-[10px] ${goal.is_family_goal ? 'text-blue-600' : 'text-gray-500'}`}>
+{goal.is_family_goal ? 'Family' : 'Personal'}
+</span>
+</div>
+</div>
+{selectedGoal?.id === goal.id && (
+<i className="fas fa-check-circle text-indigo-500 text-sm"></i>
+)}
+</div>
+<div className="mb-1.5">
+<div className="flex items-center justify-between text-[10px] mb-1">
+<span className="text-gray-500">Progress</span>
+<span className="font-semibold text-indigo-600">{progress.toFixed(0)}%</span>
+</div>
+<div className="w-full bg-gray-200 rounded-full h-1">
+<div className="h-1 rounded-full bg-indigo-500" style={{ width: `${progress}%` }}></div>
+</div>
+</div>
+<div className="flex items-center justify-between text-[10px]">
+<span className="text-gray-500">{formatCurrency(goal.current_amount)} / {formatCurrency(goal.target_amount)}</span>
+<span className="text-emerald-600 font-medium">{formatCurrency(goal.target_amount - goal.current_amount)} left</span>
+</div>
+</div>
+);
+})}
+</div>
+)}
+</div>
+</div>
+</div>,
+document.body
+);
+};
+
+return (
+<div className={`form-group selector-container ${className}`}>
+{/* ===== MOBILE VIEW ===== */}
+<div className="block md:hidden">
+<label className="text-xs font-bold text-gray-700 mb-1.5 block">
+{label} {required && <span className="text-rose-500">*</span>}
+</label>
+  
+{loading ? (
+<div className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl">
+<div className="flex items-center gap-1">
+<div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+<div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+<div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+</div>
+<span className="text-xs text-gray-500">Loading goals...</span>
+</div>
+) : (
+<>
+<div
+className={`flex items-center justify-between p-2.5 bg-white border rounded-xl transition-all active:scale-[0.99] ${
+disabled ? 'opacity-50 bg-gray-50' : ''
+} ${selectedGoal 
+? selectedGoal.is_family_goal ? 'border-blue-200' : 'border-indigo-200'
+: showValidationError && required ? 'border-rose-300' : 'border-gray-200'}`}
+onClick={handleMobileOpen}
+>
+{selectedGoal ? (
+<div className="flex items-center gap-2.5 flex-1 min-w-0">
+<div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+selectedGoal.is_family_goal ? 'bg-blue-100' : 'bg-indigo-100'
+}`}>
+<i className={`${selectedGoal.is_family_goal ? 'fas fa-users text-blue-500' : 'fas fa-flag text-indigo-500'} text-xs`}></i>
+</div>
+<div className="flex-1 min-w-0">
+<span className="text-sm font-semibold text-gray-800 truncate block">{selectedGoal.goal_name}</span>
+<span className="text-[10px] text-indigo-600 font-medium">{getProgressPercentage(selectedGoal).toFixed(0)}% complete</span>
+</div>
+</div>
+) : (
+<span className={`text-sm ${showValidationError && required ? 'text-rose-400' : 'text-gray-400'}`}>
+{required ? "Select Goal" : "Select Goal (Optional)"}
+</span>
+)}
+<div className="flex items-center gap-1.5">
+{selectedGoal && !disabled && (
+<button
+type="button"
+className="w-6 h-6 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center"
+onClick={(e) => { e.stopPropagation(); handleClearSelection(); }}
+>
+<i className="fas fa-times text-[10px]"></i>
+</button>
+)}
+<i className="fas fa-chevron-right text-gray-400 text-xs"></i>
+</div>
+</div>
+
+{selectedGoal && (
+  <div className={`mt-2 p-2.5 rounded-xl border ${selectedGoal.is_family_goal ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100' : 'bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-100'}`}>
+    <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+          <i className="fas fa-chart-line text-emerald-600 text-xs"></i>
+        </div>
+        <div>
+          <p className="text-[9px] text-gray-500 uppercase font-semibold">Progress</p>
+          <p className="text-sm font-bold text-indigo-600">{getProgressPercentage(selectedGoal).toFixed(0)}%</p>
+        </div>
+      </div>
+      <div className="text-right">
+        <p className="text-[9px] text-gray-500 uppercase font-semibold">Remaining</p>
+        <p className="text-xs font-bold text-emerald-600">{formatCurrency(selectedGoal.target_amount - selectedGoal.current_amount)}</p>
+      </div>
+    </div>
+    <div className="w-full bg-gray-200 rounded-full h-1.5">
+      <div className="h-1.5 rounded-full bg-indigo-500" style={{ width: `${getProgressPercentage(selectedGoal)}%` }}></div>
+    </div>
+  </div>
+)}
+
+<p className="text-[10px] text-gray-400 mt-1.5">
+  {isContributionType && required ? "Goal selection required" : "Link to a goal"}
+</p>
+
+{showValidationError && required && !selectedGoal && (
+  <div className="flex items-center gap-1.5 mt-1.5 p-2 bg-rose-50 border border-rose-200 rounded-lg">
+    <i className="fas fa-exclamation-triangle text-rose-500 text-[10px]"></i>
+    <span className="text-[10px] text-rose-600">Please select a goal</span>
+  </div>
+)}
+<MobileGoalModal />
+</>
+)}
+</div>
+
+{/* ===== DESKTOP VIEW ===== */}
+<div className="hidden md:block">
+  <label className="font-weight-bold text-gray-800">
+    {label} {required && <span className="text-danger">*</span>}
+  </label>
+  
+  <div className="position-relative">
+    {/* Selected Goal Display */}
+    <div
           className={`d-flex align-items-center justify-content-between px-3 py-2 border bg-white ${
             disabled || loading ? 'bg-light' : ''
           } ${
@@ -468,17 +705,18 @@ const GoalSelector: React.FC<GoalSelectorProps> = ({
           Please select a goal for your contribution
         </div>
       )}
-      
-      {/* Permission Error Modal */}
-      <PermissionErrorModal
-        isOpen={permissionErrorModal.isOpen}
-        onClose={() => setPermissionErrorModal({ isOpen: false, title: '', message: '' })}
-        errorTitle={permissionErrorModal.title}
-        errorMessage={permissionErrorModal.message}
-        suggestedActions={permissionErrorModal.suggestedActions}
-        userRole={permissionErrorModal.userRole}
-      />
     </div>
+    
+    {/* Permission Error Modal */}
+    <PermissionErrorModal
+      isOpen={permissionErrorModal.isOpen}
+      onClose={() => setPermissionErrorModal({ isOpen: false, title: '', message: '' })}
+      errorTitle={permissionErrorModal.title}
+      errorMessage={permissionErrorModal.message}
+      suggestedActions={permissionErrorModal.suggestedActions}
+      userRole={permissionErrorModal.userRole}
+    />
+  </div>
   );
 };
 

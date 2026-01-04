@@ -1,5 +1,5 @@
-import React, { useState, FC, FormEvent, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, FC, FormEvent, useEffect, useRef, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import "animate.css";
 import "../../assets/css/landing.css";
 import "../../assets/css/dashboard-graphic.css";
@@ -14,12 +14,20 @@ import {
   FamilyAnimation,
   AIPredictionsAnimation,
 } from "./ModuleAnimations";
-// Import SVG Icons
-import { ReactComponent as GoogleIcon } from "../../assets/icons/google-original.svg";
-import { ReactComponent as FacebookIcon } from "../../assets/icons/facebook-original.svg";
+// Google Icon as inline SVG component for Vite compatibility
+const GoogleIcon: FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" {...props}>
+    <path fill="#fff" d="M44.59 4.21a63.28 63.28 0 004.33 120.9 67.6 67.6 0 0032.36.35 57.13 57.13 0 0025.9-13.46 57.44 57.44 0 0016-26.26 74.33 74.33 0 001.61-33.58H65.27v24.69h34.47a29.72 29.72 0 01-12.66 19.52 36.16 36.16 0 01-13.93 5.5 41.29 41.29 0 01-15.1 0A37.16 37.16 0 0144 95.74a39.3 39.3 0 01-14.5-19.42 38.31 38.31 0 010-24.63 39.25 39.25 0 019.18-14.91A37.17 37.17 0 0176.13 27a34.28 34.28 0 0113.64 8q5.83-5.8 11.64-11.63c2-2.09 4.18-4.08 6.15-6.22A61.22 61.22 0 0087.2 4.59a64 64 0 00-42.61-.38z"/>
+    <path fill="#e33629" d="M44.59 4.21a64 64 0 0142.61.37 61.22 61.22 0 0120.35 12.62c-2 2.14-4.11 4.14-6.15 6.22Q95.58 29.23 89.77 35a34.28 34.28 0 00-13.64-8 37.17 37.17 0 00-37.46 9.74 39.25 39.25 0 00-9.18 14.91L8.76 35.6A63.53 63.53 0 0144.59 4.21z"/>
+    <path fill="#f8bd00" d="M3.26 51.5a62.93 62.93 0 015.5-15.9l20.73 16.09a38.31 38.31 0 000 24.63q-10.36 8-20.73 16.08a63.33 63.33 0 01-5.5-40.9z"/>
+    <path fill="#587dbd" d="M65.27 52.15h59.52a74.33 74.33 0 01-1.61 33.58 57.44 57.44 0 01-16 26.26c-6.69-5.22-13.41-10.4-20.1-15.62a29.72 29.72 0 0012.66-19.54H65.27c-.01-8.22 0-16.45 0-24.68z"/>
+    <path fill="#319f43" d="M8.75 92.4q10.37-8 20.73-16.08A39.3 39.3 0 0044 95.74a37.16 37.16 0 0014.08 6.08 41.29 41.29 0 0015.1 0 36.16 36.16 0 0013.93-5.5c6.69 5.22 13.41 10.4 20.1 15.62a57.13 57.13 0 01-25.9 13.47 67.6 67.6 0 01-32.36-.35 63 63 0 01-23-11.59A63.73 63.73 0 018.75 92.4z"/>
+  </svg>
+);
 import { useAuth } from "../../utils/AuthContext";
 import { useToast } from "../../utils/ToastContext";
 import EmailVerificationModal from "../auth/EmailVerificationModal";
+import { supabase } from "../../utils/supabaseClient";
 
 // Add testimonial styling
 const testimonialStyles = `
@@ -974,6 +982,522 @@ const buttonStyles = `
   .get-started-large:hover i {
     transform: translateX(3px);
   }
+  
+  /* Mobile-responsive button styling */
+  .btn-primary, .btn-secondary {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  
+  .btn-primary {
+    background: #4e68f5;
+    color: white;
+  }
+  
+  .btn-primary:hover {
+    background: #3754db;
+    transform: translateY(-1px);
+  }
+  
+  .btn-secondary {
+    background: transparent;
+    color: #4e68f5;
+    border: 2px solid #4e68f5;
+  }
+  
+  .btn-secondary:hover {
+    background: #4e68f5;
+    color: white;
+  }
+  
+  /* OAuth button styling */
+  .oauth-btn {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+    color: #374151;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  
+  .oauth-btn:hover {
+    border-color: #d1d5db;
+    background: #f9fafb;
+    transform: translateY(-1px);
+  }
+  
+  .oauth-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  @media (max-width: 480px) {
+    .btn-primary, .btn-secondary {
+      padding: 12px 16px;
+      font-size: 16px;
+    }
+    
+    .oauth-btn {
+      padding: 14px 16px;
+      font-size: 16px;
+    }
+  }
+`;
+
+// Add email validation styles
+const emailValidationStyles = `
+  .input-success {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1) !important;
+  }
+  
+  .input-success:focus {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
+  }
+  
+  .input-warning {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+  }
+  
+  .input-warning:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
+  }
+  
+  .input-error {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+  }
+  
+  .input-error:focus {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+  }
+  
+  /* Focus states for enhanced inputs */
+  .input-with-icon .enhanced-input:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  }
+  
+  .input-with-icon .enhanced-input:focus + i {
+    color: #4f46e5;
+  }
+  
+  /* Mobile touch improvements */
+  @media (max-width: 768px) {
+    .input-with-icon .enhanced-input {
+      -webkit-appearance: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    .btn-primary:active, .btn-secondary:active {
+      transform: translateY(0);
+    }
+    
+    .oauth-btn:active {
+      transform: translateY(0);
+    }
+  }
+  
+  .success-message {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 14px;
+    color: #10b981;
+    margin-top: 4px;
+  }
+  
+  .success-message i {
+    font-size: 16px;
+  }
+  
+  .info-message {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 14px;
+    color: #4f72ff;
+    margin-top: 4px;
+  }
+  
+  .info-message i {
+    font-size: 16px;
+  }
+  
+  /* Enhanced input positioning for icons */
+  .input-with-icon {
+    position: relative !important;
+    display: block !important;
+    width: 100%;
+  }
+  
+  /* Left icon positioning - using dedicated class for reliability */
+  .input-with-icon .input-icon-left {
+    position: absolute !important;
+    left: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 10 !important;
+    color: #6b7280;
+    font-size: 16px !important;
+    pointer-events: none;
+    line-height: 1;
+  }
+  
+  /* Fallback for i:first-child selector */
+  .input-with-icon > i:first-child {
+    position: absolute !important;
+    left: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 10 !important;
+    color: #6b7280;
+    font-size: 16px !important;
+    pointer-events: none;
+    line-height: 1;
+  }
+  
+  /* Input field styling */
+  .input-with-icon .enhanced-input {
+    width: 100%;
+    padding: 12px 45px 12px 40px !important;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    background-color: #ffffff;
+    box-sizing: border-box;
+  }
+  
+  /* When no left icon is present */
+  .input-with-icon .enhanced-input.no-left-icon {
+    padding-left: 12px !important;
+  }
+  
+  /* Password toggle button */
+  .input-with-icon .toggle-password-inline {
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    background: none;
+    border: none;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    z-index: 11 !important;
+    transition: all 0.2s ease;
+    line-height: 1;
+  }
+  
+  .input-with-icon .toggle-password-inline:hover {
+    color: #4f46e5;
+    background-color: rgba(79, 70, 229, 0.1);
+  }
+  
+  .input-with-icon .toggle-password-inline i {
+    font-size: 16px !important;
+    line-height: 1;
+  }
+  
+  /* Spinner containment and mobile fix */
+  .input-with-icon .bx-loader-alt {
+    position: absolute !important;
+    right: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    pointer-events: none;
+    width: 16px;
+    height: 16px;
+    font-size: 16px !important;
+    z-index: 10 !important;
+  }
+  
+  /* Mobile responsive adjustments */
+  @media (max-width: 768px) {
+    .modal-container {
+      margin: 8px !important;
+      max-width: calc(100vw - 16px) !important;
+      width: calc(100vw - 16px) !important;
+      max-height: calc(100vh - 16px) !important;
+    }
+    
+    .modal-body {
+      padding: 16px !important;
+      max-height: calc(80vh - 120px) !important;
+    }
+    
+    .input-with-icon .enhanced-input {
+      font-size: 16px !important;
+      padding: 14px 45px 14px 42px !important;
+    }
+    
+    .input-with-icon .enhanced-input.no-left-icon {
+      padding-left: 14px !important;
+    }
+    
+    .input-with-icon .input-icon-left,
+    .input-with-icon > i:first-child {
+      left: 14px !important;
+      font-size: 18px !important;
+    }
+    
+    .input-with-icon .toggle-password-inline {
+      right: 14px !important;
+    }
+    
+    .input-with-icon .bx-loader-alt {
+      right: 14px !important;
+      font-size: 16px !important;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .modal-container {
+      margin: 4px !important;
+      max-width: calc(100vw - 8px) !important;
+      width: calc(100vw - 8px) !important;
+    }
+    
+    .modal-body {
+      padding: 12px !important;
+    }
+    
+    .input-with-icon .enhanced-input {
+      padding: 12px 42px 12px 36px;
+      font-size: 16px;
+    }
+    
+    .input-with-icon .enhanced-input.no-left-icon {
+      padding-left: 12px;
+    }
+    
+    .input-with-icon > i:first-child {
+      left: 12px;
+      font-size: 14px;
+    }
+    
+    .input-with-icon .toggle-password-inline {
+      right: 12px;
+    }
+    
+    .input-with-icon .bx-loader-alt {
+      right: 12px;
+      font-size: 14px;
+    }
+  }
+  
+  /* Spinner animation */
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  .bx-spin {
+    animation: spin 1s linear infinite;
+    display: inline-block;
+    transform-origin: center center;
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+  
+  /* Prevent spinner animation inheritance */
+  .modal-container, .modal-body, .form-group {
+    animation: none !important;
+  }
+  
+  /* Ensure spinners stay within bounds */
+  .input-with-icon {
+    contain: layout style;
+    isolation: isolate;
+  }
+  
+  /* Fallback for browsers without contain support */
+  @supports not (contain: layout style) {
+    .input-with-icon {
+      overflow: hidden;
+      transform: translateZ(0);
+    }
+  }
+  
+  /* Modal form styling improvements */
+  .form-group {
+    margin-bottom: 20px;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #374151;
+    font-size: 14px;
+  }
+  
+  /* Error and success messages */
+  .error-message {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #ef4444;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  
+  .success-message {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #10b981;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  
+  .info-message {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #4f72ff;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  
+  /* Modal title responsive styling */
+  .modal-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1f2937;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  
+  /* Password Strength Validation Styles */
+  .password-strength-container {
+    margin-top: 8px;
+  }
+  
+  .password-strength-meter {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 8px;
+  }
+  
+  .strength-bar {
+    height: 4px;
+    border-radius: 2px;
+    flex: 1;
+    background-color: #e2e8f0;
+    transition: background-color 0.3s ease;
+  }
+  
+  .strength-bar.weak { background-color: #ef4444; }
+  .strength-bar.fair { background-color: #f59e0b; }
+  .strength-bar.good { background-color: #3b82f6; }
+  .strength-bar.strong { background-color: #10b981; }
+  
+  .password-strength-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  
+  .strength-weak { color: #ef4444; }
+  .strength-fair { color: #f59e0b; }
+  .strength-good { color: #3b82f6; }
+  .strength-strong { color: #10b981; }
+  
+  .password-requirements {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    font-size: 12px;
+  }
+  
+  @media (max-width: 480px) {
+    .password-requirements {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+    
+    .modal-title {
+      font-size: 20px;
+      margin-bottom: 16px;
+    }
+    
+    .form-group {
+      margin-bottom: 16px;
+    }
+  }
+  
+  .requirement-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.3s ease;
+  }
+  
+  .requirement-item.met {
+    color: #10b981;
+  }
+  
+  .requirement-item.unmet {
+    color: #64748b;
+  }
+  
+  .requirement-item i {
+    font-size: 14px;
+  }
+  
+  .password-suggestions {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(79, 114, 255, 0.05);
+    border-radius: 6px;
+    border-left: 3px solid #4f72ff;
+  }
+  
+  .suggestions-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4f72ff;
+    margin-bottom: 4px;
+  }
+  
+  .suggestions-list {
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.4;
+  }
 `;
 
 interface LandingPageProps {
@@ -990,6 +1514,7 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
     error,
     clearError,
     verificationEmail,
+    setVerificationEmail,
     showEmailVerificationModal,
     setShowEmailVerificationModal,
     resetPasswordSuccess,
@@ -1015,7 +1540,70 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
   const [loginPasswordVisible, setLoginPasswordVisible] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(false);
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [loginError, setLoginError] = useState<string>("");
   const [modalScrollPosition, setModalScrollPosition] = useState<number>(0);
+  const [oauthLoading, setOauthLoading] = useState<boolean>(false);
+  
+  // Email validation states
+  const [emailValidation, setEmailValidation] = useState<{
+    isValidFormat: boolean;
+    isChecking: boolean;
+    emailExists: boolean;
+    hasBeenChecked: boolean;
+  }>({
+    isValidFormat: false,
+    isChecking: false,
+    emailExists: false,
+    hasBeenChecked: false,
+  });
+  const emailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Login email validation (format only)
+  const [loginEmailValidation, setLoginEmailValidation] = useState<{
+    isValidFormat: boolean;
+    isChecking: boolean;
+    hasBeenChecked: boolean;
+  }>({
+    isValidFormat: false,
+    isChecking: false,
+    hasBeenChecked: false,
+  });
+  const loginEmailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Reset email validation (format + existence check)
+  const [resetEmailValidation, setResetEmailValidation] = useState<{
+    isValidFormat: boolean;
+    isChecking: boolean;
+    emailExists: boolean;
+    hasBeenChecked: boolean;
+  }>({
+    isValidFormat: false,
+    isChecking: false,
+    emailExists: false,
+    hasBeenChecked: false,
+  });
+  const resetEmailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Password validation states
+  const [passwordValidation, setPasswordValidation] = useState<{
+    strength: 'weak' | 'fair' | 'good' | 'strong';
+    score: number;
+    hasUppercase: boolean;
+    hasLowercase: boolean;
+    hasNumber: boolean;
+    hasSymbol: boolean;
+    hasMinLength: boolean;
+    suggestions: string[];
+  }>({
+    strength: 'weak',
+    score: 0,
+    hasUppercase: false,
+    hasLowercase: false,
+    hasNumber: false,
+    hasSymbol: false,
+    hasMinLength: false,
+    suggestions: [],
+  });
   
   // New states for hero section interactivity
   const [chartHovered, setChartHovered] = useState<number | null>(null);
@@ -1117,6 +1705,314 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
   });
   
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Email validation functions
+  const validateEmailFormat = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const checkEmailExists = useCallback(async (email: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.rpc('check_email_exists', {
+        email_input: email
+      });
+      
+      if (error) {
+        console.error('Error checking email:', error);
+        return false;
+      }
+      
+      return data === true;
+    } catch (error) {
+      console.error('Error checking email existence:', error);
+      return false;
+    }
+  }, []);
+
+  const debouncedEmailCheck = useCallback((email: string) => {
+    // Clear previous timeout
+    if (emailCheckTimeoutRef.current) {
+      clearTimeout(emailCheckTimeoutRef.current);
+    }
+
+    const isValidFormat = validateEmailFormat(email);
+
+    // Show loading state immediately for any input
+    setEmailValidation(prev => ({
+      ...prev,
+      isValidFormat,
+      isChecking: true,
+      emailExists: false,
+      hasBeenChecked: false,
+    }));
+
+    // Debounce the actual validation by 800ms
+    emailCheckTimeoutRef.current = setTimeout(async () => {
+      if (!isValidFormat) {
+        // If format is invalid, just update the state without checking existence
+        setEmailValidation(prev => ({
+          ...prev,
+          isChecking: false,
+          emailExists: false,
+          hasBeenChecked: true,
+        }));
+      } else {
+        // If format is valid, check if email exists
+        const exists = await checkEmailExists(email);
+        setEmailValidation(prev => ({
+          ...prev,
+          isChecking: false,
+          emailExists: exists,
+          hasBeenChecked: true,
+        }));
+      }
+    }, 800);
+  }, [checkEmailExists]);
+
+  // Password validation functions
+  const validatePasswordStrength = useCallback((password: string) => {
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    const hasSymbol = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password);
+    const hasMinLength = password.length >= 8;
+    
+    let score = 0;
+    const suggestions: string[] = [];
+    
+    // Calculate score and suggestions
+    if (hasMinLength) score += 1;
+    else suggestions.push("Use at least 8 characters");
+    
+    if (hasUppercase) score += 1;
+    else suggestions.push("Add uppercase letters (A-Z)");
+    
+    if (hasLowercase) score += 1;
+    else suggestions.push("Add lowercase letters (a-z)");
+    
+    if (hasNumber) score += 1;
+    else suggestions.push("Add numbers (0-9)");
+    
+    if (hasSymbol) score += 1;
+    else suggestions.push("Add symbols (!@#$%^&*)");
+    
+    // Determine strength
+    let strength: 'weak' | 'fair' | 'good' | 'strong';
+    if (score <= 1) strength = 'weak';
+    else if (score <= 2) strength = 'fair';
+    else if (score <= 3) strength = 'good';
+    else strength = 'strong';
+    
+    return {
+      strength,
+      score,
+      hasUppercase,
+      hasLowercase,
+      hasNumber,
+      hasSymbol,
+      hasMinLength,
+      suggestions,
+    };
+  }, []);
+
+  const handlePasswordChange = useCallback((newPassword: string) => {
+    setPassword(newPassword);
+    
+    // Clear form errors when user starts typing
+    if (formErrors.password) {
+      setFormErrors(prev => ({ ...prev, password: '' }));
+    }
+    
+    // Clear confirm password error if passwords now match
+    if (formErrors.confirmPassword && confirmPassword && newPassword === confirmPassword) {
+      setFormErrors(prev => ({ ...prev, confirmPassword: '' }));
+    }
+    
+    // Validate password strength immediately
+    const validation = validatePasswordStrength(newPassword);
+    setPasswordValidation(validation);
+  }, [formErrors.password, formErrors.confirmPassword, confirmPassword, validatePasswordStrength]);
+
+  // Login email validation (format only, no existence check)
+  const handleLoginEmailChange = useCallback((newEmail: string) => {
+    setEmail(newEmail);
+    
+    // Clear form errors and login errors when user starts typing
+    if (formErrors.email) {
+      setFormErrors(prev => ({ ...prev, email: '' }));
+    }
+    if (loginError) {
+      setLoginError("");
+      clearError();
+    }
+    
+    // Clear previous timeout
+    if (loginEmailCheckTimeoutRef.current) {
+      clearTimeout(loginEmailCheckTimeoutRef.current);
+    }
+
+    if (newEmail.length === 0) {
+      // Reset validation state when email is empty
+      setLoginEmailValidation({
+        isValidFormat: false,
+        isChecking: false,
+        hasBeenChecked: false,
+      });
+      return;
+    }
+
+    // Show loading state immediately for any input
+    setLoginEmailValidation(prev => ({
+      ...prev,
+      isChecking: true,
+      hasBeenChecked: false,
+    }));
+
+    // Debounce the validation by 500ms (shorter than registration since it's just format checking)
+    loginEmailCheckTimeoutRef.current = setTimeout(() => {
+      const isValidFormat = validateEmailFormat(newEmail);
+      setLoginEmailValidation({
+        isValidFormat,
+        isChecking: false,
+        hasBeenChecked: true,
+      });
+    }, 500);
+  }, [formErrors.email]);
+
+  // Reset email validation (format + existence check) - wants email to exist
+  const debouncedResetEmailCheck = useCallback((email: string) => {
+    // Clear previous timeout
+    if (resetEmailCheckTimeoutRef.current) {
+      clearTimeout(resetEmailCheckTimeoutRef.current);
+    }
+
+    const isValidFormat = validateEmailFormat(email);
+
+    // Show loading state immediately for any input
+    setResetEmailValidation(prev => ({
+      ...prev,
+      isValidFormat,
+      isChecking: true,
+      emailExists: false,
+      hasBeenChecked: false,
+    }));
+
+    // Debounce the actual validation by 800ms
+    resetEmailCheckTimeoutRef.current = setTimeout(async () => {
+      if (!isValidFormat) {
+        // If format is invalid, just update the state without checking existence
+        setResetEmailValidation(prev => ({
+          ...prev,
+          isChecking: false,
+          emailExists: false,
+          hasBeenChecked: true,
+        }));
+      } else {
+        // If format is valid, check if email exists (for reset, we WANT it to exist)
+        const exists = await checkEmailExists(email);
+        setResetEmailValidation(prev => ({
+          ...prev,
+          isChecking: false,
+          emailExists: exists,
+          hasBeenChecked: true,
+        }));
+      }
+    }, 800);
+  }, [checkEmailExists]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (emailCheckTimeoutRef.current) {
+        clearTimeout(emailCheckTimeoutRef.current);
+      }
+      if (loginEmailCheckTimeoutRef.current) {
+        clearTimeout(loginEmailCheckTimeoutRef.current);
+      }
+      if (resetEmailCheckTimeoutRef.current) {
+        clearTimeout(resetEmailCheckTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Reset validation states when modals close
+  useEffect(() => {
+    if (!showRegisterModal && !showLoginModal) {
+      setEmailValidation({
+        isValidFormat: false,
+        isChecking: false,
+        emailExists: false,
+        hasBeenChecked: false,
+      });
+      setLoginEmailValidation({
+        isValidFormat: false,
+        isChecking: false,
+        hasBeenChecked: false,
+      });
+      setPasswordValidation({
+        strength: 'weak',
+        score: 0,
+        hasUppercase: false,
+        hasLowercase: false,
+        hasNumber: false,
+        hasSymbol: false,
+        hasMinLength: false,
+        suggestions: [],
+      });
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setName("");
+      setFormErrors({});
+      setLoginError("");
+      clearError();
+    }
+  }, [showRegisterModal, showLoginModal, clearError]);
+
+  // Reset validation states when forgot password modal closes
+  useEffect(() => {
+    if (!showForgotPasswordModal) {
+      setResetEmailValidation({
+        isValidFormat: false,
+        isChecking: false,
+        emailExists: false,
+        hasBeenChecked: false,
+      });
+      setResetEmail("");
+      // Clear form errors for reset email
+      setFormErrors(prev => ({ ...prev, resetEmail: '' }));
+    }
+  }, [showForgotPasswordModal]);
+
+  // Handle redirect from PrivateRoute and show login modal
+  useEffect(() => {
+    const state = location.state as any;
+    const queryParams = new URLSearchParams(location.search);
+    
+    if (state?.showLogin || queryParams.get('login') === 'true') {
+      setShowLoginModal(true);
+      // Clear the state and query params to prevent the modal from showing again on refresh
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    
+    // Handle access denied parameter
+    if (queryParams.get('access_denied') === 'true') {
+      setShowLoginModal(true);
+      showErrorToast("Access denied: You don't have admin privileges");
+      // Clear the query params
+      navigate(location.pathname, { replace: true });
+    }
+    
+    // Handle error parameter
+    if (queryParams.get('error') === 'true') {
+      setShowLoginModal(true);
+      showErrorToast("An error occurred. Please try logging in again.");
+      // Clear the query params
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate, showErrorToast]);
 
   // Use activeTab to show the appropriate modal on initial render
   useEffect(() => {
@@ -1216,14 +2112,22 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
     if (form === 'login' || form === 'register') {
       if (!email) {
         errors.email = "Email is required";
-      } else if (!/\S+@\S+\.\S+/.test(email)) {
+      } else if (form === 'login' && loginEmailValidation.isChecking) {
+        errors.email = "Validating email format...";
+      } else if (form === 'login' && loginEmailValidation.hasBeenChecked && !loginEmailValidation.isValidFormat) {
         errors.email = "Email address is invalid";
+      } else if (form === 'register' && !emailValidation.isValidFormat) {
+        errors.email = "Email address is invalid";
+      } else if (form === 'register' && emailValidation.hasBeenChecked && emailValidation.emailExists) {
+        errors.email = "This email is already registered";
+      } else if (form === 'register' && emailValidation.isChecking) {
+        errors.email = "Checking email availability...";
       }
       
       if (!password) {
         errors.password = "Password is required";
-      } else if (password.length < 8) {
-        errors.password = "Password must be at least 8 characters";
+      } else if (form === 'register' && passwordValidation.strength === 'weak') {
+        errors.password = "Please create a stronger password";
       }
     }
     
@@ -1242,15 +2146,16 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
     if (form === 'resetPassword') {
       if (!resetEmail) {
         errors.resetEmail = "Email is required";
-      } else if (!/\S+@\S+\.\S+/.test(resetEmail)) {
+      } else if (resetEmailValidation.isChecking) {
+        errors.resetEmail = "Checking email...";
+      } else if (resetEmailValidation.hasBeenChecked && !resetEmailValidation.isValidFormat) {
         errors.resetEmail = "Email address is invalid";
+      } else if (resetEmailValidation.hasBeenChecked && resetEmailValidation.isValidFormat && !resetEmailValidation.emailExists) {
+        errors.resetEmail = "No account found with this email address";
       }
     }
     
     setFormErrors(errors);
-    
-    // Only show form validation errors, not toasts
-    // Removing toast notification for validation errors
     
     return Object.keys(errors).length === 0;
   };
@@ -1259,27 +2164,44 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
     e.preventDefault();
     if (!validateForm('login')) return;
     
+    // Clear previous errors
     clearError();
+    setLoginError("");
+    
     try {
       await signIn(email, password);
       
-      // If login is successful, close the modal
+      // If login is successful, close the modal and check if user is admin
       if (signInSuccess) {
         setShowLoginModal(false);
-        showSuccessToast("Successfully logged in!");
+        
+        // Check if user is admin and redirect accordingly
+        try {
+          const { isUserAdmin } = await import('../../utils/adminHelpers');
+          const isAdmin = await isUserAdmin();
+          
+          if (isAdmin) {
+            navigate('/admin/dashboard');
+          } else {
+            navigate('/dashboard');
+          }
+        } catch (adminCheckError) {
+          console.error('Error checking admin status:', adminCheckError);
+          // If admin check fails, default to regular dashboard
+          navigate('/dashboard');
+        }
       }
     } catch (err) {
       console.error('Login error:', err);
-      // Only show error toast for backend/API errors, not validation errors
-      if (error) {
-        showErrorToast(error);
-      } else if (err instanceof Error) {
-        showErrorToast(err.message);
-      } else {
-        showErrorToast("Failed to log in. Please try again.");
-      }
     }
   };
+  
+  // Update login error display when AuthContext error changes
+  useEffect(() => {
+    if (error && showLoginModal) {
+      setLoginError(error);
+    }
+  }, [error, showLoginModal]);
 
   const handleRegister = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -1310,14 +2232,17 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
   // Handle social login
   const handleSocialLogin = async (provider: string): Promise<void> => {
     clearError();
+    setOauthLoading(true);
     
     try {
       // Convert provider string to Provider type
-      if (provider === 'google' || provider === 'facebook') {
+      if (provider === 'google') {
         await signInWithOAuth(provider);
+        // Note: OAuth redirects away, so loading state will persist until redirect
       }
     } catch (err) {
       console.error(`${provider} login error:`, err);
+      setOauthLoading(false);
       // Only show error toast for backend/API errors
       if (error) {
         showErrorToast(error);
@@ -1365,36 +2290,105 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
     }
   }, [modalScrollPosition, showLoginModal, showRegisterModal]);
 
-  // Add handler for forgot password
+  // Helper function to handle reset password errors
+  const handleResetError = (errorMessage: string) => {
+    // Check if it's a rate limiting error
+    if (errorMessage.includes('rate') || errorMessage.includes('limit') || errorMessage.includes('many') || errorMessage.includes('wait')) {
+      showErrorToast(errorMessage);
+      
+      // Add helpful guidance for rate limited users
+      setTimeout(() => {
+        if (!resetPasswordSuccess) {
+          showErrorToast("💡 Tip: Password reset emails may take a few minutes to arrive. Check your spam folder too!");
+        }
+      }, 4000);
+    } else if (errorMessage.includes('invalid email') || errorMessage.includes('valid email')) {
+      showErrorToast(errorMessage);
+      // Focus back to email input for correction
+      setTimeout(() => {
+        const emailInput = document.getElementById('reset-email');
+        if (emailInput) emailInput.focus();
+      }, 1000);
+    } else if (errorMessage.includes('email') && (errorMessage.includes('delivery') || errorMessage.includes('send') || errorMessage.includes('unavailable'))) {
+      showErrorToast(errorMessage);
+      setTimeout(() => {
+        showErrorToast("📧 Please check your spam/junk folder. If the issue persists, contact our support team.");
+      }, 3500);
+    } else if (errorMessage.includes('confirm') || errorMessage.includes('verify')) {
+      showErrorToast(errorMessage);
+      setTimeout(() => {
+        showErrorToast("ℹ️ Check your inbox for any previous verification emails first.");
+      }, 3500);
+    } else if (errorMessage.includes('disabled') || errorMessage.includes('unavailable')) {
+      showErrorToast(errorMessage);
+      setTimeout(() => {
+        showErrorToast("🛠️ Service temporarily unavailable. Please try again in a few minutes.");
+      }, 3500);
+    } else {
+      showErrorToast(errorMessage);
+      // Generic fallback guidance
+      setTimeout(() => {
+        if (!resetPasswordSuccess) {
+          showErrorToast("💡 Double-check your email address and ensure it's associated with a BudgetMe account.");
+        }
+      }, 4000);
+    }
+  };
+
+  // Enhanced forgot password handler with better error handling
   const handleForgotPassword = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     
-    if (!validateForm('resetPassword')) return;
+    console.log('🔄 Password reset initiated for email:', resetEmail);
+    
+    if (!validateForm('resetPassword')) {
+      console.log('❌ Form validation failed');
+      return;
+    }
+    
+    console.log('✅ Form validation passed, starting reset process...');
     
     setIsResettingPassword(true);
     clearError();
     
     try {
-      await resetUserPassword(resetEmail);
-      
+      const result = await resetUserPassword(resetEmail);
+
+      console.log('📊 Reset result:', result);
+
       setIsResettingPassword(false);
       
-      // Show success modal instead of alert
-      if (resetPasswordSuccess) {
+      if (result.success) {
+        console.log('🎉 Password reset successful, showing success modal');
+        setShowForgotPasswordModal(false);
+        setShowResetSuccessModal(true);
+        showSuccessToast("Password reset email sent!");
+      } else if (result.error) {
+        console.log('❌ Password reset error detected:', result.error);
+        handleResetError(result.error);
+      } else {
+        console.log('⚠️ Unexpected state - no error but resetPasswordSuccess is false');
+        // Fallback: show success anyway since Supabase did not return an error
         setShowForgotPasswordModal(false);
         setShowResetSuccessModal(true);
         showSuccessToast("Password reset email sent!");
       }
+      
     } catch (err) {
       console.error('Password reset error:', err);
       setIsResettingPassword(false);
-      // Only show error toast for backend/API errors, not validation errors
-      if (error) {
-        showErrorToast(error);
-      } else if (err instanceof Error) {
-        showErrorToast(err.message);
+      
+      // Handle unexpected errors that weren't caught by the context
+      if (err instanceof Error) {
+        showErrorToast(err.message || "Password reset failed. Please try again.");
+        setTimeout(() => {
+          showErrorToast("🔄 If the problem continues, please refresh the page and try again.");
+        }, 3500);
       } else {
-        showErrorToast("Failed to send reset email. Please try again.");
+        showErrorToast("Unable to send reset email. Please verify your email address and try again.");
+        setTimeout(() => {
+          showErrorToast("💡 Make sure you're using the email address associated with your BudgetMe account.");
+        }, 4000);
       }
     }
   };
@@ -1437,6 +2431,8 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
       <style dangerouslySetInnerHTML={{ __html: moduleStyles }} />
       {/* Inject button styles */}
       <style dangerouslySetInnerHTML={{ __html: buttonStyles }} />
+      {/* Inject email validation styles */}
+      <style dangerouslySetInnerHTML={{ __html: emailValidationStyles }} />
       <Header onLoginClick={() => setShowLoginModal(true)} onRegisterClick={() => setShowRegisterModal(true)} />
       
       {/* Redesigned Hero Section */}
@@ -1550,11 +2546,26 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                 </div>
               </div>
               
-              <div className="device-mockup" style={{ 
+              <div className="apple-device-mockup" style={{ 
                 transform: `perspective(800px) rotateX(${deviceRotation.x}deg) rotateY(${deviceRotation.y}deg)` 
               }}>
+                {/* iPhone Screen */}
                 <div className="device-screen">
                   <div className="screen-content">
+                    {/* iOS Status Bar */}
+                    <div className="ios-status-bar">
+                      <div className="status-left">
+                        <span className="status-time">9:41</span>
+                      </div>
+                      <div className="status-right">
+                        <div className="status-icons">
+                          <i className="bx bx-signal-5"></i>
+                          <i className="bx bx-wifi"></i>
+                          <i className="bx bx-battery"></i>
+                        </div>
+                      </div>
+                    </div>
+                    
                     <div className="screen-header">
                       <div className="screen-title">Your Dashboard</div>
                       <div className="screen-date">July 2025</div>
@@ -1625,6 +2636,13 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                       ></div>
                     </div>
                   </div>
+                </div>
+                
+                {/* iPhone Side Buttons */}
+                <div className="device-buttons">
+                  <div className="button-volume-up"></div>
+                  <div className="button-volume-down"></div>
+                  <div className="button-power"></div>
                 </div>
               </div>
             </div>
@@ -2856,33 +3874,68 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                 e.preventDefault();
                 handleLogin(e);
               }}>
-                <div className="form-group">
-                  <label htmlFor="login-email">Email</label>
-                  <div className={`input-with-icon ${formErrors.email ? 'input-error' : ''}`}>
-                    <i className="bx bx-envelope"></i>
-                    <input
-                      type="email"
-                      id="login-email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="enhanced-input"
-                      required
-                    />
-                  </div>
-                  {formErrors.email && <div className="error-message">{formErrors.email}</div>}
-                </div>
+                    <div className="form-group">
+                      <label htmlFor="login-email">Email</label>
+                      <div className={`input-with-icon ${
+                        formErrors.email || loginError ? 'input-error' : 
+                        loginEmailValidation.hasBeenChecked && !loginEmailValidation.isValidFormat ? 'input-error' : 
+                        loginEmailValidation.hasBeenChecked && loginEmailValidation.isValidFormat ? 'input-success' : ''
+                      }`}>
+                        {!formErrors.email && !loginError && (
+                          <i className="bx bx-envelope input-icon-left"></i>
+                        )}
+                        <input
+                          type="email"
+                          id="login-email"
+                          value={email}
+                          onChange={(e) => handleLoginEmailChange(e.target.value)}
+                          placeholder="Enter your email"
+                          className={`enhanced-input ${
+                            formErrors.email || loginError ? 'no-left-icon' : ''
+                          }`}
+                          required
+                        />
+                      </div>
+                      {formErrors.email && <div className="error-message">{formErrors.email}</div>}
+                      {!formErrors.email && loginEmailValidation.isChecking && (
+                        <div className="info-message" style={{ color: '#4f72ff', fontSize: '14px', marginTop: '4px' }}>
+                          <i className="bx bx-loader-alt bx-spin"></i> Checking email format...
+                        </div>
+                      )}
+                      {!formErrors.email && loginEmailValidation.hasBeenChecked && !loginEmailValidation.isValidFormat && !loginEmailValidation.isChecking && (
+                        <div className="error-message">
+                          Please enter a valid email address
+                        </div>
+                      )}
+                      {!formErrors.email && loginEmailValidation.hasBeenChecked && loginEmailValidation.isValidFormat && !loginEmailValidation.isChecking && (
+                        <div className="success-message" style={{ color: '#10b981', fontSize: '14px', marginTop: '4px' }}>
+                          <i className="bx bx-check-circle"></i> Valid email format
+                        </div>
+                      )}
+                    </div>
                 <div className="form-group">
                   <label htmlFor="login-password">Password</label>
-                  <div className={`input-with-icon password-field ${formErrors.password ? 'input-error' : ''}`}>
-                    <i className="bx bx-lock-alt"></i>
+                  <div className={`input-with-icon password-field ${formErrors.password || loginError ? 'input-error' : ''}`}>
+                    {!formErrors.password && !loginError && (
+                      <i className="bx bx-lock-alt input-icon-left"></i>
+                    )}
                     <input
                       type={loginPasswordVisible ? "text" : "password"}
                       id="login-password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        // Clear form errors and login errors when user starts typing
+                        if (formErrors.password) {
+                          setFormErrors(prev => ({ ...prev, password: '' }));
+                        }
+                        if (loginError) {
+                          setLoginError("");
+                          clearError();
+                        }
+                      }}
                       placeholder="Enter your password"
-                      className="enhanced-input"
+                      className={`enhanced-input ${formErrors.password || loginError ? 'no-left-icon' : ''}`}
                       required
                     />
                     <button 
@@ -2895,6 +3948,34 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                     </button>
                   </div>
                   {formErrors.password && <div className="error-message">{formErrors.password}</div>}
+                  
+                  {/* Display login error message */}
+                  {!formErrors.password && loginError && (
+                    <div className="error-message" style={{ marginTop: '8px' }}>
+                      <i className="bx bx-error-circle"></i> {loginError}
+                      {loginError.toLowerCase().includes('verify') && loginError.toLowerCase().includes('email') && (
+                        <div style={{ marginTop: '8px', fontSize: '13px' }}>
+                          <button 
+                            type="button" 
+                            className="text-btn" 
+                            onClick={() => {
+                              setShowLoginModal(false);
+                              setVerificationEmail(email);
+                              setTimeout(() => setShowEmailVerificationModal(true), 300);
+                            }}
+                            style={{ 
+                              textDecoration: 'underline', 
+                              color: '#4f72ff',
+                              fontSize: '13px',
+                              fontWeight: '500'
+                            }}
+                          >
+                            Resend verification email
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="form-options">
@@ -2944,17 +4025,19 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                       type="button"
                       className="social-btn google"
                       onClick={() => handleSocialLogin('google')}
+                      disabled={oauthLoading || loading}
                     >
-                      <GoogleIcon className="social-icon" />
-                      <span>Google</span>
-                    </button>
-                    <button 
-                      type="button"
-                      className="social-btn facebook"
-                      onClick={() => handleSocialLogin('facebook')}
-                    >
-                      <FacebookIcon className="social-icon" />
-                      <span>Facebook</span>
+                      {oauthLoading ? (
+                        <>
+                          <div className="oauth-spinner"></div>
+                          <span>Connecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <GoogleIcon className="social-icon" />
+                          <span>Google</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -3019,7 +4102,7 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                 <div className="form-group">
                   <label htmlFor="register-name">Full Name</label>
                   <div className={`input-with-icon ${formErrors.name ? 'input-error' : ''}`}>
-                    <i className="bx bx-user"></i>
+                    <i className="bx bx-user input-icon-left"></i>
                     <input
                       type="text"
                       id="register-name"
@@ -3034,31 +4117,89 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                 </div>
                 <div className="form-group">
                   <label htmlFor="register-email">Email</label>
-                  <div className={`input-with-icon ${formErrors.email ? 'input-error' : ''}`}>
-                    <i className="bx bx-envelope"></i>
+                  <div className={`input-with-icon ${formErrors.email ? 'input-error' : emailValidation.hasBeenChecked && (!emailValidation.isValidFormat || emailValidation.emailExists) ? 'input-error' : emailValidation.hasBeenChecked && emailValidation.isValidFormat && !emailValidation.emailExists ? 'input-success' : ''}`}>
+                    {!formErrors.email && (
+                      <i className="bx bx-envelope input-icon-left"></i>
+                    )}
                     <input
                       type="email"
                       id="register-email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        const newEmail = e.target.value;
+                        setEmail(newEmail);
+                        // Clear form errors when user starts typing
+                        if (formErrors.email) {
+                          setFormErrors(prev => ({ ...prev, email: '' }));
+                        }
+                        // Trigger debounced email validation
+                        if (newEmail.length > 0) {
+                          debouncedEmailCheck(newEmail);
+                        } else {
+                          // Reset validation state when email is empty
+                          setEmailValidation({
+                            isValidFormat: false,
+                            isChecking: false,
+                            emailExists: false,
+                            hasBeenChecked: false,
+                          });
+                        }
+                      }}
                       placeholder="Enter your email"
-                      className="enhanced-input"
+                      className={`enhanced-input ${
+                        formErrors.email ? 'no-left-icon' : ''
+                      }`}
                       required
                     />
                   </div>
                   {formErrors.email && <div className="error-message">{formErrors.email}</div>}
+                  {!formErrors.email && emailValidation.hasBeenChecked && !emailValidation.isChecking && !emailValidation.isValidFormat && (
+                    <div className="error-message">
+                      Please enter a valid email address
+                    </div>
+                  )}
+                  {!formErrors.email && emailValidation.hasBeenChecked && !emailValidation.isChecking && emailValidation.isValidFormat && !emailValidation.emailExists && (
+                    <div className="success-message" style={{ color: '#10b981', fontSize: '14px', marginTop: '4px' }}>
+                      <i className="bx bx-check-circle"></i> Email is available
+                    </div>
+                  )}
+                  {!formErrors.email && emailValidation.hasBeenChecked && !emailValidation.isChecking && emailValidation.emailExists && (
+                    <div className="error-message">
+                      This email is already registered. <button 
+                        type="button" 
+                        className="text-btn" 
+                        onClick={() => {
+                          setShowRegisterModal(false);
+                          setTimeout(() => setShowLoginModal(true), 300);
+                        }}
+                        style={{ textDecoration: 'underline', color: 'inherit' }}
+                      >
+                        Sign in instead?
+                      </button>
+                    </div>
+                  )}
+                  {!formErrors.email && emailValidation.isChecking && (
+                    <div className="info-message" style={{ color: '#4f72ff', fontSize: '14px', marginTop: '4px' }}>
+                      <i className="bx bx-loader-alt bx-spin"></i> Checking email availability...
+                    </div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label htmlFor="register-password">Password</label>
-                  <div className={`input-with-icon password-field ${formErrors.password ? 'input-error' : ''}`}>
-                    <i className="bx bx-lock-alt"></i>
+                  <div className={`input-with-icon password-field ${formErrors.password ? 'input-error' : passwordValidation.strength === 'strong' ? 'input-success' : passwordValidation.strength === 'good' ? 'input-warning' : ''}`}>
+                    {!formErrors.password && password.length === 0 && (
+                      <i className="bx bx-lock-alt input-icon-left"></i>
+                    )}
                     <input
                       type={passwordVisible ? "text" : "password"}
                       id="register-password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Create a password (min. 8 characters)"
-                      className="enhanced-input"
+                      onChange={(e) => handlePasswordChange(e.target.value)}
+                      placeholder="Create a strong password"
+                      className={`enhanced-input ${
+                        formErrors.password || password.length > 0
+                        ? 'no-left-icon' : ''
+                      }`}
                       required
                     />
                     <button 
@@ -3069,26 +4210,119 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                     >
                       <i className={`bx ${passwordVisible ? 'bx-hide' : 'bx-show'}`}></i>
                     </button>
+                    {password.length > 0 && passwordValidation.strength === 'strong' && (
+                      <i className="bx bx-check-circle" style={{ 
+                        position: 'absolute', 
+                        right: '44px', 
+                        top: '50%', 
+                        transform: 'translateY(-50%)',
+                        color: '#10b981',
+                        fontSize: '18px'
+                      }}></i>
+                    )}
+                    {password.length > 0 && passwordValidation.strength !== 'strong' && (
+                      <i className="bx bx-info-circle" style={{ 
+                        position: 'absolute', 
+                        right: '44px', 
+                        top: '50%', 
+                        transform: 'translateY(-50%)',
+                        color: passwordValidation.strength === 'good' ? '#3b82f6' : passwordValidation.strength === 'fair' ? '#f59e0b' : '#ef4444',
+                        fontSize: '18px'
+                      }}></i>
+                    )}
                   </div>
                   {formErrors.password && <div className="error-message">{formErrors.password}</div>}
-                  <div className="password-strength">
-                    <div className={`strength-meter ${password.length > 0 ? (password.length >= 8 ? 'strong' : 'weak') : ''}`}></div>
-                    <span className="strength-text">{password.length > 0 ? (password.length >= 8 ? 'Strong' : 'Weak') : ' '}</span>
-                  </div>
+                  
+                  {password.length > 0 && (
+                    <div className="password-strength-container">
+                      {/* Strength Meter */}
+                      <div className="password-strength-meter">
+                        {[1, 2, 3, 4, 5].map((bar) => (
+                          <div 
+                            key={bar}
+                            className={`strength-bar ${
+                              bar <= passwordValidation.score ? passwordValidation.strength : ''
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      
+                      {/* Strength Label */}
+                      <div className={`password-strength-label strength-${passwordValidation.strength}`}>
+                        <i className={`bx ${
+                          passwordValidation.strength === 'strong' ? 'bxs-shield-check' :
+                          passwordValidation.strength === 'good' ? 'bxs-shield' :
+                          passwordValidation.strength === 'fair' ? 'bxs-shield-minus' :
+                          'bxs-shield-x'
+                        }`}></i>
+                        Password strength: {passwordValidation.strength.charAt(0).toUpperCase() + passwordValidation.strength.slice(1)}
+                      </div>
+                      
+                      {/* Requirements */}
+                      <div className="password-requirements">
+                        <div className={`requirement-item ${passwordValidation.hasMinLength ? 'met' : 'unmet'}`}>
+                          <i className={`bx ${passwordValidation.hasMinLength ? 'bx-check' : 'bx-x'}`}></i>
+                          <span>8+ characters</span>
+                        </div>
+                        <div className={`requirement-item ${passwordValidation.hasUppercase ? 'met' : 'unmet'}`}>
+                          <i className={`bx ${passwordValidation.hasUppercase ? 'bx-check' : 'bx-x'}`}></i>
+                          <span>Uppercase (A-Z)</span>
+                        </div>
+                        <div className={`requirement-item ${passwordValidation.hasLowercase ? 'met' : 'unmet'}`}>
+                          <i className={`bx ${passwordValidation.hasLowercase ? 'bx-check' : 'bx-x'}`}></i>
+                          <span>Lowercase (a-z)</span>
+                        </div>
+                        <div className={`requirement-item ${passwordValidation.hasNumber ? 'met' : 'unmet'}`}>
+                          <i className={`bx ${passwordValidation.hasNumber ? 'bx-check' : 'bx-x'}`}></i>
+                          <span>Number (0-9)</span>
+                        </div>
+                        <div className={`requirement-item ${passwordValidation.hasSymbol ? 'met' : 'unmet'}`}>
+                          <i className={`bx ${passwordValidation.hasSymbol ? 'bx-check' : 'bx-x'}`}></i>
+                          <span>Symbol (!@#$)</span>
+                        </div>
+                      </div>
+                      
+                      {/* Suggestions */}
+                      {passwordValidation.suggestions.length > 0 && (
+                        <div className="password-suggestions">
+                          <div className="suggestions-title">💡 To strengthen your password:</div>
+                          <div className="suggestions-list">
+                            {passwordValidation.suggestions.join(' • ')}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
                 {/* Confirm Password Field */}
                 <div className="form-group">
                   <label htmlFor="register-confirm-password">Confirm Password</label>
-                  <div className={`input-with-icon password-field ${formErrors.confirmPassword ? 'input-error' : ''}`}>
-                    <i className="bx bx-lock-alt"></i>
+                  <div className={`input-with-icon password-field ${
+                    formErrors.confirmPassword ? 'input-error' : 
+                    confirmPassword.length > 0 && password === confirmPassword ? 'input-success' : 
+                    confirmPassword.length > 0 && password !== confirmPassword ? 'input-error' : ''
+                  }`}>
+                    {!formErrors.confirmPassword && confirmPassword.length === 0 && (
+                      <i className="bx bx-lock-alt input-icon-left"></i>
+                    )}
                     <input
                       type={confirmPasswordVisible ? "text" : "password"}
                       id="register-confirm-password"
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onChange={(e) => {
+                        const newConfirmPassword = e.target.value;
+                        setConfirmPassword(newConfirmPassword);
+                        // Clear form errors when user starts typing
+                        if (formErrors.confirmPassword) {
+                          setFormErrors(prev => ({ ...prev, confirmPassword: '' }));
+                        }
+                      }}
                       placeholder="Confirm your password"
-                      className="enhanced-input"
+                      className={`enhanced-input ${
+                        formErrors.confirmPassword || confirmPassword.length > 0
+                        ? 'no-left-icon' : ''
+                      }`}
                       required
                     />
                     <button 
@@ -3099,8 +4333,38 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                     >
                       <i className={`bx ${confirmPasswordVisible ? 'bx-hide' : 'bx-show'}`}></i>
                     </button>
+                    {confirmPassword.length > 0 && password === confirmPassword && (
+                      <i className="bx bx-check-circle" style={{ 
+                        position: 'absolute', 
+                        right: '44px', 
+                        top: '50%', 
+                        transform: 'translateY(-50%)',
+                        color: '#10b981',
+                        fontSize: '18px'
+                      }}></i>
+                    )}
+                    {confirmPassword.length > 0 && password !== confirmPassword && (
+                      <i className="bx bx-x-circle" style={{ 
+                        position: 'absolute', 
+                        right: '44px', 
+                        top: '50%', 
+                        transform: 'translateY(-50%)',
+                        color: '#ef4444',
+                        fontSize: '18px'
+                      }}></i>
+                    )}
                   </div>
                   {formErrors.confirmPassword && <div className="error-message">{formErrors.confirmPassword}</div>}
+                  {!formErrors.confirmPassword && confirmPassword.length > 0 && password === confirmPassword && (
+                    <div className="success-message" style={{ color: '#10b981', fontSize: '14px', marginTop: '4px' }}>
+                      <i className="bx bx-check-circle"></i> Passwords match
+                    </div>
+                  )}
+                  {!formErrors.confirmPassword && confirmPassword.length > 0 && password !== confirmPassword && (
+                    <div className="error-message">
+                      Passwords do not match
+                    </div>
+                  )}
                 </div>
                 
                 {/* Terms and Conditions Checkbox */}
@@ -3136,17 +4400,19 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
                       type="button"
                       className="social-btn google"
                       onClick={() => handleSocialLogin('google')}
+                      disabled={oauthLoading || loading}
                     >
-                      <GoogleIcon className="social-icon" />
-                      <span>Google</span>
-                    </button>
-                    <button 
-                      type="button"
-                      className="social-btn facebook"
-                      onClick={() => handleSocialLogin('facebook')}
-                    >
-                      <FacebookIcon className="social-icon" />
-                      <span>Facebook</span>
+                      {oauthLoading ? (
+                        <>
+                          <div className="oauth-spinner"></div>
+                          <span>Connecting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <GoogleIcon className="social-icon" />
+                          <span>Google</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -3203,46 +4469,144 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
             </div>
             <div className="modal-body" ref={forgotPasswordModalRef}>
               <h2 className="modal-title text-center mb-6">Reset Your Password</h2>
-              <p className="text-center mb-4">Enter your email address and we'll send you a link to reset your password.</p>
+              <p className="text-center mb-4">Enter your email address and we'll send you a secure link to reset your password.</p>
+              
+              {/* Security Notice */}
+              <div className="security-notice mb-4" style={{
+                background: 'rgba(59, 130, 246, 0.05)',
+                border: '1px solid rgba(59, 130, 246, 0.2)',
+                borderRadius: '8px',
+                padding: '12px',
+                fontSize: '14px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <i className="bx bx-info-circle" style={{ color: '#3b82f6' }}></i>
+                  <strong style={{ color: '#3b82f6' }}>Security Notice</strong>
+                </div>
+                <ul style={{ margin: '0', paddingLeft: '16px', color: '#64748b' }}>
+                  <li>You can request up to 3 password resets per hour</li>
+                  <li>Check your spam folder if you don't see the email</li>
+                  <li>The reset link expires after 24 hours</li>
+                </ul>
+              </div>
               
               <form onSubmit={(e) => {
                 e.preventDefault();
                 handleForgotPassword(e);
               }}>
                 <div className="form-group">
-                  <label htmlFor="reset-email">Email</label>
-                  <div className={`input-with-icon ${formErrors.resetEmail ? 'input-error' : ''}`}>
-                    <i className="bx bx-envelope"></i>
+                  <label htmlFor="reset-email">Email Address</label>
+                  <div className={`input-with-icon ${
+                    formErrors.resetEmail ? 'input-error' : 
+                    resetEmailValidation.hasBeenChecked && (!resetEmailValidation.isValidFormat || !resetEmailValidation.emailExists) ? 'input-error' : 
+                    resetEmailValidation.hasBeenChecked && resetEmailValidation.isValidFormat && resetEmailValidation.emailExists ? 'input-success' : ''
+                  }`}>
+                    {!formErrors.resetEmail && (
+                      <i className="bx bx-envelope input-icon-left"></i>
+                    )}
                     <input
                       type="email"
                       id="reset-email"
                       value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="enhanced-input"
+                      onChange={(e) => {
+                        const newResetEmail = e.target.value;
+                        setResetEmail(newResetEmail);
+                        // Clear form errors when user starts typing
+                        if (formErrors.resetEmail) {
+                          setFormErrors(prev => ({ ...prev, resetEmail: '' }));
+                        }
+                        // Trigger debounced email validation
+                        if (newResetEmail.length > 0) {
+                          debouncedResetEmailCheck(newResetEmail);
+                        } else {
+                          // Reset validation state when email is empty
+                          setResetEmailValidation({
+                            isValidFormat: false,
+                            isChecking: false,
+                            emailExists: false,
+                            hasBeenChecked: false,
+                          });
+                        }
+                      }}
+                      placeholder="Enter your email address"
+                      className={`enhanced-input ${formErrors.resetEmail ? 'no-left-icon' : ''}`}
                       required
+                      disabled={isResettingPassword}
+                      autoComplete="email"
                     />
                   </div>
                   {formErrors.resetEmail && <div className="error-message">{formErrors.resetEmail}</div>}
+                  {!formErrors.resetEmail && resetEmailValidation.hasBeenChecked && !resetEmailValidation.isChecking && !resetEmailValidation.isValidFormat && (
+                    <div className="error-message">
+                      Please enter a valid email address
+                    </div>
+                  )}
+                  {!formErrors.resetEmail && resetEmailValidation.hasBeenChecked && !resetEmailValidation.isChecking && resetEmailValidation.isValidFormat && !resetEmailValidation.emailExists && (
+                    <div className="error-message">
+                      No account found with this email address. <button 
+                        type="button" 
+                        className="text-btn" 
+                        onClick={() => {
+                          setShowForgotPasswordModal(false);
+                          setTimeout(() => setShowRegisterModal(true), 300);
+                        }}
+                        style={{ textDecoration: 'underline', color: 'inherit' }}
+                      >
+                        Create an account?
+                      </button>
+                    </div>
+                  )}
+                  {!formErrors.resetEmail && resetEmailValidation.hasBeenChecked && !resetEmailValidation.isChecking && resetEmailValidation.isValidFormat && resetEmailValidation.emailExists && (
+                    <div className="success-message" style={{ color: '#10b981', fontSize: '14px', marginTop: '4px' }}>
+                      <i className="bx bx-check-circle"></i> Account found - ready to send reset link
+                    </div>
+                  )}
+                  {!formErrors.resetEmail && resetEmailValidation.isChecking && (
+                    <div className="info-message" style={{ color: '#4f72ff', fontSize: '14px', marginTop: '4px' }}>
+                      <i className="bx bx-loader-alt bx-spin"></i> Checking account...
+                    </div>
+                  )}
                 </div>
                 
                 <button 
                   type="submit" 
                   className="btn-primary btn-block"
-                  disabled={isResettingPassword}
+                  disabled={
+                    isResettingPassword || 
+                    !resetEmail.trim() || 
+                    resetEmailValidation.isChecking ||
+                    (resetEmailValidation.hasBeenChecked && (!resetEmailValidation.isValidFormat || !resetEmailValidation.emailExists))
+                  }
                   style={{ 
                     transition: "all 0.3s ease",
-                    transform: isResettingPassword ? "scale(0.98)" : "scale(1)"
+                    transform: isResettingPassword ? "scale(0.98)" : "scale(1)",
+                    opacity: isResettingPassword || 
+                             !resetEmail.trim() || 
+                             resetEmailValidation.isChecking ||
+                             (resetEmailValidation.hasBeenChecked && (!resetEmailValidation.isValidFormat || !resetEmailValidation.emailExists)) 
+                             ? 0.7 : 1
                   }}
-                  onMouseDown={(e) => e.currentTarget.style.transform = "scale(0.98)"}
-                  onMouseUp={(e) => e.currentTarget.style.transform = "scale(1)"}
+                  onMouseDown={(e) => !isResettingPassword && (e.currentTarget.style.transform = "scale(0.98)")}
+                  onMouseUp={(e) => !isResettingPassword && (e.currentTarget.style.transform = "scale(1)")}
                 >
                   {isResettingPassword ? (
                     <>
-                      <i className="bx bx-loader-alt bx-spin"></i> Sending Reset Link...
+                      <i className="bx bx-loader-alt bx-spin"></i> Sending Secure Link...
                     </>
-                  ) : 'Reset Password'}
+                  ) : (
+                    <>
+                      <i className="bx bx-paper-plane"></i> Send Reset Link
+                    </>
+                  )}
                 </button>
+                
+                {/* Additional help text */}
+                <div className="text-center mt-4" style={{ fontSize: '13px', color: '#64748b' }}>
+                  <p>
+                    <i className="bx bx-shield-check" style={{ color: '#10b981' }}></i>
+                    We'll never share your email address with anyone
+                  </p>
+                </div>
               </form>
             </div>
             <div className="modal-footer">
@@ -3296,29 +4660,88 @@ const LandingPage: FC<LandingPageProps> = ({ activeTab }) => {
             </div>
             <div className="modal-body text-center">
               <div className="success-icon mb-4">
-                <i className="bx bx-check-circle text-success" style={{ fontSize: '3rem' }}></i>
+                <i className="bx bx-check-circle text-success" style={{ fontSize: '3rem', color: '#10b981' }}></i>
               </div>
-              <h2 className="modal-title mb-4">Password Reset Email Sent</h2>
-              <p className="mb-4">
-                We've sent a password reset link to: <strong>{resetEmail}</strong>
+              <h2 className="modal-title mb-4">Password Reset Link Sent!</h2>
+              <p className="mb-4" style={{ fontSize: '16px', lineHeight: '1.6' }}>
+                We've sent a secure password reset link to:<br />
+                <strong style={{ color: '#4f72ff' }}>{resetEmail}</strong>
               </p>
-              <p className="mb-4">
-                Please check your inbox and follow the instructions to reset your password.
-              </p>
-              <div className="reset-instructions">
-                <p><i className="bx bx-info-circle"></i> If you don't see the email, check your spam folder</p>
-                <p><i className="bx bx-time"></i> The link will expire after 24 hours</p>
+              
+              {/* Next Steps */}
+              <div className="next-steps mb-4" style={{
+                background: 'rgba(16, 185, 129, 0.05)',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                borderRadius: '8px',
+                padding: '16px',
+                textAlign: 'left'
+              }}>
+                <h4 style={{ color: '#10b981', margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600' }}>
+                  <i className="bx bx-list-check"></i> Next Steps:
+                </h4>
+                <ol style={{ margin: '0', paddingLeft: '20px', fontSize: '14px', color: '#64748b' }}>
+                  <li>Check your email inbox for a message from BudgetMe</li>
+                  <li>Click the "Reset My Password" button in the email</li>
+                  <li>Create a new secure password on the reset page</li>
+                  <li>Sign in with your new password</li>
+                </ol>
               </div>
-              <button 
-                className="btn-primary mt-4"
-                onClick={() => {
-                  setShowResetSuccessModal(false);
-                  setResetEmail("");
-                  setResetPasswordSuccess(false);
-                }}
-              >
-                Got It
-              </button>
+              
+              {/* Troubleshooting */}
+              <div className="reset-instructions mb-4" style={{
+                background: 'rgba(249, 115, 22, 0.05)',
+                border: '1px solid rgba(249, 115, 22, 0.2)',
+                borderRadius: '8px',
+                padding: '16px',
+                fontSize: '14px'
+              }}>
+                <h4 style={{ color: '#f97316', margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600' }}>
+                  <i className="bx bx-help-circle"></i> Didn't receive the email?
+                </h4>
+                <div style={{ textAlign: 'left', color: '#64748b' }}>
+                  <p style={{ margin: '4px 0' }}>
+                    <i className="bx bx-search-alt" style={{ color: '#f97316' }}></i> Check your spam/junk folder
+                  </p>
+                  <p style={{ margin: '4px 0' }}>
+                    <i className="bx bx-time" style={{ color: '#f97316' }}></i> Wait a few minutes for delivery
+                  </p>
+                  <p style={{ margin: '4px 0' }}>
+                    <i className="bx bx-refresh" style={{ color: '#f97316' }}></i> Try requesting another reset link
+                  </p>
+                  <p style={{ margin: '4px 0', fontSize: '13px', fontStyle: 'italic' }}>
+                    The reset link expires in 24 hours for your security
+                  </p>
+                </div>
+              </div>
+              
+              <div className="modal-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <button 
+                  className="btn-primary"
+                  onClick={() => {
+                    setShowResetSuccessModal(false);
+                    setResetEmail("");
+                    setResetPasswordSuccess(false);
+                  }}
+                >
+                  <i className="bx bx-check"></i> Got It
+                </button>
+                <button 
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowResetSuccessModal(false);
+                    setResetPasswordSuccess(false);
+                    // Don't clear resetEmail so user can try again
+                    setTimeout(() => setShowForgotPasswordModal(true), 200);
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #d1d5db',
+                    color: '#64748b'
+                  }}
+                >
+                  <i className="bx bx-refresh"></i> Send Another Link
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -21,6 +21,8 @@ interface ChatWindowProps {
   isAuthenticated: boolean;
   remainingMessages: number | null;
   showLoginPrompt: boolean;
+  rateLimitWarning?: boolean;
+  retryCountdown?: number;
   onSendMessage: (message: string) => void;
   onSuggestionClick: (suggestion: string) => void;
   onMinimize: () => void;
@@ -41,6 +43,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   isAuthenticated,
   remainingMessages,
   showLoginPrompt,
+  rateLimitWarning = false,
+  retryCountdown = 0,
   onSendMessage,
   onSuggestionClick,
   onClose,
@@ -301,6 +305,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
           {/* Chat Input */}
           <form onSubmit={handleSubmit} className="chat-input-container">
+            {/* Rate Limiting Warning */}
+            {rateLimitWarning && (
+              <div className="rate-limit-warning">
+                <div className="rate-limit-content">
+                  <svg className="rate-limit-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="rate-limit-text">
+                    Rate limit reached. Please wait {retryCountdown} seconds before sending another message.
+                  </span>
+                </div>
+              </div>
+            )}
+            
             <div className="chat-input-wrapper">
               <textarea
                 ref={inputRef}
@@ -310,12 +329,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 placeholder="Type your message..."
                 className="chat-input"
                 rows={1}
-                disabled={isLoading}
+                disabled={isLoading || rateLimitWarning}
               />
               <button
                 type="submit"
                 className="chat-send-btn"
-                disabled={!inputValue.trim() || isLoading || (!isAuthenticated && remainingMessages !== null && remainingMessages <= 0)}
+                disabled={!inputValue.trim() || isLoading || rateLimitWarning || (!isAuthenticated && remainingMessages !== null && remainingMessages <= 0)}
                 aria-label="Send message"
               >
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -69,7 +69,7 @@ export const CentavoInput: React.FC<CentavoInputProps> = ({
     setDisplayValue(input);
     
     // Parse and validate centavo input
-    const parsed = parseCurrencyInput(input, currency);
+    const parsed = parseCurrencyInput(input);
     
     // Always round to 2 decimal places (centavos) regardless of input
     const rounded = Math.round(parsed * 100) / 100;
@@ -123,7 +123,7 @@ export const CentavoInput: React.FC<CentavoInputProps> = ({
     }
   };
 
-  const currencySymbol = getCurrencySymbol(currency);
+  const currencySymbol = getCurrencySymbol();
   const config = CURRENCY_CONFIGS[currency] || CURRENCY_CONFIGS[DEFAULT_CURRENCY];
   const inputId = id || name || 'centavo-input';
 
@@ -206,11 +206,11 @@ export const CentavoInput: React.FC<CentavoInputProps> = ({
       {(min !== undefined || max !== undefined) && !error && (
         <small className="form-text text-muted">
           {min !== undefined && max !== undefined
-            ? `Range: ${formatCurrency(min, currency)} - ${formatCurrency(max, currency)}`
+            ? `Range: ${formatCurrency(min)} - ${formatCurrency(max)}`
             : min !== undefined
-            ? `Minimum: ${formatCurrency(min, currency)}`
+            ? `Minimum: ${formatCurrency(min)}`
             : max !== undefined
-            ? `Maximum: ${formatCurrency(max, currency)}`
+            ? `Maximum: ${formatCurrency(max)}`
             : ''
           }
         </small>
@@ -289,14 +289,14 @@ export const ContributionInput: React.FC<ContributionInputProps> = ({
         ) : (
           <>
             <i className="fas fa-plus me-2"></i>
-            Contribute {amount > 0 ? formatCurrency(amount, currency) : ''}
+            Contribute {amount > 0 ? formatCurrency(amount) : ''}
           </>
         )}
       </button>
       
       {maxAmount !== undefined && amount > maxAmount && (
         <small className="text-danger d-block mt-1">
-          Amount exceeds remaining target of {formatCurrency(maxAmount, currency)}
+          Amount exceeds remaining target of {formatCurrency(maxAmount)}
         </small>
       )}
     </div>
@@ -361,7 +361,7 @@ export const BudgetAmountInput: React.FC<BudgetAmountInputProps> = ({
                 onClick={() => handleSuggestedAmountClick(amount)}
                 disabled={disabled}
               >
-                {formatCurrency(amount, currency, { showDecimals: amount % 1 !== 0 })}
+                {formatCurrency(amount, { showDecimals: amount % 1 !== 0 })}
               </button>
             ))}
           </div>

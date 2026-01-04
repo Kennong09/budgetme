@@ -128,76 +128,68 @@ export const usePredictionData = (timeframe: TimeframeType) => {
     try {
       // Add timeout wrapper for the entire operation
       const dataFetchPromise = (async () => {
-        // Use caching for performance
-        const cachedData = await PredictionService.getCachedPredictionData(
-          user.id,
-          async () => {
-            setCacheStatus('miss');
-            
-            console.log('usePredictionData: Cache miss, fetching fresh data');
-            
-            // Fetch all data in parallel with individual timeouts
-            const [metadata, categoryData, predictionDataResult] = await Promise.all([
-              Promise.resolve(generateModelMetadata()),
-              Promise.race([
-                generateCategoryPredictions(user.id),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Category predictions timeout')), 8000)
-                )
-              ]).catch(error => {
-                console.warn('Category predictions failed, using empty state:', error);
-                return [{
-                  category: "Data Loading Error",
-                  current: 0,
-                  predicted: 0,
-                  change: 0,
-                  changePercent: 0,
-                  isEmptyState: true
-                }];
-              }),
-              Promise.race([
-                generatePredictionData(user.id),
-                new Promise((_, reject) => 
-                  setTimeout(() => reject(new Error('Prediction data timeout')), 8000)
-                )
-              ]).catch(error => {
-                console.warn('Prediction data generation failed, using defaults:', error);
-                return {
-                  "3months": [],
-                  "6months": [],
-                  "1year": []
-                };
-              })
-            ]);
-
-            console.log('usePredictionData: Data fetched successfully', {
-              metadata: !!metadata,
-              categoryDataLength: Array.isArray(categoryData) ? categoryData.length : 0,
-              predictionDataKeys: predictionDataResult ? Object.keys(predictionDataResult as object) : []
-            });
-
+        setCacheStatus('miss');
+        
+        console.log('usePredictionData: Fetching fresh data from database');
+        
+        // Fetch all data in parallel with individual timeouts
+        const [metadata, categoryData, predictionDataResult] = await Promise.all([
+          Promise.resolve(generateModelMetadata()),
+          Promise.race([
+            generateCategoryPredictions(user.id),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Category predictions timeout')), 8000)
+            )
+          ]).catch(error => {
+            console.warn('Category predictions failed, using empty state:', error);
+            return [{
+              category: "Data Loading Error",
+              current: 0,
+              predicted: 0,
+              change: 0,
+              changePercent: 0,
+              isEmptyState: true
+            }];
+          }),
+          Promise.race([
+            generatePredictionData(user.id),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Prediction data timeout')), 8000)
+            )
+          ]).catch(error => {
+            console.warn('Prediction data generation failed, using defaults:', error);
             return {
-              metadata,
-              categoryData,
-              predictionDataResult
+              "3months": [],
+              "6months": [],
+              "1year": []
             };
-          }
-        );
+          })
+        ]);
 
-        return cachedData;
+        console.log('usePredictionData: Data fetched successfully', {
+          metadata: !!metadata,
+          categoryDataLength: Array.isArray(categoryData) ? categoryData.length : 0,
+          predictionDataKeys: predictionDataResult ? Object.keys(predictionDataResult as object) : []
+        });
+
+        return {
+          metadata,
+          categoryData,
+          predictionDataResult
+        };
       })();
       
       // Apply overall timeout to the entire operation
-      const cachedData = await Promise.race([
+      const fetchedData = await Promise.race([
         dataFetchPromise,
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Overall data fetch timeout')), 12000)
         )
-      ]);
+      ]) as { metadata: any; categoryData: any; predictionDataResult: any };
 
       setCacheStatus('hit');
       
-      const { metadata, categoryData, predictionDataResult } = cachedData;
+      const { metadata, categoryData, predictionDataResult } = fetchedData;
       const { modelDetails: newModelDetails, modelAccuracy: newModelAccuracy } = metadata;
       
       setModelDetails(newModelDetails);
@@ -210,13 +202,18 @@ export const usePredictionData = (timeframe: TimeframeType) => {
       setInsights(currentInsights);
 
       // Generate AI insights (optional, don't let it block the main flow)
+      // Skip AI insights for now to prevent CORS errors and database issues
+      console.log('Skipping AI insights generation to prevent external API errors');
+      setAiInsights(null);
+      
+      /*
       setTimeout(async () => {
         try {
           const userProfile = await PredictionService.buildUserFinancialProfile(user.id);
           const aiResponse = await AIInsightsService.generateInsights({
             predictionData: [], // Convert to ProphetPrediction format if needed
             categoryForecasts: await PredictionService.generateCategoryForecasts(user.id),
-            userContext: userProfile,
+            userContext: { userId: user.id, user_id: user.id, ...userProfile },
             timeframe: timeframe === '3months' ? 'months_3' : timeframe === '6months' ? 'months_6' : 'year_1'
           });
           setAiInsights(aiResponse);
@@ -225,6 +222,7 @@ export const usePredictionData = (timeframe: TimeframeType) => {
           setAiInsights(null);
         }
       }, 100); // Run AI insights generation asynchronously
+      */
       
     } catch (fetchError) {
       console.error('Error loading prediction data:', fetchError);
@@ -266,8 +264,7 @@ export const usePredictionData = (timeframe: TimeframeType) => {
       user.id,
       () => {
         console.log('Real-time update received, refreshing prediction data');
-        // Clear cache and refetch data
-        PredictionService.clearCache(user.id);
+        // Refetch data from database
         fetchPredictionData();
       }
     );
@@ -295,7 +292,6 @@ export const usePredictionData = (timeframe: TimeframeType) => {
   // Manual refresh function
   const refreshData = useCallback(() => {
     if (user?.id) {
-      PredictionService.clearCache(user.id);
       fetchPredictionData();
     }
   }, [user?.id, fetchPredictionData]);

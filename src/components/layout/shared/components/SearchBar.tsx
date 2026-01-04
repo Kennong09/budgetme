@@ -1,4 +1,4 @@
-import React, { FC, useState, useEffect, useRef } from "react";
+import React, { FC, useState, useEffect, useRef, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../../utils/AuthContext";
 import { SearchService, SearchResult } from "../../../../services/database/searchService";
@@ -118,34 +118,35 @@ const SearchBar: FC<SearchBarProps> = ({
     }
   };
 
-  const handleResultClick = (result: SearchResult) => {
+  // Memoized handlers
+  const handleResultClick = useCallback((result: SearchResult) => {
     const path = SearchService.getNavigationPath(result);
     navigate(path);
     setSearchQuery('');
     setShowDropdown(false);
     setSelectedIndex(-1);
     inputRef.current?.blur();
-  };
+  }, [navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (onSearch) {
       onSearch(searchQuery);
     }
     setShowDropdown(false);
     setSelectedIndex(-1);
-  };
+  }, [onSearch, searchQuery]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
     setSelectedIndex(-1);
-  };
+  }, []);
 
-  const handleInputFocus = () => {
+  const handleInputFocus = useCallback(() => {
     if (searchResults.length > 0 && showResults) {
       setShowDropdown(true);
     }
-  };
+  }, [searchResults.length, showResults]);
 
   const renderSearchResult = (result: SearchResult, index: number) => (
     <button
@@ -176,7 +177,7 @@ const SearchBar: FC<SearchBarProps> = ({
           {result.amount && (
             <div className={`text-right ${result.color}`}>
               <div className="font-weight-bold">
-                {formatCurrency(result.amount, result.currency)}
+                {formatCurrency(result.amount)}
               </div>
               <div className="small text-muted text-capitalize">
                 {result.type}
@@ -188,16 +189,21 @@ const SearchBar: FC<SearchBarProps> = ({
     </button>
   );
 
-  const buttonColorClass = variant === "admin" ? "btn-danger" : "btn-primary";
-  const inputClass = showMobileVersion ? "" : "d-none d-sm-inline-block";
-
   // Mobile search dropdown version
   if (showMobileVersion && mobileSearchOpen) {
     return (
       <div className="position-relative" ref={searchRef}>
         <div
           className="dropdown-menu dropdown-menu-right p-3 shadow animated--grow-in show position-absolute"
-          style={{ width: "calc(100vw - 2rem)", maxWidth: "300px", ...style }}
+          style={{ 
+            width: "calc(100vw - 3rem)", 
+            maxWidth: "320px", 
+            right: "0",
+            top: "100%",
+            marginTop: "0.5rem",
+            zIndex: 1050,
+            ...style 
+          }}
         >
           <form className="form-inline mr-auto w-100 navbar-search" onSubmit={handleSubmit}>
             <div className="input-group">
@@ -215,7 +221,11 @@ const SearchBar: FC<SearchBarProps> = ({
               />
               <div className="input-group-append">
                 <button 
-                  className={`btn ${buttonColorClass} rounded-pill`} 
+                  className={`px-3 py-2 rounded-r-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                    variant === 'admin' 
+                      ? 'bg-red-600 hover:bg-red-700 focus:ring-red-300' 
+                      : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-300'
+                  } text-white disabled:opacity-50`} 
                   type="submit"
                   disabled={isLoading}
                 >
@@ -260,20 +270,20 @@ const SearchBar: FC<SearchBarProps> = ({
   if (showMobileVersion && !mobileSearchOpen) {
     return (
       <button
-        className="nav-link btn btn-link"
+        className="flex items-center justify-center w-10 h-10 bg-transparent hover:bg-gray-100 text-gray-600 hover:text-indigo-600 rounded-full transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-300 active:scale-95"
         type="button"
         onClick={onMobileToggle}
         aria-expanded={mobileSearchOpen}
         aria-label="Toggle search"
       >
-        <i className="fas fa-search fa-fw"></i>
+        <i className="fas fa-search"></i>
       </button>
     );
   }
 
   // Desktop search form
   return (
-    <div className={`position-relative ${inputClass} form-inline mr-auto ml-md-3 my-2 my-md-0 mw-100 navbar-search ${className}`} ref={searchRef}>
+    <div className={`position-relative form-inline mr-auto ml-md-3 my-2 my-md-0 mw-100 navbar-search ${className}`} ref={searchRef}>
       <form onSubmit={handleSubmit} className="w-100" style={style}>
         <div className="input-group">
           <input
@@ -291,7 +301,11 @@ const SearchBar: FC<SearchBarProps> = ({
           />
           <div className="input-group-append">
             <button 
-              className={`btn ${buttonColorClass} rounded-pill`} 
+              className={`px-3 py-2 rounded-r-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                variant === 'admin' 
+                  ? 'bg-red-600 hover:bg-red-700 focus:ring-red-300' 
+                  : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-300'
+              } text-white disabled:opacity-50`} 
               type="submit"
               disabled={isLoading}
             >
@@ -351,4 +365,5 @@ const SearchBar: FC<SearchBarProps> = ({
   );
 };
 
-export default SearchBar;
+// Memoize SearchBar component for performance
+export default memo(SearchBar);

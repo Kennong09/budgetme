@@ -228,7 +228,7 @@ EOF
     echo \"   docker-compose up -d\"
     echo
     echo \"4. Access the application:\"
-    echo \"   Frontend: http://localhost:3000\"
+    echo \"   Frontend: https://budgetme.site\"
     echo \"   API:      http://localhost:8000\"
     echo \"   API Docs: http://localhost:8000/docs\"
     echo

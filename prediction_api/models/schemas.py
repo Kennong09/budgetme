@@ -126,6 +126,17 @@ class UserFinancialProfile(BaseModel):
     spending_categories: List[str]
     transaction_count: int
 
+class MonthlyPrediction(BaseModel):
+    """Monthly aggregated prediction data point"""
+    month: str = Field(..., description="Month in YYYY-MM format")
+    predicted: float = Field(..., description="Predicted monthly total")
+    upper: float = Field(..., description="Upper confidence bound")
+    lower: float = Field(..., description="Lower confidence bound")
+    trend: float = Field(..., description="Trend component")
+    seasonal: float = Field(..., description="Seasonal component")
+    confidence: float = Field(..., ge=0, le=1, description="Confidence score (0-1)")
+    data_points: int = Field(..., description="Number of daily points aggregated")
+
 class PredictionResponse(BaseModel):
     """Complete prediction response"""
     user_id: str
@@ -135,6 +146,8 @@ class PredictionResponse(BaseModel):
     
     # Prediction data
     predictions: List[ProphetPredictionPoint]
+    monthly_predictions: Optional[List[MonthlyPrediction]] = Field(None, description="Monthly aggregated predictions")
+    aggregation_method: Optional[str] = Field(None, description="Aggregation method used (daily or monthly)")
     category_forecasts: Dict[str, CategoryForecast]
     
     # Model information

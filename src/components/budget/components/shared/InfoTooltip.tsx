@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import React, { FC, memo } from "react";
 import { TooltipPosition } from "../../types";
 
 interface InfoTooltipProps {
@@ -9,7 +9,7 @@ interface InfoTooltipProps {
   onClose: () => void;
 }
 
-const InfoTooltip: FC<InfoTooltipProps> = ({
+const InfoTooltip: FC<InfoTooltipProps> = memo(({
   isActive,
   position,
   title,
@@ -44,13 +44,13 @@ const InfoTooltip: FC<InfoTooltipProps> = ({
           left: position.left,
           transform: "translateX(-50%)",
           zIndex: 1001,
-          maxWidth: "300px",
+          maxWidth: window.innerWidth < 768 ? "250px" : "300px",
           backgroundColor: "#fff",
           border: "1px solid #e3e6f0",
           borderRadius: "0.35rem",
           boxShadow: "0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15)",
-          padding: "0.75rem",
-          fontSize: "0.875rem",
+          padding: window.innerWidth < 768 ? "0.5rem" : "0.75rem",
+          fontSize: window.innerWidth < 768 ? "0.8125rem" : "0.875rem",
           lineHeight: "1.5"
         }}
       >
@@ -66,11 +66,13 @@ const InfoTooltip: FC<InfoTooltipProps> = ({
           borderBottom: "6px solid #fff"
         }}></div>
         
-        <div className="font-weight-bold text-primary mb-2">{title}</div>
-        <div className="text-gray-700">{content}</div>
+        <div className="font-weight-bold text-primary mb-1 md:mb-2 text-sm md:text-base">{title}</div>
+        <div className="text-gray-700 text-xs md:text-sm">{content}</div>
       </div>
     </>
   );
-};
+});
+
+InfoTooltip.displayName = 'InfoTooltip';
 
 export default InfoTooltip;

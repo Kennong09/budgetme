@@ -1,7 +1,36 @@
 # DFD - AI Prediction Module (7.0): BudgetMe Financial Management System
 
 ## Overview
-This Data Flow Diagram details the AI Prediction Module (Process 7.0) of the BudgetMe system, located at `src/components/predictions/` and `prediction_api/`. This module provides sophisticated financial forecasting using Facebook Prophet, AI-powered insights generation, and predictive analytics for personal finance management.
+
+The AI Prediction Module (Process 7.0) delivers sophisticated financial forecasting and predictive analytics through a hybrid architecture combining **Facebook Prophet** for time-series forecasting and **LLM-based analysis** for contextual insights. Implemented in `src/components/predictions/` (frontend) and `prediction_api/` (Python Flask backend), this module transforms historical financial data into actionable predictions and personalized recommendations.
+
+### Core Responsibilities
+
+- **Time-Series Forecasting**: Prophet-based predictions for income, expenses, and savings trends (30/90/180/365 day horizons)
+- **Spending Predictions**: Category-level spending forecasts with seasonality and trend decomposition
+- **Goal Achievement Forecasting**: Probability-based timeline predictions for financial goals
+- **AI Insights Generation**: LLM-powered analysis of predictions with risk assessment and opportunity identification
+- **Budget Impact Analysis**: Predictive budget utilization and potential overspending alerts
+- **Usage Management**: Subscription-tier based usage limits (free: 3/month, premium: unlimited)
+
+### Technology Stack
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Forecasting Engine | Facebook Prophet | Time-series predictions with seasonality handling |
+| API Backend | Python Flask | Prediction API serving and model management |
+| AI Insights | OpenRouter API | LLM-powered analysis and recommendation generation |
+| Data Storage | Supabase PostgreSQL | Prediction caching and usage tracking |
+| Frontend | React + TypeScript | Interactive prediction visualization |
+
+### Key Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `prediction_requests` | User prediction requests with parameters and processing status |
+| `prophet_predictions` | Cached Prophet model outputs with accuracy metrics |
+| `ai_insights` | AI-generated insights linked to predictions |
+| `prediction_usage_limits` | Per-user usage tracking with subscription tier enforcement |
 
 ## AI Prediction Module Data Flow Diagram
 
@@ -48,14 +77,14 @@ graph TB
         CHATBOT[8.0 Chatbot Module]
     end
     
-    subgraph "Data Stores"
-        D1[(D1<br/>Transaction History)]
-        D2[(D2<br/>Budget Data)]
-        D3[(D3<br/>User Profiles)]
-        D4[(D4<br/>Prediction Cache)]
-        D5[(D5<br/>Model Store)]
-        D6[(D6<br/>Usage Analytics)]
-        D7[(D7<br/>AI Insights Store)]
+    subgraph "Data Stores (Supabase)"
+        D1[(transactions<br/>accounts)]
+        D2[(budgets<br/>budget_alerts)]
+        D3[(profiles<br/>user_settings)]
+        D4[(prophet_predictions)]
+        D5[(prediction_requests)]
+        D6[(prediction_usage_limits)]
+        D7[(ai_insights<br/>ai_reports)]
     end
     
     %% User Interactions
@@ -498,91 +527,90 @@ graph TB
 - Personal financial details masked in shared reports
 - Export limit: 10 exports per month for free users
 
-## Data Store Specifications
+## Data Store Specifications (Actual Supabase Tables)
 
-### D1 - Transaction History
-**Structure**:
-- All historical transaction data
-- Categorized spending information
-- Time-series transaction aggregations
-- Spending pattern metrics
+### D1 - prediction_requests
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique request identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `request_type` | TEXT | "spending", "income", "savings", "goal_achievement" |
+| `timeframe` | TEXT | "30_days", "90_days", "180_days", "365_days" |
+| `parameters` | JSONB | Request parameters (categories, filters) |
+| `status` | TEXT | "pending", "processing", "completed", "failed" |
+| `processing_time_ms` | INTEGER | Time to process request |
+| `error_message` | TEXT | Error details if failed |
+| `created_at` | TIMESTAMPTZ | Request timestamp |
+| `completed_at` | TIMESTAMPTZ | Completion timestamp |
 
-**Access Patterns**:
-- Read: Data collection for model training
-- Aggregate: Category and time-based summarization
-- Analytics: Pattern and trend analysis
+### D2 - prophet_predictions
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique prediction identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `request_id` | UUID FK | References prediction_requests(id) |
+| `prediction_type` | TEXT | "expense", "income", "savings", "category" |
+| `category_id` | UUID FK | References expense_categories(id), optional |
+| `forecast_data` | JSONB | Prophet model output (ds, yhat, yhat_lower, yhat_upper) |
+| `trend_data` | JSONB | Trend decomposition data |
+| `seasonality_data` | JSONB | Seasonality patterns |
+| `accuracy_metrics` | JSONB | MAE, MAPE, RMSE scores |
+| `confidence_level` | NUMERIC | Overall confidence (0-1) |
+| `cache_key` | TEXT | Unique cache identifier |
+| `generated_at` | TIMESTAMPTZ | Prediction generation timestamp |
+| `expires_at` | TIMESTAMPTZ | Cache expiration (default: 30 minutes) |
 
-### D2 - Budget Data
-**Structure**:
-- Current and historical budget information
-- Category allocations and limits
-- Budget performance metrics
-- Spending variance data
+### D3 - ai_insights
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique insight identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `prediction_id` | UUID FK | References prophet_predictions(id) |
+| `insights` | JSONB | AI-generated insights array |
+| `risk_assessment` | JSONB | Risk factors and severity |
+| `opportunities` | JSONB | Identified savings/investment opportunities |
+| `recommendations` | JSONB | Actionable recommendations |
+| `ai_service` | TEXT | AI provider (default: "openrouter") |
+| `model_used` | TEXT | Model identifier |
+| `generation_time_ms` | INTEGER | Time to generate insights |
+| `confidence_level` | NUMERIC | Insight confidence (0-1) |
+| `generated_at` | TIMESTAMPTZ | Insight generation timestamp |
+| `expires_at` | TIMESTAMPTZ | Cache expiration timestamp |
 
-**Access Patterns**:
-- Read: Budget context for predictions
-- Analysis: Budget vs. actual variance calculation
-- Integration: Budget goal alignment assessment
+### D4 - prediction_usage_limits
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique record identifier |
+| `user_id` | UUID FK UK | References auth.users(id), unique |
+| `monthly_limit` | INTEGER | Maximum predictions per month (default: 5) |
+| `current_usage` | INTEGER | Current month's usage count |
+| `last_reset_at` | TIMESTAMPTZ | Last monthly reset timestamp |
+| `subscription_tier` | TEXT | "free", "premium", "enterprise" |
 
-### D3 - User Profiles
-**Structure**:
-- User financial profiles and preferences
-- Income information and patterns
-- Financial goals and objectives
-- Risk tolerance and investment preferences
+### D5 - transactions (Source Data)
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Transaction identifier |
+| `user_id` | UUID FK | User reference |
+| `amount` | NUMERIC | Transaction amount |
+| `transaction_date` | DATE | Transaction date for time-series |
+| `expense_category_id` | UUID FK | Category for categorical predictions |
+| Used as training data for Prophet models |
 
-**Access Patterns**:
-- Read: User context for personalized predictions
-- Profile: Demographic and financial profiling
-- Preferences: Prediction customization settings
+### D6 - profiles (User Context)
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK,FK | References auth.users(id) |
+| `currency` | TEXT | Preferred currency for predictions |
+| `timezone` | TEXT | User timezone for date handling |
+| `preferences` | JSONB | Prediction preferences and settings |
 
-### D4 - Prediction Cache
-**Structure**:
-- Cached prediction results by user and timeframe
-- Prophet model outputs and forecasts
-- AI insights and recommendations
-- Prediction metadata and timestamps
-
-**Access Patterns**:
-- Write: Cache new prediction results
-- Read: Retrieve cached predictions for display
-- Cleanup: Remove expired cache entries
-
-### D5 - Model Store
-**Structure**:
-- Trained Prophet models per user/category
-- Model parameters and configurations
-- Training metrics and performance data
-- Model version and update history
-
-**Access Patterns**:
-- Write: Store newly trained models
-- Read: Load models for prediction generation
-- Update: Model retraining and versioning
-
-### D6 - Usage Analytics
-**Structure**:
-- User prediction usage statistics
-- API call tracking and costs
-- Subscription level and limits
-- Usage patterns and trends
-
-**Access Patterns**:
-- Write: Log prediction requests and usage
-- Read: Validate usage limits and restrictions
-- Analytics: Usage reporting and billing
-
-### D7 - AI Insights Store
-**Structure**:
-- Generated AI insights by user and date
-- Insight categories and confidence scores
-- AI model responses and processing logs
-- Insight feedback and ratings
-
-**Access Patterns**:
-- Write: Store new AI insights
-- Read: Retrieve insights for display
-- Analytics: Insight quality and user satisfaction
+### D7 - budgets / goals (Context Data)
+| Table | Purpose |
+|-------|---------|
+| `budgets` | Budget data for spending limit predictions |
+| `goals` | Goal data for achievement timeline predictions |
+| `accounts` | Account balances for net worth projections |
 
 ## Integration Points
 

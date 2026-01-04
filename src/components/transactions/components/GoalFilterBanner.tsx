@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { FC, memo } from 'react';
 import { GoalFilterBannerProps } from '../types';
 
-const GoalFilterBanner: React.FC<GoalFilterBannerProps> = ({
+const GoalFilterBanner: FC<GoalFilterBannerProps> = memo(({
   goalId,
   goalName,
   onClearFilter
@@ -15,13 +15,15 @@ const GoalFilterBanner: React.FC<GoalFilterBannerProps> = ({
         <strong>Filtered by Goal:</strong> {goalName || "Unknown Goal"}
       </div>
       <button 
-        className="btn btn-sm btn-outline-info" 
+        className="inline-flex items-center justify-center px-2 py-1.5 md:px-3 md:py-2 bg-white hover:bg-blue-50 text-[#36b9cc] border border-[#36b9cc] text-xs md:text-sm font-medium rounded shadow-sm transition-colors"
         onClick={onClearFilter}
       >
-        <i className="fas fa-times mr-1"></i> Clear Filter
+        <i className="fas fa-times text-xs mr-1"></i> Clear Filter
       </button>
     </div>
   );
-};
+});
+
+GoalFilterBanner.displayName = 'GoalFilterBanner';
 
 export default GoalFilterBanner;

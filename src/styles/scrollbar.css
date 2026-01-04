@@ -1,0 +1,102 @@
+/* Custom Scrollbar Styles for BudgetMe AI Predictions */
+
+/* Category Trends Container Scrollbar */
+.category-trends-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.category-trends-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.category-trends-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 123, 255, 0.3);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.category-trends-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 123, 255, 0.5);
+}
+
+/* General scrollable container styles */
+.scrollable-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 123, 255, 0.3) rgba(0, 0, 0, 0.05);
+}
+
+.scrollable-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollable-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.scrollable-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 123, 255, 0.3);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.scrollable-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 123, 255, 0.5);
+}
+
+/* Focus styles for accessibility */
+.category-trends-container:focus,
+.scrollable-container:focus {
+  outline: 2px solid rgba(0, 123, 255, 0.5);
+  outline-offset: 2px;
+}
+
+/* Responsive scrollbar adjustments */
+@media (max-width: 768px) {
+  .category-trends-container::-webkit-scrollbar,
+  .scrollable-container::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  /* Adjust max-heights for mobile */
+  .category-trends-container {
+    max-height: clamp(280px, 45vh, 450px) !important;
+  }
+  
+  .scrollable-container {
+    max-height: clamp(320px, 50vh, 500px) !important;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .category-trends-container {
+    max-height: clamp(400px, 55vh, 650px) !important;
+  }
+  
+  .scrollable-container {
+    max-height: clamp(450px, 60vh, 700px) !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .category-trends-container::-webkit-scrollbar-thumb,
+  .scrollable-container::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.7);
+  }
+  
+  .category-trends-container::-webkit-scrollbar-thumb:hover,
+  .scrollable-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.9);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .category-trends-container::-webkit-scrollbar-thumb,
+  .scrollable-container::-webkit-scrollbar-thumb {
+    transition: none;
+  }
+}

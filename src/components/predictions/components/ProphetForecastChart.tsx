@@ -1,4 +1,4 @@
-import React, { FC, useMemo } from 'react';
+import React, { FC, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -49,6 +49,7 @@ const ProphetForecastChart: FC<ProphetForecastChartProps> = ({
   showSeasonal = false,
   timeframe = 'months_3'
 }) => {
+  const [mobileActiveTab, setMobileActiveTab] = useState<'forecast' | 'components' | 'confidence'>('forecast');
   // Process data for chart
   const chartData = useMemo<ChartDataPoint[]>(() => {
     const allData = [...historical, ...predictions];
@@ -132,19 +133,233 @@ const ProphetForecastChart: FC<ProphetForecastChartProps> = ({
 
   if (chartData.length === 0) {
     return (
-      <div className="card">
-        <div className="card-header">
-          <h6 className="font-weight-bold text-primary">{title}</h6>
+      <>
+        {/* Mobile Empty State */}
+        <div className="block md:hidden mb-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-3 py-2.5 border-b border-gray-100">
+              <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <i className="fas fa-chart-area text-indigo-500 text-[10px]"></i>
+                {title}
+              </h6>
+            </div>
+            <div className="p-6 text-center">
+              <i className="fas fa-chart-line text-gray-300 text-2xl mb-2"></i>
+              <p className="text-[10px] text-gray-500">No prediction data available</p>
+            </div>
+          </div>
         </div>
-        <div className="card-body text-center py-5">
-          <p className="text-muted">No prediction data available</p>
+        
+        {/* Desktop Empty State */}
+        <div className="card d-none d-md-block">
+          <div className="card-header">
+            <h6 className="font-weight-bold text-primary">{title}</h6>
+          </div>
+          <div className="card-body text-center py-5">
+            <p className="text-muted">No prediction data available</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
+  // Mobile View Component
+  const MobileView = () => (
+    <div className="block md:hidden mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Mobile Header */}
+        <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between">
+          <h6 className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+            <i className="fas fa-chart-area text-indigo-500 text-[10px]"></i>
+            Prophet Forecast
+          </h6>
+          {metrics && (
+            <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold ${
+              metrics.trendDirection === 'increasing' ? 'bg-emerald-100 text-emerald-600' :
+              metrics.trendDirection === 'decreasing' ? 'bg-amber-100 text-amber-600' :
+              'bg-gray-100 text-gray-600'
+            }`}>
+              {metrics.trendDirection === 'increasing' ? '↗' : metrics.trendDirection === 'decreasing' ? '↘' : '→'} {metrics.trendDirection}
+            </span>
+          )}
+        </div>
+        
+        {/* Mobile Summary Stats */}
+        {metrics && (
+          <div className="grid grid-cols-4 gap-1 p-2 bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-gray-100">
+            <div className="text-center">
+              <p className="text-[9px] text-gray-500">Avg Forecast</p>
+              <p className="text-[11px] font-bold text-indigo-600">${metrics.avgPredicted}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-gray-500">Confidence</p>
+              <p className="text-[11px] font-bold text-emerald-600">{metrics.avgConfidence}%</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-gray-500">Trend</p>
+              <p className="text-[11px] font-bold text-amber-600 capitalize">{metrics.trendDirection}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[9px] text-gray-500">Points</p>
+              <p className="text-[11px] font-bold text-cyan-600">{chartData.length}</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Mobile Tab Navigation */}
+        <div className="flex border-b border-gray-100">
+          {[
+            { key: 'forecast', label: 'Forecast', icon: 'fa-chart-line' },
+            { key: 'components', label: 'Components', icon: 'fa-layer-group' },
+            { key: 'confidence', label: 'Bands', icon: 'fa-arrows-alt-v' }
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setMobileActiveTab(tab.key as any)}
+              className={`flex-1 py-2 text-[10px] font-medium transition-colors ${
+                mobileActiveTab === tab.key
+                  ? 'text-indigo-600 border-b-2 border-indigo-500 bg-indigo-50/50'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <i className={`fas ${tab.icon} mr-1 text-[9px]`}></i>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        
+        {/* Mobile Chart */}
+        <div className="p-2">
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: -15, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis 
+                dataKey="date" 
+                tick={{ fontSize: 9 }}
+                angle={-45}
+                textAnchor="end"
+                height={45}
+              />
+              <YAxis 
+                tick={{ fontSize: 9 }}
+                tickFormatter={(value) => `${value}`}
+              />
+              <Tooltip 
+                contentStyle={{ fontSize: '10px', padding: '6px' }}
+                formatter={(value: any) => [`$${value}`, '']}
+              />
+              
+              {/* Confidence Intervals - shown in confidence tab */}
+              {mobileActiveTab === 'confidence' && (
+                <>
+                  <Area
+                    type="monotone"
+                    dataKey="upper"
+                    stroke="none"
+                    fill="#1cc88a"
+                    fillOpacity={0.2}
+                    name="Upper"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="lower"
+                    stroke="none"
+                    fill="#e74a3b"
+                    fillOpacity={0.2}
+                    name="Lower"
+                  />
+                </>
+              )}
+              
+              {/* Historical Data */}
+              {historical.length > 0 && (
+                <Line
+                  type="monotone"
+                  dataKey="actual"
+                  stroke="#858796"
+                  strokeWidth={1.5}
+                  dot={{ fill: '#858796', r: 2 }}
+                  name="Historical"
+                  connectNulls={false}
+                />
+              )}
+              
+              {/* Main Prediction Line */}
+              <Line
+                type="monotone"
+                dataKey="predicted"
+                stroke="#4e73df"
+                strokeWidth={2}
+                dot={{ fill: '#4e73df', r: 2 }}
+                name="Forecast"
+              />
+              
+              {/* Trend Line - shown in components tab */}
+              {mobileActiveTab === 'components' && (
+                <Line
+                  type="monotone"
+                  dataKey="trend"
+                  stroke="#f6c23e"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 5"
+                  dot={{ fill: '#f6c23e', r: 2 }}
+                  name="Trend"
+                />
+              )}
+              
+              {/* Seasonal Component - shown in components tab */}
+              {mobileActiveTab === 'components' && (
+                <Line
+                  type="monotone"
+                  dataKey="seasonal"
+                  stroke="#e74a3b"
+                  strokeWidth={1}
+                  strokeDasharray="2 2"
+                  dot={{ fill: '#e74a3b', r: 1 }}
+                  name="Seasonal"
+                />
+              )}
+              
+              <ReferenceLine y={0} stroke="#d1d3e2" strokeDasharray="2 2" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        
+        {/* Mobile Legend */}
+        <div className="px-3 pb-3 flex flex-wrap gap-2 justify-center">
+          <span className="flex items-center text-[9px] text-gray-600">
+            <span className="w-3 h-0.5 bg-indigo-500 mr-1"></span>
+            Forecast
+          </span>
+          {historical.length > 0 && (
+            <span className="flex items-center text-[9px] text-gray-600">
+              <span className="w-3 h-0.5 bg-gray-500 mr-1"></span>
+              Historical
+            </span>
+          )}
+          {mobileActiveTab === 'components' && (
+            <>
+              <span className="flex items-center text-[9px] text-gray-600">
+                <span className="w-3 h-0.5 bg-amber-400 mr-1 border-dashed"></span>
+                Trend
+              </span>
+              <span className="flex items-center text-[9px] text-gray-600">
+                <span className="w-3 h-0.5 bg-rose-500 mr-1"></span>
+                Seasonal
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="card mb-4">
+    <>
+      <MobileView />
+      
+      {/* Desktop View */}
+      <div className="card mb-4 d-none d-md-block">
       <div className="card-header">
         <div className="d-flex justify-content-between align-items-center">
           <h6 className="font-weight-bold text-primary mb-0">{title}</h6>
@@ -331,6 +546,7 @@ const ProphetForecastChart: FC<ProphetForecastChartProps> = ({
         )}
       </div>
     </div>
+    </>
   );
 };
 

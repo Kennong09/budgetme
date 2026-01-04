@@ -1,11 +1,9 @@
 // Admin Layout Components
 export { default as AdminLayout } from './layout/AdminLayout';
-export { default as AdminSidebar } from './layout/AdminSidebar';
 export { default as AdminHeader } from './layout/AdminHeader';
 export { default as AdminNotFound } from './layout/AdminNotFound';
 
 // Admin Login Component
-export { default as AdminLogin } from './AdminLogin';
 export { default as AdminRedirect } from './AdminRedirect';
 
 // Admin Dashboard Component
@@ -16,6 +14,9 @@ export { default as UserManagement } from './users/UserManagement';
 
 // Admin Budget Component
 export { default as AdminBudgets } from './budget/AdminBudgets';
+
+// Admin Account Component
+export { default as AdminAccounts } from './accounts/AdminAccounts';
 
 // Other admin components would be exported here as they are implemented 
 

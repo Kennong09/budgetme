@@ -45,8 +45,10 @@ const GoalCard: React.FC<GoalCardProps> = ({ goal, onDeleteGoal }) => {
     setHoveringGoalBar(isHovering);
   };
 
+  // This component is only used for desktop grid view
+  // Mobile grid view uses MobileGoalCard component
   return (
-    <div className="col-xl-4 col-md-6 mb-4">
+    <div className="col-xl-4 col-md-6 mb-4 d-none d-md-block">
       <div className={`card shadow h-100 ${goal.is_family_goal ? 'border-left-info' : 'border-left-secondary'}`}>
         <div className="card-header py-3 d-flex flex-row align-items-center justify-content-between">
           <h6 className="m-0 font-weight-bold text-primary">

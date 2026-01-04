@@ -919,7 +919,20 @@ const GoalDetails: FC = () => {
   if (loading) {
     return (
       <div className="container-fluid">
-        <div className="text-center my-5">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">Loading goal details...</p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="text-center my-5 hidden md:block">
           <div className="spinner-border text-primary mb-3" role="status">
             <span className="sr-only">Loading...</span>
           </div>
@@ -936,7 +949,35 @@ const GoalDetails: FC = () => {
   if (error) {
     return (
       <div className="container-fluid">
-        <div className="text-center my-5 animate__animated animate__fadeIn">
+        {/* Mobile Error State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center text-center px-4">
+            <div className="w-16 h-16 rounded-full bg-rose-100 flex items-center justify-center mb-4">
+              <i className="fas fa-database text-rose-500 text-2xl"></i>
+            </div>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Error Loading Goal</h2>
+            <p className="text-sm text-gray-500 mb-4">{error}</p>
+            <div className="flex flex-col gap-2 w-full max-w-xs">
+              <button 
+                onClick={() => { setError(null); setLoading(true); memoizedFetchGoalData(); }}
+                className="w-full py-2.5 bg-indigo-500 text-white text-sm font-medium rounded-xl hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <i className="fas fa-sync-alt text-xs"></i>
+                Try Again
+              </button>
+              <Link 
+                to="/goals" 
+                className="w-full py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+              >
+                <i className="fas fa-arrow-left text-xs"></i>
+                Back to Goals
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Error State */}
+        <div className="text-center my-5 animate__animated animate__fadeIn hidden md:block">
           <div className="error-icon mb-4">
             <i className="fas fa-database fa-4x text-danger"></i>
           </div>
@@ -971,7 +1012,35 @@ const GoalDetails: FC = () => {
   if (!goal) {
     return (
       <div className="container-fluid">
-        <div className="text-center my-5 animate__animated animate__fadeIn">
+        {/* Mobile Not Found State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center text-center px-4">
+            <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+              <i className="fas fa-exclamation-triangle text-amber-500 text-2xl"></i>
+            </div>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Goal not found</h2>
+            <p className="text-sm text-gray-500 mb-4">The goal you're looking for does not exist or has been deleted.</p>
+            <div className="flex flex-col gap-2 w-full max-w-xs">
+              <Link 
+                to="/goals" 
+                className="w-full py-2.5 bg-indigo-500 text-white text-sm font-medium rounded-xl hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <i className="fas fa-arrow-left text-xs"></i>
+                View All Goals
+              </Link>
+              <Link 
+                to="/goals/create" 
+                className="w-full py-2.5 bg-emerald-500 text-white text-sm font-medium rounded-xl hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <i className="fas fa-plus text-xs"></i>
+                Create New Goal
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop Not Found State */}
+        <div className="text-center my-5 animate__animated animate__fadeIn hidden md:block">
           <div className="error-icon mb-4">
             <i className="fas fa-exclamation-triangle fa-4x text-warning"></i>
           </div>
@@ -1027,6 +1096,271 @@ const GoalDetails: FC = () => {
 
   return (
     <div className="container-fluid animate__animated animate__fadeIn">
+      {/* Mobile View */}
+      <div className="block md:hidden">
+        {/* Mobile Page Heading */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-base font-bold text-gray-800 truncate flex-1 mr-2">{goal.goal_name}</h1>
+            <div className="flex items-center gap-2">
+              {goal.status !== 'completed' && goal.status !== 'cancelled' && (
+                <Link
+                  to={`/goals/${id}/contribute`}
+                  className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+                  aria-label="Contribute to goal"
+                >
+                  <i className="fas fa-plus text-xs"></i>
+                </Link>
+              )}
+              {isGoalOwner && goal.status !== 'completed' && goal.status !== 'cancelled' && (
+                <Link
+                  to={`/goals/${id}/edit`}
+                  className="w-9 h-9 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+                  aria-label="Edit goal"
+                >
+                  <i className="fas fa-edit text-xs"></i>
+                </Link>
+              )}
+              {isGoalOwner && (
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="w-9 h-9 rounded-full bg-rose-500 hover:bg-rose-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+                  aria-label="Delete goal"
+                >
+                  <i className="fas fa-trash text-xs"></i>
+                </button>
+              )}
+              <Link
+                to="/goals"
+                className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                aria-label="Back to goals"
+              >
+                <i className="fas fa-arrow-left text-xs"></i>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        {/* Goal Progress Card */}
+        <div className={`bg-gradient-to-br ${
+          progressPercentage >= 100 ? 'from-emerald-500 via-teal-500 to-cyan-500' :
+          progressPercentage >= 75 ? 'from-blue-500 via-indigo-500 to-purple-500' :
+          progressPercentage >= 40 ? 'from-amber-500 via-orange-500 to-yellow-500' :
+          'from-rose-500 via-red-500 to-orange-500'
+        } rounded-2xl p-4 mb-3 shadow-lg`}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-white/80 text-xs font-medium">
+              {isSharedGoal ? 'Family Goal' : 'Personal Goal'}
+            </span>
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+              <i className={`fas fa-${progressPercentage >= 100 ? 'check-circle' : 'bullseye'} text-white text-sm`}></i>
+            </div>
+          </div>
+          <div className="text-white text-2xl font-bold mb-1">
+            {formatPercentage(progressPercentage)}
+          </div>
+          <div className="text-white/70 text-xs mb-3">
+            {formatCurrency(goal.current_amount)} of {formatCurrency(goal.target_amount)}
+          </div>
+          {/* Progress bar */}
+          <div className="w-full bg-white/20 rounded-full h-2">
+            <div
+              className="bg-white h-2 rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(progressPercentage, 100)}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center mb-2">
+              <i className="fas fa-bullseye text-blue-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Target</p>
+            <p className="text-sm font-bold text-gray-800">{formatCurrency(goal.target_amount)}</p>
+          </div>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center mb-2">
+              <i className="fas fa-piggy-bank text-emerald-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Saved</p>
+            <p className="text-sm font-bold text-gray-800">{formatCurrency(goal.current_amount)}</p>
+          </div>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center mb-2">
+              <i className="fas fa-hourglass-half text-amber-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Remaining</p>
+            <p className={`text-sm font-bold ${remainingAmount <= 0 ? 'text-emerald-600' : 'text-gray-800'}`}>
+              {formatCurrency(Math.max(0, remainingAmount))}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center mb-2">
+              <i className="fas fa-calendar text-indigo-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Days Left</p>
+            <p className={`text-sm font-bold ${remainingDays <= 0 ? 'text-rose-600' : 'text-gray-800'}`}>
+              {remainingDays > 0 ? remainingDays : 'Overdue'}
+            </p>
+          </div>
+        </div>
+
+        {/* Monthly Savings Recommendation */}
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-xl p-4 mb-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <i className="fas fa-chart-line text-white text-sm"></i>
+            </div>
+            <div className="flex-1">
+              <p className="text-white/80 text-[10px] font-medium uppercase tracking-wide">Monthly Saving</p>
+              <p className="text-white text-lg font-bold">{formatCurrency(monthlySavings)}</p>
+              <p className="text-white/60 text-[10px]">To reach goal by {formatDate(goal.target_date)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Status and Priority */}
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-6 h-6 rounded-lg bg-${statusColor}-100 flex items-center justify-center`}>
+                <i className={`fas fa-${statusIcon} text-${statusColor}-500 text-[10px]`}></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Status</p>
+            </div>
+            <p className={`text-xs font-bold text-${statusColor}-600 capitalize`}>
+              {goal.status?.replace("_", " ")}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-6 h-6 rounded-lg bg-${priorityColor}-100 flex items-center justify-center`}>
+                <i className={`fas fa-flag text-${priorityColor}-500 text-[10px]`}></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Priority</p>
+            </div>
+            <p className={`text-xs font-bold text-${priorityColor}-600 capitalize`}>
+              {goal.priority}
+            </p>
+          </div>
+        </div>
+
+        {/* Shared Goal Banner */}
+        {isSharedGoal && (
+          <div className="bg-blue-50 rounded-xl p-3 mb-3 border border-blue-100">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                <i className="fas fa-users text-blue-500 text-xs"></i>
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-blue-800">Family Shared Goal</p>
+                <p className="text-[10px] text-blue-600">
+                  Shared with {familyName || 'your family'}
+                  {!isGoalOwner && ' • Created by another member'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Description */}
+        {goal.description && (
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mb-3">
+            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide mb-1">Description</p>
+            <p className="text-xs text-gray-700">{goal.description}</p>
+          </div>
+        )}
+
+        {/* Charts Section - Tabbed */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-3">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <h6 className="text-xs font-bold text-gray-800 flex items-center gap-2">
+              <i className="fas fa-chart-bar text-indigo-500 text-[10px]"></i>
+              Progress Charts
+            </h6>
+          </div>
+          <div className="p-4">
+            {highchartsLoaded && progressConfig && (
+              <div className="mb-4">
+                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-2">Progress Gauge</p>
+                <HighchartsReact
+                  highcharts={Highcharts}
+                  options={{
+                    ...progressConfig,
+                    chart: { ...progressConfig.chart, height: 180 }
+                  }}
+                  ref={progressChartRef}
+                />
+              </div>
+            )}
+            {highchartsLoaded && contributionsConfig && transactions.length > 0 && (
+              <div>
+                <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-2">Contributions</p>
+                <HighchartsReact
+                  highcharts={Highcharts}
+                  options={{
+                    ...contributionsConfig,
+                    chart: { ...contributionsConfig.chart, height: 200 }
+                  }}
+                  ref={contributionsChartRef}
+                />
+              </div>
+            )}
+            {(!transactions || transactions.length === 0) && (
+              <div className="text-center py-8">
+                <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                  <i className="fas fa-chart-bar text-gray-400 text-lg"></i>
+                </div>
+                <p className="text-xs text-gray-500 mb-3">No contributions yet</p>
+                {goal.status !== 'completed' && goal.status !== 'cancelled' && (
+                  <Link
+                    to={`/goals/${id}/contribute`}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-xs font-medium rounded-lg hover:bg-emerald-600 transition-colors"
+                  >
+                    <i className="fas fa-plus text-[10px]"></i>
+                    Add Contribution
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Contribution History */}
+        {transactions && transactions.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <h6 className="text-xs font-bold text-gray-800 flex items-center gap-2">
+                <i className="fas fa-history text-indigo-500 text-[10px]"></i>
+                Recent Contributions
+                <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full text-[9px]">
+                  {transactions.length}
+                </span>
+              </h6>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {transactions.slice(0, 5).map((tx) => (
+                <div key={tx.id} className="px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                      <i className="fas fa-plus text-emerald-500 text-xs"></i>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-800">{formatCurrency(tx.amount)}</p>
+                      <p className="text-[10px] text-gray-500">{formatDate(tx.date)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop View */}
+      <div className="hidden md:block">
 
     
       {/* Delete Confirmation Modal */}
@@ -1644,6 +1978,7 @@ const GoalDetails: FC = () => {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Global tooltip */}

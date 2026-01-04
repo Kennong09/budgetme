@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, FC } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../utils/AuthContext';
 import { useToast } from '../../utils/ToastContext';
 
@@ -10,8 +10,9 @@ import {
   ReportControls,
   ReportChart,
   ReportTable,
-  EmailModal,
   TooltipSystem,
+  FinancialInsights,
+  AnomalyAlerts,
   ReportType,
   TimeframeType,
   FormatType,
@@ -23,7 +24,6 @@ import {
   useReportData,
   useReportSettings,
   useTooltips,
-  useEmailReport,
   useSummaryData,
   SpendingDataItem,
   IncomeExpenseDataItem,
@@ -43,7 +43,7 @@ import {
 } from './utils';
 
 import { generateChartOptions } from './utils/chartOptions';
-import { exportToPDF, exportToCSV, exportToExcel } from './utils/exportUtils';
+import { exportToPDF, exportToCSV, exportToDOCX } from './utils/exportUtils';
 
 // Import SB Admin CSS
 import "startbootstrap-sb-admin-2/css/sb-admin-2.min.css";
@@ -53,6 +53,7 @@ import "animate.css";
 
 const FinancialReports: FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { showSuccessToast, showErrorToast } = useToast();
   const chartRef = useRef<any>(null);
 
@@ -84,20 +85,6 @@ const FinancialReports: FC = () => {
   } = useTooltips();
 
   const {
-    showEmailModal,
-    emailRecipient,
-    emailSubject,
-    emailMessage,
-    emailSending,
-    setEmailRecipient,
-    setEmailSubject,
-    setEmailMessage,
-    openEmailModal,
-    closeEmailModal,
-    sendEmail
-  } = useEmailReport();
-
-  const {
     totalTransactions,
     activeBudgets,
     activeGoals,
@@ -112,6 +99,11 @@ const FinancialReports: FC = () => {
   const [goalRelationship, setGoalRelationship] = useState<BudgetRelationship | null>(null);
   const [budgetData, setBudgetData] = useState<any[]>([]);
   const [chartOptions, setChartOptions] = useState<any>({});
+  const [aiInsights, setAiInsights] = useState<any[]>([]);
+  
+  // Mobile UI state
+  const [isExporting, setIsExporting] = useState(false);
+  const [mobileSettingsExpanded, setMobileSettingsExpanded] = useState(false);
 
   // CSS for better mobile responsiveness
   const responsiveStyles = `
@@ -194,6 +186,7 @@ const FinancialReports: FC = () => {
   // Export handlers
   const handleExportPDF = async () => {
     try {
+      setIsExporting(true);
       showSuccessToast('Preparing PDF export...');
       await exportToPDF(
         reportType,
@@ -204,72 +197,87 @@ const FinancialReports: FC = () => {
         trendsData,
         goalRelationship || undefined,
         monthlyFinancials,
-        chartRef
+        chartRef,
+        aiInsights
       );
       showSuccessToast('PDF report downloaded successfully!');
     } catch (error) {
+      console.error('PDF Export Error:', error);
       showErrorToast('Failed to generate PDF report. Please try again.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
   const handleExportCSV = () => {
     try {
+      setIsExporting(true);
+      showSuccessToast('Preparing CSV export...');
       exportToCSV(
         reportType,
         timeframe,
         categoryData,
         monthlyData,
         trendsData,
-        goalRelationship || undefined
+        goalRelationship || undefined,
+        aiInsights
       );
       showSuccessToast('CSV report downloaded successfully!');
     } catch (error) {
+      console.error('CSV Export Error:', error);
       showErrorToast('Failed to generate CSV report. Please try again.');
+    } finally {
+      setIsExporting(false);
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportDOCX = async () => {
     try {
-      exportToExcel(
+      setIsExporting(true);
+      showSuccessToast('Preparing Word document export...');
+      await exportToDOCX(
         reportType,
         timeframe,
         categoryData,
         monthlyData,
         trendsData,
         goalRelationship || undefined,
-        monthlyFinancials
+        monthlyFinancials,
+        aiInsights
       );
-      showSuccessToast('Excel report downloaded successfully!');
+      showSuccessToast('Word document downloaded successfully!');
     } catch (error) {
-      showErrorToast('Failed to generate Excel report. Please try again.');
+      console.error('DOCX Export Error:', error);
+      showErrorToast('Failed to generate Word document. Please try again.');
+    } finally {
+      setIsExporting(false);
     }
-  };
-
-  const handleEmailReport = () => {
-    openEmailModal(reportType);
   };
 
   // Handle user authentication redirect
   if (!user) {
-    return (
-      <div className="container-fluid">
-        <div className="text-center mt-5">
-          <div className="error mx-auto" data-text="401">401</div>
-          <p className="lead text-gray-800 mb-5">Authentication Required</p>
-          <p className="text-gray-500 mb-0">Please log in to view your financial reports.</p>
-          <Link to="/login" className="btn btn-primary mt-3">
-            <i className="fas fa-sign-in-alt mr-2"></i>Log In
-          </Link>
-        </div>
-      </div>
-    );
+    navigate('/auth/login');
+    return null;
   }
 
   // Loading state
   if (loading) {
     return (
       <div className="container-fluid">
-        <div className="text-center mt-5">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">Loading your reports...</p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="text-center mt-5 hidden md:block">
           <div className="spinner-border text-primary" role="status">
             <span className="sr-only">Loading...</span>
           </div>
@@ -281,13 +289,65 @@ const FinancialReports: FC = () => {
 
   return (
     <div className="container-fluid">
-      {/* Page Header */}
-      <ReportHeader
-        onExportPDF={handleExportPDF}
-        onExportCSV={handleExportCSV}
-        onExportExcel={handleExportExcel}
-        onEmailReport={handleEmailReport}
-      />
+      {/* Mobile Page Heading - Floating action buttons */}
+      <div className="block md:hidden mb-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-base font-bold text-gray-800">Reports</h1>
+          <div className="flex items-center gap-2">
+            {/* Settings Toggle Button */}
+            <button
+              onClick={() => setMobileSettingsExpanded(!mobileSettingsExpanded)}
+              className={`w-9 h-9 rounded-full ${mobileSettingsExpanded ? 'bg-indigo-600' : 'bg-gray-500 hover:bg-gray-600'} text-white flex items-center justify-center shadow-md transition-all active:scale-95`}
+              aria-label="Toggle settings"
+            >
+              <i className={`fas fa-${mobileSettingsExpanded ? 'times' : 'sliders-h'} text-xs`}></i>
+            </button>
+            {/* Export Button */}
+            <div className="dropdown">
+              <button
+                className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95 disabled:opacity-50"
+                type="button"
+                id="mobileExportDropdown"
+                data-toggle="dropdown"
+                aria-haspopup="true"
+                aria-expanded="false"
+                disabled={isExporting}
+                aria-label="Export"
+              >
+                <i className={`fas fa-download text-xs ${isExporting ? 'animate-pulse' : ''}`}></i>
+              </button>
+              <div className="dropdown-menu dropdown-menu-right shadow" aria-labelledby="mobileExportDropdown">
+                <button className="dropdown-item text-sm" onClick={handleExportPDF} disabled={isExporting}>
+                  <i className="fas fa-file-pdf fa-sm fa-fw mr-2 text-danger"></i>PDF
+                </button>
+                <button className="dropdown-item text-sm" onClick={handleExportCSV} disabled={isExporting}>
+                  <i className="fas fa-file-csv fa-sm fa-fw mr-2 text-success"></i>CSV
+                </button>
+                <button className="dropdown-item text-sm" onClick={handleExportDOCX} disabled={isExporting}>
+                  <i className="fas fa-file-word fa-sm fa-fw mr-2 text-primary"></i>Word
+                </button>
+              </div>
+            </div>
+            {/* View Toggle Button */}
+            <button
+              onClick={() => setFormat(format === 'chart' ? 'table' : 'chart')}
+              className="w-9 h-9 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white flex items-center justify-center shadow-md transition-all active:scale-95"
+              aria-label={format === 'chart' ? 'Switch to table view' : 'Switch to chart view'}
+            >
+              <i className={`fas fa-${format === 'chart' ? 'table' : 'chart-bar'} text-xs`}></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Page Header */}
+      <div className="hidden md:block">
+        <ReportHeader
+          onExportPDF={handleExportPDF}
+          onExportCSV={handleExportCSV}
+          onExportDOCX={handleExportDOCX}
+        />
+      </div>
 
       {/* Summary Cards */}
       <ReportSummaryCards
@@ -308,6 +368,23 @@ const FinancialReports: FC = () => {
         onFormatChange={setFormat}
         onChartTypeChange={setChartType}
         onToggleTip={toggleTip}
+        mobileExpanded={mobileSettingsExpanded}
+        onMobileToggle={() => setMobileSettingsExpanded(!mobileSettingsExpanded)}
+      />
+
+      {/* Anomaly Alerts */}
+      <AnomalyAlerts
+        transactions={transactions}
+      />
+
+      {/* Financial Insights */}
+      <FinancialInsights
+        reportType={reportType}
+        reportData={categoryData.length > 0 ? categoryData : monthlyData}
+        transactions={transactions}
+        categories={categories}
+        timeframe={timeframe}
+        onInsightsChange={setAiInsights}
       />
 
       {/* Report Content */}
@@ -317,6 +394,10 @@ const FinancialReports: FC = () => {
           timeframe={timeframe}
           chartOptions={chartOptions}
           onToggleTip={toggleTip}
+          categoryData={categoryData}
+          monthlyData={monthlyData}
+          trendsData={trendsData}
+          budgetData={budgetData}
         />
       ) : (
         <ReportTable
@@ -329,20 +410,6 @@ const FinancialReports: FC = () => {
           onToggleTip={toggleTip}
         />
       )}
-
-      {/* Email Modal */}
-      <EmailModal
-        show={showEmailModal}
-        emailRecipient={emailRecipient}
-        emailSubject={emailSubject}
-        emailMessage={emailMessage}
-        emailSending={emailSending}
-        onEmailRecipientChange={setEmailRecipient}
-        onEmailSubjectChange={setEmailSubject}
-        onEmailMessageChange={setEmailMessage}
-        onSubmit={sendEmail}
-        onClose={closeEmailModal}
-      />
 
       {/* Tooltip System */}
       <TooltipSystem

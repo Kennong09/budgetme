@@ -21,64 +21,182 @@ const NoFamilyHandler: React.FC<NoFamilyHandlerProps> = ({ onJoinSuccess }) => {
 
   return (
     <div className="container-fluid">
-      {/* Header */}
-      <div className="text-center mb-5">
-        <div className="d-flex justify-content-center mb-3">
-          <div className="rounded-circle d-flex align-items-center justify-content-center"
-               style={{ width: "80px", height: "80px", backgroundColor: "rgba(78, 115, 223, 0.1)" }}>
-            <i className="fas fa-users fa-2x text-primary" />
+      {/* Mobile View */}
+      <div className="block md:hidden animate__animated animate__fadeIn">
+        {/* Mobile Header */}
+        <div className="text-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center mx-auto mb-3">
+            <i className="fas fa-users text-indigo-500 text-2xl"></i>
           </div>
+          <h1 className="text-lg font-bold text-gray-800 mb-1">Family Finance</h1>
+          <p className="text-xs text-gray-500">Start collaborating together</p>
         </div>
-        <h1 className="h2 text-gray-800 mb-2">Family Financial Management</h1>
-        <p className="text-gray-600 mb-0">Start collaborating on your family finances</p>
-      </div>
 
-      {/* Main Content Card */}
-      <div className="card shadow mb-4">
-        <div className="card-header py-3">
-          <ul className="nav nav-tabs card-header-tabs">
-            <li className="nav-item">
-              <button 
-                type="button"
-                className={`nav-link btn btn-link ${activeTab === "create" ? "active" : ""}`} 
-                onClick={() => handleTabChange("create")}
-              >
-                <i className="fas fa-plus-circle mr-1" /> Create Family
-              </button>
-            </li>
-            <li className="nav-item">
-              <button 
-                type="button"
-                className={`nav-link btn btn-link ${activeTab === "join" ? "active" : ""}`} 
-                onClick={() => handleTabChange("join")}
-              >
-                <i className="fas fa-sign-in-alt mr-1" /> Join Family
-              </button>
-            </li>
-            <li className="nav-item">
-              <button 
-                type="button"
-                className={`nav-link btn btn-link ${activeTab === "invitations" ? "active" : ""}`} 
-                onClick={() => handleTabChange("invitations")}
-              >
-                <i className="fas fa-envelope mr-1" /> Invitations
-              </button>
-            </li>
-          </ul>
+        {/* Mobile Tab Navigation */}
+        <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
+          <button 
+            type="button"
+            className={`flex-1 py-2 px-3 text-xs font-medium rounded-lg transition-all ${
+              activeTab === "create" 
+                ? "bg-white text-indigo-600 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => handleTabChange("create")}
+          >
+            <i className="fas fa-plus-circle mr-1"></i>
+            Create
+          </button>
+          <button 
+            type="button"
+            className={`flex-1 py-2 px-3 text-xs font-medium rounded-lg transition-all ${
+              activeTab === "join" 
+                ? "bg-white text-indigo-600 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => handleTabChange("join")}
+          >
+            <i className="fas fa-sign-in-alt mr-1"></i>
+            Join
+          </button>
+          <button 
+            type="button"
+            className={`flex-1 py-2 px-3 text-xs font-medium rounded-lg transition-all ${
+              activeTab === "invitations" 
+                ? "bg-white text-indigo-600 shadow-sm" 
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+            onClick={() => handleTabChange("invitations")}
+          >
+            <i className="fas fa-envelope mr-1"></i>
+            Invites
+          </button>
         </div>
-        
-        <div className="card-body">
+
+        {/* Mobile Tab Content */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
           {activeTab === 'create' && (
-            <CreateFamilyTab onCreateFamily={handleCreateFamily} />
+            <MobileCreateFamilyTab onCreateFamily={handleCreateFamily} />
           )}
           
           {activeTab === 'join' && (
-            <JoinFamilyTab onJoinSuccess={onJoinSuccess} />
+            <JoinFamily onJoinSuccess={onJoinSuccess} />
           )}
           
           {activeTab === 'invitations' && (
-            <InvitationsTab onAcceptSuccess={onJoinSuccess} />
+            <PendingInvitations onAcceptSuccess={onJoinSuccess} />
           )}
+        </div>
+      </div>
+
+      {/* Desktop View */}
+      <div className="hidden md:block">
+        {/* Header */}
+        <div className="text-center mb-5">
+          <div className="d-flex justify-content-center mb-3">
+            <div className="rounded-circle d-flex align-items-center justify-content-center"
+                 style={{ width: "80px", height: "80px", backgroundColor: "rgba(78, 115, 223, 0.1)" }}>
+              <i className="fas fa-users fa-2x text-primary" />
+            </div>
+          </div>
+          <h1 className="h2 text-gray-800 mb-2">Family Financial Management</h1>
+          <p className="text-gray-600 mb-0">Start collaborating on your family finances</p>
+        </div>
+
+        {/* Main Content Card */}
+        <div className="card shadow mb-4">
+          <div className="card-header py-3">
+            <ul className="nav nav-tabs card-header-tabs">
+              <li className="nav-item">
+                <button 
+                  type="button"
+                  className={`nav-link btn btn-link ${activeTab === "create" ? "active" : ""}`} 
+                  onClick={() => handleTabChange("create")}
+                >
+                  <i className="fas fa-plus-circle mr-1" /> Create Family
+                </button>
+              </li>
+              <li className="nav-item">
+                <button 
+                  type="button"
+                  className={`nav-link btn btn-link ${activeTab === "join" ? "active" : ""}`} 
+                  onClick={() => handleTabChange("join")}
+                >
+                  <i className="fas fa-sign-in-alt mr-1" /> Join Family
+                </button>
+              </li>
+              <li className="nav-item">
+                <button 
+                  type="button"
+                  className={`nav-link btn btn-link ${activeTab === "invitations" ? "active" : ""}`} 
+                  onClick={() => handleTabChange("invitations")}
+                >
+                  <i className="fas fa-envelope mr-1" /> Invitations
+                </button>
+              </li>
+            </ul>
+          </div>
+          
+          <div className="card-body">
+            {activeTab === 'create' && (
+              <CreateFamilyTab onCreateFamily={handleCreateFamily} />
+            )}
+            
+            {activeTab === 'join' && (
+              <JoinFamilyTab onJoinSuccess={onJoinSuccess} />
+            )}
+            
+            {activeTab === 'invitations' && (
+              <InvitationsTab onAcceptSuccess={onJoinSuccess} />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Mobile Create Family Tab Component
+const MobileCreateFamilyTab: React.FC<{ onCreateFamily: () => void }> = ({ onCreateFamily }) => {
+  return (
+    <div className="text-center">
+      <div className="mb-4">
+        <h3 className="text-sm font-bold text-gray-800 mb-2">Create Your Family</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Start managing finances together with your household.
+        </p>
+        
+        <button 
+          type="button"
+          className="w-full py-3 bg-indigo-500 text-white text-sm font-medium rounded-xl hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
+          onClick={onCreateFamily}
+        >
+          <i className="fas fa-home"></i>
+          Create Family Group
+        </button>
+      </div>
+
+      {/* Mobile Benefits */}
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        <div className="bg-gray-50 rounded-xl p-3 text-center">
+          <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center mx-auto mb-2">
+            <i className="fas fa-chart-line text-emerald-500 text-xs"></i>
+          </div>
+          <p className="text-[9px] font-semibold text-gray-700">Shared</p>
+          <p className="text-[8px] text-gray-400">Overview</p>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3 text-center">
+          <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center mx-auto mb-2">
+            <i className="fas fa-bullseye text-amber-500 text-xs"></i>
+          </div>
+          <p className="text-[9px] font-semibold text-gray-700">Team</p>
+          <p className="text-[8px] text-gray-400">Goals</p>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3 text-center">
+          <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center mx-auto mb-2">
+            <i className="fas fa-shield-alt text-rose-500 text-xs"></i>
+          </div>
+          <p className="text-[9px] font-semibold text-gray-700">Privacy</p>
+          <p className="text-[8px] text-gray-400">Control</p>
         </div>
       </div>
     </div>

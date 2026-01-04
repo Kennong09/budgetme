@@ -219,7 +219,7 @@ CREATE TABLE IF NOT EXISTS public.prediction_usage_limits (
     -- Limits per tier
     tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'basic', 'premium', 'enterprise')),
     prophet_daily_limit INTEGER DEFAULT 10,
-    ai_insights_daily_limit INTEGER DEFAULT 5,
+    ai_insights_daily_limit INTEGER DEFAULT 10,
     total_daily_limit INTEGER DEFAULT 20,
     
     -- Reset tracking
@@ -553,6 +553,9 @@ BEGIN
         user_id,
         prediction_id,
         insights,
+        risk_assessment,
+        recommendations,
+        opportunity_areas,
         ai_service,
         model_used,
         generation_time_ms,
@@ -561,6 +564,9 @@ BEGIN
         p_user_id,
         p_prediction_id,
         p_insights,
+        p_insights->'riskAssessment',
+        p_insights->'recommendations',
+        p_insights->'opportunityAreas',
         p_ai_service,
         p_model_used,
         p_generation_time_ms,

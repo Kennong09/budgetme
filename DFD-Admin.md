@@ -1,7 +1,29 @@
 # DFD - Admin Management Module (9.0): BudgetMe Financial Management System
 
 ## Overview
-This Data Flow Diagram details the Admin Management Module (Process 9.0) located at `src/components/admin/`. This module provides comprehensive system administration, user management, monitoring, and configuration capabilities for BudgetMe administrators.
+
+The Admin Management Module (Process 9.0) serves as the centralized control center for the BudgetMe Financial Management System, implemented in `src/components/admin/` with supporting database functions in `sql-refactored/08-admin-schema.sql`. This module provides comprehensive system administration, user management, monitoring, and configuration capabilities for BudgetMe administrators.
+
+### Core Responsibilities
+
+- **User Administration**: Complete user lifecycle management including creation, modification, suspension, and deletion of user accounts
+- **Role & Permission Control**: Hierarchical role-based access control (RBAC) with support for user, moderator, admin, and super_admin roles
+- **System Monitoring**: Real-time health monitoring, performance analytics, and usage statistics across all system modules
+- **Security Management**: Security policy enforcement, anomaly detection, and incident response coordination
+- **Data Operations**: Backup management, data archival, cleanup procedures, and migration support
+- **Configuration Management**: System-wide settings, feature flags, and environment configuration
+- **Audit & Compliance**: Comprehensive audit logging, compliance reporting, and regulatory adherence
+
+### Database Functions (Supabase)
+
+The Admin module leverages several PostgreSQL functions:
+- `is_admin_user(UUID)` - Validates admin privileges for a user
+- `add_admin_user(UUID)` - Grants admin role to a specified user
+- `remove_admin_user(UUID)` - Revokes admin role from a user
+- `log_admin_activity(...)` - Records administrative actions for audit trail
+- `get_admin_setting(TEXT)` / `set_admin_setting(TEXT, JSONB)` - Configuration management
+- `manage_user_role(UUID, TEXT)` - Role assignment and modification
+- `create_admin_notification(...)` - System notification creation
 
 ## Admin Management Module Data Flow Diagram
 
@@ -53,13 +75,13 @@ graph TB
         CHATBOT[8.0 Chatbot]
     end
     
-    subgraph "Data Stores"
-        D1[(D1<br/>Admin Database)]
-        D2[(D2<br/>System Config)]
-        D3[(D3<br/>Audit Logs)]
-        D4[(D4<br/>Performance Metrics)]
-        D5[(D5<br/>User Analytics)]
-        D6[(D6<br/>System Backups)]
+    subgraph "Data Stores (Supabase)"
+        D1[(admin_settings<br/>admin_notifications)]
+        D2[(feature_flags)]
+        D3[(admin_actions<br/>system_activity_log)]
+        D4[(admin_anomalies)]
+        D5[(profiles<br/>user_roles)]
+        D6[(backup_logs)]
     end
     
     %% Admin Authentication
@@ -209,41 +231,116 @@ graph TB
 
 ## Data Store Specifications
 
-### D1 - Admin Database
-- Administrative user accounts and roles
-- System administration logs and history
-- Administrative configuration settings
-- User management and permission records
+### D1 - Admin Settings & Notifications (admin_settings, admin_notifications)
 
-### D2 - System Config
-- System-wide configuration parameters
-- Feature flags and capability settings
-- Security policies and procedures
-- Environment and deployment settings
+**admin_settings**:
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique setting identifier |
+| `setting_key` | TEXT UK | Configuration key name (e.g., "maintenance_mode", "max_users") |
+| `setting_value` | JSONB | Configuration value with type-safe structure |
+| `category` | TEXT | Setting category (system, security, performance, feature) |
+| `created_by` | UUID FK | Administrator who created the setting |
+| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
 
-### D3 - Audit Logs
-- System activity and change logs
-- Security event logs and monitoring
-- Administrative action tracking
-- Compliance and regulatory audit trails
+**admin_notifications**:
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique notification identifier |
+| `title` | TEXT | Notification title |
+| `message` | TEXT | Notification content |
+| `priority` | TEXT | Priority level (low, medium, high, critical) |
+| `target_roles` | TEXT[] | Roles that should receive the notification |
+| `created_by` | UUID FK | Administrator who created the notification |
+| `expires_at` | TIMESTAMPTZ | When the notification should be dismissed |
 
-### D4 - Performance Metrics
-- System performance measurements
-- Module-specific performance data
-- Resource utilization statistics
-- Performance trend analysis data
+### D2 - Feature Flags (feature_flags)
 
-### D5 - User Analytics
-- User behavior and usage patterns
-- System adoption and engagement metrics
-- Feature usage statistics
-- User satisfaction and feedback data
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique flag identifier |
+| `flag_name` | TEXT UK | Feature flag name (e.g., "ai_predictions", "family_sharing") |
+| `is_enabled` | BOOLEAN | Whether the feature is currently enabled |
+| `rollout_percentage` | INTEGER | Percentage of users (0-100) with access to the feature |
+| `conditions` | JSONB | Additional conditions for feature access (user roles, regions) |
+| `created_by` | UUID FK | Administrator who created the flag |
+| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
 
-### D6 - System Backups
-- System backup files and archives
-- Backup metadata and recovery information
-- Backup schedules and execution logs
-- Disaster recovery procedures and data
+### D3 - Admin Actions & Activity Log (admin_actions, system_activity_log)
+
+**admin_actions**:
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique action identifier |
+| `admin_id` | UUID FK | Administrator who performed the action |
+| `action_type` | TEXT | Type of action (create, update, delete, approve, reject) |
+| `target_module` | TEXT | Affected module (authentication, budget, transactions, etc.) |
+| `target_id` | UUID | Identifier of the affected record |
+| `previous_values` | JSONB | State before the action |
+| `new_values` | JSONB | State after the action |
+| `success` | BOOLEAN | Whether the action completed successfully |
+| `created_at` | TIMESTAMPTZ | Action timestamp |
+
+**system_activity_log**:
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique log entry identifier |
+| `user_id` | UUID FK | User who triggered the activity |
+| `activity_type` | TEXT | Classification of activity |
+| `activity_description` | TEXT | Human-readable description |
+| `ip_address` | INET | Source IP address |
+| `user_agent` | TEXT | Browser/client identification |
+| `severity` | TEXT | Log level (info, warning, error, critical) |
+| `metadata` | JSONB | Additional context data |
+| `created_at` | TIMESTAMPTZ | Activity timestamp |
+
+### D4 - Admin Anomalies (admin_anomalies)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique anomaly identifier |
+| `user_id` | UUID FK | User associated with the anomaly |
+| `anomaly_type` | TEXT | Type (spending_spike, income_drop, unusual_pattern, security_threat) |
+| `severity` | TEXT | Severity level (low, medium, high, critical) |
+| `data_source` | TEXT | Origin of the anomaly detection |
+| `details` | JSONB | Detailed anomaly information |
+| `resolution_status` | TEXT | Status (open, investigating, resolved, dismissed) |
+| `assigned_admin` | UUID FK | Administrator handling the anomaly |
+| `created_at` | TIMESTAMPTZ | Detection timestamp |
+| `resolved_at` | TIMESTAMPTZ | Resolution timestamp |
+
+### D5 - User Profiles & Roles (profiles, user_roles)
+
+**profiles** (user data for admin management):
+- User profile information for administrative oversight
+- Account status and verification state
+- User preferences and settings
+
+**user_roles**:
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique role assignment identifier |
+| `user_id` | UUID FK | User receiving the role |
+| `role` | TEXT | Role name (user, moderator, admin, super_admin) |
+| `granted_by` | UUID FK | Administrator who granted the role |
+| `granted_at` | TIMESTAMPTZ | When the role was assigned |
+| `expires_at` | TIMESTAMPTZ | Role expiration (nullable for permanent) |
+| `is_active` | BOOLEAN | Whether the role is currently effective |
+
+### D6 - Backup Logs (backup_logs)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique backup identifier |
+| `backup_type` | TEXT | Type (full, incremental, differential) |
+| `status` | TEXT | Status (pending, running, completed, failed) |
+| `backup_size_bytes` | BIGINT | Size of the backup in bytes |
+| `backup_location` | TEXT | Storage location/path |
+| `checksum` | TEXT | Integrity verification hash |
+| `created_by` | UUID FK | Administrator who initiated the backup |
+| `started_at` | TIMESTAMPTZ | Backup start time |
+| `completed_at` | TIMESTAMPTZ | Backup completion time |
+| `error_message` | TEXT | Error details if backup failed |
 
 ## Integration Points
 

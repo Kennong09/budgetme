@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS public.budgets (
     currency TEXT NOT NULL DEFAULT 'USD',
     
     -- Period configuration
-    period TEXT NOT NULL CHECK (period IN ('week', 'month', 'quarter', 'year', 'custom')),
+    period TEXT NOT NULL CHECK (period IN ('day', 'week', 'month', 'quarter', 'year', 'custom')),
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     
@@ -499,17 +499,8 @@ BEGIN
             SET last_alert_sent = now()
             WHERE id = p_budget_id;
             
-            -- Send notification
-            PERFORM public.send_notification(
-                'budget_alert',
-                jsonb_build_object(
-                    'budget_id', p_budget_id,
-                    'user_id', v_budget.user_id,
-                    'alert_type', v_alert_type,
-                    'alert_level', v_alert_level,
-                    'message', v_message
-                )::TEXT
-            );
+            -- Notification system disabled to prevent function dependency errors
+            -- The alert is still recorded in the budget_alerts table
         END IF;
     END IF;
 END;

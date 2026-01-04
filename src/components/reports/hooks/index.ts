@@ -13,8 +13,10 @@ interface Transaction {
   date: string;
   description?: string;
   notes?: string;
-  type: "income" | "expense" | "contribution";
+  type: "income" | "expense" | "transfer" | "contribution";
   category_id?: number;
+  expense_category_id?: string;
+  income_category_id?: string;
   account_id: string;
   created_at: string;
   updated_at?: string;
@@ -55,7 +57,7 @@ interface Goal {
 }
 
 interface Category {
-  id: number;
+  id: number | string;
   category_name: string;
   type: "income" | "expense";
   icon?: string;
@@ -73,10 +75,14 @@ interface IncomeExpenseDataItem {
   name: string;
   income: number;
   expenses: number;
+  contributions: number;
 }
 
 interface SavingsDataItem {
   name: string;
+  income: number;
+  expenses: number;
+  savings: number;
   rate: number;
 }
 
@@ -136,9 +142,8 @@ export const useReportData = (timeframe: TimeframeType, reportType: ReportType) 
       }
       
       query = query
-        .gte('date', startDate.toISOString())
-        .lte('date', now.toISOString())
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .order('date', { ascending: false });
       
       const { data, error } = await query;
       
@@ -435,68 +440,24 @@ export const useTooltips = () => {
   };
 };
 
-// Hook for managing email functionality
-export const useEmailReport = () => {
-  const { showSuccessToast, showErrorToast } = useToast();
-  const [showEmailModal, setShowEmailModal] = useState<boolean>(false);
-  const [emailRecipient, setEmailRecipient] = useState<string>('');
-  const [emailSubject, setEmailSubject] = useState<string>('');
-  const [emailMessage, setEmailMessage] = useState<string>('');
-  const [emailSending, setEmailSending] = useState<boolean>(false);
+// Email functionality removed - use direct export options instead
 
-  const openEmailModal = (reportType: ReportType) => {
-    setEmailSubject(`Financial Report - ${reportType.charAt(0).toUpperCase() + reportType.slice(1)}`);
-    setEmailMessage(`Please find attached the ${reportType} report.`);
-    setShowEmailModal(true);
-  };
-
-  const closeEmailModal = () => {
-    setShowEmailModal(false);
-    setEmailRecipient('');
-    setEmailSubject('');
-    setEmailMessage('');
-  };
-
-  const sendEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!emailRecipient) {
-      showErrorToast('Please enter a recipient email address');
-      return;
-    }
-    
-    setEmailSending(true);
-    
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      setEmailSending(false);
-      closeEmailModal();
-      showSuccessToast(`Report sent successfully to ${emailRecipient}`);
-    } catch (error) {
-      console.error('Error sending email:', error);
-      setEmailSending(false);
-      showErrorToast('Failed to send email. Please try again later.');
-    }
-  };
-
-  return {
-    showEmailModal,
-    emailRecipient,
-    emailSubject,
-    emailMessage,
-    emailSending,
-    setEmailRecipient,
-    setEmailSubject,
-    setEmailMessage,
-    openEmailModal,
-    closeEmailModal,
-    sendEmail
-  };
+// Helper function to get the actual category ID from a transaction
+export const getTransactionCategoryId = (transaction: Transaction): string | number | undefined => {
+  // Check for the new structure first (expense_category_id or income_category_id)
+  if (transaction.type === 'expense' && transaction.expense_category_id) {
+    return transaction.expense_category_id;
+  }
+  if (transaction.type === 'income' && transaction.income_category_id) {
+    return transaction.income_category_id;
+  }
+  // Fallback to old structure
+  return transaction.category_id;
 };
 
 // Helper function to get category name
-export const getCategoryName = (categoryId: number, categories: Category[]): string => {
-  const category = categories.find(cat => cat.id === categoryId);
+export const getCategoryName = (categoryId: number | string, categories: Category[]): string => {
+  const category = categories.find(cat => cat.id === categoryId || cat.id.toString() === categoryId.toString());
   return category ? category.category_name : `Category ${categoryId}`;
 };
 
@@ -507,14 +468,27 @@ export const useSummaryData = (transactions: Transaction[], budgets: Budget[], g
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     
-    const totalIncome = getTotalIncome(1, firstDay.toISOString(), lastDay.toISOString());
-    const totalExpenses = getTotalExpenses(1, firstDay.toISOString(), lastDay.toISOString());
-    const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
+    // Calculate from actual transactions instead of mock data
+    const currentMonthTransactions = transactions.filter(t => {
+      const transactionDate = new Date(t.date);
+      return transactionDate >= firstDay && transactionDate <= lastDay;
+    });
+    
+    const totalIncome = currentMonthTransactions
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const totalExpenses = currentMonthTransactions
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+      
+    const savings = totalIncome - totalExpenses;
+    const savingsRate = totalIncome > 0 ? (savings / totalIncome) * 100 : 0;
     
     return {
       income: totalIncome,
       expenses: totalExpenses,
-      savings: totalIncome - totalExpenses,
+      savings,
       savingsRate
     };
   };

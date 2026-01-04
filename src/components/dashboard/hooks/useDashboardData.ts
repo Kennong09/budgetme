@@ -100,7 +100,7 @@ export const useDashboardData = () => {
       // Fetch recent transactions using EnhancedTransactionService for proper category mapping
       const transactionResult = await EnhancedTransactionService.fetchTransactionsWithMapping(
         user.id,
-        { limit: 50 } // Get recent 50 transactions
+        { limit: 500 } // Get more transactions for comprehensive dashboard view
       );
       
       if (!transactionResult.success) {
@@ -238,12 +238,13 @@ export const useDashboardData = () => {
       // Update state
       setUserData(dashboardUserData);
       setPendingInvites(formattedInvitations);
-      setBudgetProgress(formattedBudgetData);
+      // Limit budget progress to 10 latest budgets
+      setBudgetProgress(formattedBudgetData.slice(0, 10));
       
-      // Set recent transactions
+      // Set recent transactions - limit to 10 latest
       const sortedTransactions = [...(transactionsData || [])].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      ).slice(0, 5);
+      ).slice(0, 10);
       setRecentTransactions(sortedTransactions);
 
     } catch (error: any) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { FC, memo, useEffect, useRef, useCallback, useMemo } from 'react';
 
 interface TooltipPosition {
   top: number;
@@ -14,7 +14,7 @@ interface BudgetTooltipProps {
   category?: 'workflow' | 'form' | 'process' | 'analytics';
 }
 
-const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
+const BudgetTooltip: FC<BudgetTooltipProps> = memo(({
   isVisible,
   position,
   title,
@@ -25,31 +25,32 @@ const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   // Handle click outside to close
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
+  const handleClickOutside = useCallback((event: MouseEvent | TouchEvent) => {
+    if (tooltipRef.current && !tooltipRef.current.contains(event.target as Node)) {
+      onClose();
+    }
+  }, [onClose]);
 
+  useEffect(() => {
     if (isVisible) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('touchstart', handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside as EventListener);
+      document.addEventListener('touchstart', handleClickOutside as EventListener);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside as EventListener);
+      document.removeEventListener('touchstart', handleClickOutside as EventListener);
     };
-  }, [isVisible, onClose]);
+  }, [isVisible, handleClickOutside]);
 
   // Handle escape key to close
+  const handleEscapeKey = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      onClose();
+    }
+  }, [onClose]);
+
   useEffect(() => {
-    const handleEscapeKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
 
     if (isVisible) {
       document.addEventListener('keydown', handleEscapeKey);
@@ -58,7 +59,7 @@ const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
     return () => {
       document.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [isVisible, onClose]);
+  }, [isVisible, handleEscapeKey]);
 
   // Dynamic positioning with boundary detection
   const calculatePosition = (): React.CSSProperties => {
@@ -99,7 +100,7 @@ const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
   };
 
   // Get category-specific styling
-  const getCategoryIcon = (): string => {
+  const categoryIcon = useMemo(() => {
     const iconMap = {
       workflow: 'fas fa-route text-primary',
       form: 'fas fa-edit text-info',
@@ -107,7 +108,7 @@ const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
       analytics: 'fas fa-chart-line text-success'
     };
     return iconMap[category];
-  };
+  }, [category]);
 
   if (!isVisible || !position) {
     return null;
@@ -137,12 +138,12 @@ const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
         style={{
           ...calculatePosition(),
           background: 'white',
-          padding: '12px 15px',
+          padding: window.innerWidth < 768 ? '10px 12px' : '12px 15px',
           borderRadius: '8px',
           boxShadow: '0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15)',
-          maxWidth: '300px',
+          maxWidth: window.innerWidth < 768 ? '260px' : '300px',
           border: '1px solid rgba(0, 0, 0, 0.05)',
-          fontSize: '0.875rem',
+          fontSize: window.innerWidth < 768 ? '0.8125rem' : '0.875rem',
           lineHeight: '1.4'
         }}
         role="tooltip"
@@ -152,12 +153,12 @@ const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
         {/* Close button */}
         <button
           onClick={onClose}
-          className="btn btn-sm btn-link p-0 float-right"
+          className="p-0 float-right bg-transparent border-0 cursor-pointer hover:text-gray-700 transition-colors"
           style={{ 
             marginTop: '-2px',
             marginRight: '-5px',
             color: '#858796',
-            fontSize: '0.75rem'
+            fontSize: window.innerWidth < 768 ? '0.7rem' : '0.75rem'
           }}
           aria-label="Close tooltip"
         >
@@ -166,14 +167,14 @@ const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
 
         {/* Title with category icon */}
         <div className="tooltip-title d-flex align-items-center mb-2">
-          <i className={`${getCategoryIcon()} mr-2`} style={{ fontSize: '0.875rem' }}></i>
-          <span style={{ fontWeight: 600, color: '#5a5c69', fontSize: '0.875rem' }}>
+          <i className={`${categoryIcon} mr-2`} style={{ fontSize: window.innerWidth < 768 ? '0.8125rem' : '0.875rem' }}></i>
+          <span style={{ fontWeight: 600, color: '#5a5c69', fontSize: window.innerWidth < 768 ? '0.8125rem' : '0.875rem' }}>
             {title}
           </span>
         </div>
 
         {/* Description */}
-        <div className="tooltip-description" style={{ color: '#858796', margin: 0 }}>
+        <div className="tooltip-description" style={{ color: '#858796', margin: 0, fontSize: window.innerWidth < 768 ? '0.75rem' : '0.875rem' }}>
           {description}
         </div>
 
@@ -195,6 +196,8 @@ const BudgetTooltip: React.FC<BudgetTooltipProps> = ({
       </div>
     </>
   );
-};
+});
+
+BudgetTooltip.displayName = 'BudgetTooltip';
 
 export default BudgetTooltip;

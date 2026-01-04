@@ -439,13 +439,7 @@ class InvitationService {
         familyId: invitation.family_id 
       });
 
-      // 6. Send notification (user exists in system since we validated above)
-      try {
-        await this.sendInvitationNotification(invitation, inviterId);
-      } catch (notificationError) {
-        console.warn('Failed to send invitation notification:', notificationError);
-        // Don't fail the invitation creation if notification fails
-      }
+      // Invitation created successfully - no notification system
 
       return invitation;
     } catch (error) {
@@ -515,13 +509,7 @@ class InvitationService {
         throw new Error(`Failed to accept invitation: ${acceptError.message}`);
       }
 
-      // 5. Send welcome notification
-      try {
-        await this.sendWelcomeNotification(invitation.family_id, userId);
-      } catch (notificationError) {
-        console.warn('Failed to send welcome notification:', notificationError);
-        // Don't fail the acceptance if notification fails
-      }
+      // Invitation accepted successfully - no notification system
     } catch (error) {
       console.error('Error in acceptInvitation:', error);
       throw error;
@@ -828,30 +816,6 @@ class InvitationService {
     }
   }
 
-  /**
-   * Send invitation notification (placeholder for future implementation)
-   */
-  private async sendInvitationNotification(invitation: FamilyInvitation, inviterId: string): Promise<void> {
-    // TODO: Implement email notification or in-app notification
-    // For now, this is a placeholder
-    console.log('Invitation notification would be sent here:', {
-      invitationId: invitation.id,
-      invitedEmail: invitation.email,
-      inviterId
-    });
-  }
-
-  /**
-   * Send welcome notification (placeholder for future implementation)
-   */
-  private async sendWelcomeNotification(familyId: string, userId: string): Promise<void> {
-    // TODO: Implement welcome notification
-    // For now, this is a placeholder
-    console.log('Welcome notification would be sent here:', {
-      familyId,
-      userId
-    });
-  }
 }
 
 // Export singleton instance

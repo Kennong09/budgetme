@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import HighchartsReact from 'highcharts-react-official';
 import Highcharts from 'highcharts';
+import treemap from 'highcharts/modules/treemap';
+import heatmap from 'highcharts/modules/heatmap';
 import { CategoryExpenseData } from '../../../services/database/familyDataAggregationService';
 import { useRealtimeFamilyData } from '../../../hooks/useRealtimeFamilyData';
 import { ChartErrorBoundary } from '../../common/ChartErrorBoundary';
 import { ChartErrorHandler } from '../../../utils/chartErrorHandler';
 
-// Import treemap module for Highcharts
-require('highcharts/modules/treemap')(Highcharts);
-require('highcharts/modules/heatmap')(Highcharts);
+// Initialize Highcharts modules
+treemap(Highcharts);
+heatmap(Highcharts);
 
 interface CategoryChartProps {
   familyId: string;

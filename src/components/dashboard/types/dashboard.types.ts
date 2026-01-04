@@ -12,6 +12,9 @@ export interface Transaction {
   type: "income" | "expense" | "transfer" | "contribution";
   category?: string;
   category_id?: string;
+  // Raw database fields (before mapping)
+  expense_category_id?: string;
+  income_category_id?: string;
   account_id?: string;
   goal_id?: string;
   status?: string;

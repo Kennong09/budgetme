@@ -25,6 +25,7 @@ export interface Budget {
   user_id: string;
   user_name: string;
   user_email: string;
+  user_avatar?: string;
   status: "active" | "completed" | "archived";
   month: string;
   year: number;
@@ -40,11 +41,24 @@ export interface Category {
   user_id: string;
 }
 
-// Interface for user profile
+// Interface for budget user (matching TransactionUser pattern)
+export interface BudgetUser {
+  id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  user_metadata?: {
+    full_name?: string;
+    avatar_url?: string;
+  };
+}
+
+// Interface for user profile (kept for backward compatibility)
 export interface UserProfile {
   id: string;
   full_name: string;
   email: string;
+  avatar_url?: string;
 }
 
 // Interface for budget statistics

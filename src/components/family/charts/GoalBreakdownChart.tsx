@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import HighchartsReact from 'highcharts-react-official';
 import Highcharts from 'highcharts';
+import solidGauge from 'highcharts/modules/solid-gauge';
 import { GoalStatusData, GoalCommitmentData } from '../../../services/database/familyGoalService';
 import { useRealtimeFamilyData } from '../../../hooks/useRealtimeFamilyData';
 import { ChartErrorBoundary } from '../../common/ChartErrorBoundary';
@@ -9,8 +10,8 @@ import { KPICard } from './shared';
 import { colorSystem, getStatusColor, calculateHealthScore, calculateCommitmentLevel } from './utils';
 import './FamilyChartsResponsive.css';
 
-// Import required Highcharts modules
-require('highcharts/modules/solid-gauge')(Highcharts);
+// Initialize Highcharts modules
+solidGauge(Highcharts);
 
 interface GoalBreakdownChartProps {
   familyId: string;

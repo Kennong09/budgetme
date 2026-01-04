@@ -1,0 +1,63 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Glowing effect filter -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background circle for the icon -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="white" stroke-width="8" opacity="0.3"/>
+  
+  <!-- Smart Budget Intelligence symbol with Philippine financial elements -->
+  <g transform="translate(256, 256) scale(10)">
+    <!-- Central lightbulb shape with glowing effect -->
+    <path d="M-6 -8 C-6 -12, -2 -14, 0 -14 C2 -14, 6 -12, 6 -8 C6 -6, 4 -4, 4 -2 L4 2 C4 4, 2 4, 0 4 C-2 4, -4 4, -4 2 L-4 -2 C-4 -4, -6 -6, -6 -8 Z" 
+          fill="white" opacity="0.9" filter="url(#glow)"/>
+    
+    <!-- Lightbulb filament/brain pattern for intelligence -->
+    <path d="M-3 -6 Q-1 -8, 1 -6" stroke="white" stroke-width="0.8" fill="none" opacity="0.6"/>
+    <path d="M-2 -3 Q0 -5, 2 -3" stroke="white" stroke-width="0.8" fill="none" opacity="0.6"/>
+    <path d="M-1 -1 Q0 -2, 1 -1" stroke="white" stroke-width="0.6" fill="none" opacity="0.5"/>
+    
+    <!-- Pesos sign in the center -->
+    <text x="0" y="1" text-anchor="middle" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="white" opacity="0.9">₱</text>
+    
+    <!-- Lightbulb handle/grip -->
+    <rect x="-1.5" y="4.5" width="3" height="4" fill="white" opacity="0.7" rx="1.5"/>
+    <rect x="-2" y="5" width="4" height="0.8" fill="white" opacity="0.5" rx="0.4"/>
+    <rect x="-2" y="6.2" width="4" height="0.8" fill="white" opacity="0.5" rx="0.4"/>
+    <rect x="-2" y="7.4" width="4" height="0.8" fill="white" opacity="0.5" rx="0.4"/>
+    
+    <!-- Budget chart bars representing financial tracking -->
+    <rect x="8" y="-6" width="1.5" height="4" fill="white" opacity="0.7" rx="0.5"/>
+    <rect x="10" y="-4" width="1.5" height="2" fill="white" opacity="0.7" rx="0.5"/>
+    <rect x="12" y="-8" width="1.5" height="6" fill="white" opacity="0.7" rx="0.5"/>
+    <rect x="14" y="-5" width="1.5" height="3" fill="white" opacity="0.7" rx="0.5"/>
+    
+    <!-- Philippine peso coins stack -->
+    <ellipse cx="-10" cy="2" rx="2.2" ry="0.8" fill="white" opacity="0.6"/>
+    <ellipse cx="-10" cy="1" rx="2.2" ry="0.8" fill="white" opacity="0.7"/>
+    <ellipse cx="-10" cy="0" rx="2.2" ry="0.8" fill="white" opacity="0.8"/>
+    
+    <!-- Smart connection nodes -->
+    <circle cx="7" cy="4" r="1" fill="white" opacity="0.5"/>
+    <circle cx="-7" cy="-3" r="1" fill="white" opacity="0.5"/>
+    <circle cx="0" cy="-11" r="1" fill="white" opacity="0.5"/>
+    <circle cx="-9" cy="6" r="0.8" fill="white" opacity="0.4"/>
+    
+    <!-- Intelligence connection lines -->
+    <line x1="0" y1="-10" x2="0" y2="-8" stroke="white" stroke-width="0.5" opacity="0.4"/>
+    <line x1="6" y1="4" x2="4" y2="1" stroke="white" stroke-width="0.5" opacity="0.4"/>
+    <line x1="-6" y1="-3" x2="-4" y2="-1" stroke="white" stroke-width="0.5" opacity="0.4"/>
+    <line x1="-9" y1="5" x2="-8" y2="3" stroke="white" stroke-width="0.4" opacity="0.3"/>
+    
+    <!-- Lightbulb base/screw threads -->
+    <rect x="-2.5" y="2.5" width="5" height="1" fill="white" opacity="0.6" rx="0.2"/>
+    <rect x="-2.5" y="3.8" width="5" height="0.8" fill="white" opacity="0.5" rx="0.2"/>
+  </g>
+</svg>

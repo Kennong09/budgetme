@@ -471,26 +471,35 @@ class FamilyService {
    */
   async checkFamilyMembership(userId: string): Promise<FamilyMembershipInfo> {
     try {
-      // Use direct query only to avoid RPC function issues
+      // First, check if user has any active family membership
       const { data: memberData, error: memberError } = await supabase
         .from('family_members')
-        .select(`
-          family_id,
-          role,
-          status,
-          families (
-            id,
-            family_name,
-            description,
-            currency_pref
-          )
-        `)
+        .select('family_id, role, status')
         .eq('user_id', userId)
         .eq('status', 'active')
         .single();
 
-      if (memberError || !memberData) {
+      if (memberError) {
+        // Check if it's just "no rows" error
+        if (memberError.code === 'PGRST116') {
+          return { is_member: false };
+        }
+        throw memberError;
+      }
+
+      if (!memberData) {
         return { is_member: false };
+      }
+
+      // Get family details separately to avoid join issues
+      const { data: familyData, error: familyError } = await supabase
+        .from('families')
+        .select('id, family_name, description, currency_pref')
+        .eq('id', memberData.family_id)
+        .single();
+
+      if (familyError) {
+        console.warn('Error fetching family details:', familyError);
       }
 
       // Get member count for the family
@@ -503,9 +512,9 @@ class FamilyService {
       return {
         is_member: true,
         family_id: memberData.family_id,
-        family_name: (memberData.families as any)?.family_name,
-        description: (memberData.families as any)?.description,
-        currency_pref: (memberData.families as any)?.currency_pref,
+        family_name: familyData?.family_name || 'Unknown Family',
+        description: familyData?.description || '',
+        currency_pref: familyData?.currency_pref || 'PHP',
         role: memberData.role,
         status: memberData.status,
         member_count: memberCount || 0
@@ -523,32 +532,40 @@ class FamilyService {
     try {
       const { data: memberData, error: memberError } = await supabase
         .from('family_members')
-        .select(`
-          family_id,
-          role,
-          status,
-          families (
-            id,
-            family_name,
-            description,
-            currency_pref
-          )
-        `)
+        .select('family_id, role, status')
         .eq('user_id', userId)
         .eq('family_id', familyId)
         .eq('status', 'active')
         .single();
 
-      if (memberError || !memberData) {
+      if (memberError) {
+        if (memberError.code === 'PGRST116') {
+          return { is_member: false };
+        }
+        throw memberError;
+      }
+
+      if (!memberData) {
         return { is_member: false };
+      }
+
+      // Get family details separately
+      const { data: familyData, error: familyError } = await supabase
+        .from('families')
+        .select('id, family_name, description, currency_pref')
+        .eq('id', familyId)
+        .single();
+
+      if (familyError) {
+        console.warn('Error fetching family details:', familyError);
       }
 
       return {
         is_member: true,
         family_id: memberData.family_id,
-        family_name: (memberData.families as any)?.family_name,
-        description: (memberData.families as any)?.description,
-        currency_pref: (memberData.families as any)?.currency_pref,
+        family_name: familyData?.family_name || 'Unknown Family',
+        description: familyData?.description || '',
+        currency_pref: familyData?.currency_pref || 'PHP',
         role: memberData.role,
         status: memberData.status
       };

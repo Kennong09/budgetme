@@ -1,7 +1,28 @@
 # DFD - Budget Management Module (2.0): BudgetMe Financial Management System
 
 ## Overview
-This Data Flow Diagram details the Budget Management Module (Process 2.0) of the BudgetMe system, located at `src/components/budget/`. This module handles budget creation, monitoring, allocation management, spending tracking, and automated alerts. It provides comprehensive budgeting functionality with real-time spending analysis and family budget coordination.
+
+The Budget Management Module (Process 2.0) is a core financial planning component of the BudgetMe system, implemented in `src/components/budget/` with data persistence through Supabase PostgreSQL. This module provides comprehensive budget lifecycle management from creation to period rollover, with real-time spending analysis and family budget coordination.
+
+### Core Responsibilities
+
+- **Budget Creation**: Define spending limits by category with flexible period configurations (weekly, monthly, quarterly, yearly)
+- **Spending Tracking**: Real-time monitoring of expenditures against budget allocations with percentage-based progress
+- **Alert Management**: Automated threshold-based notifications (50%, 75%, 90%, 100%) when spending approaches or exceeds limits
+- **Category Management**: Organization of budget items using income and expense categories with customizable icons and colors
+- **Family Budgets**: Collaborative budget creation and sharing within family groups with permission-based access control
+- **Period Rollover**: Automated transition between budget periods with optional carryover of unused allocations
+- **Analysis & Insights**: Budget performance analytics integrated with AI prediction module for trend forecasting
+
+### Key Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `budgets` | Budget definitions with amounts, periods, and category associations |
+| `budget_alerts` | Threshold-based alert configurations and trigger history |
+| `income_categories` / `expense_categories` | User and system-defined categorization for budget items |
+| `transactions` | Transaction records linked to budget tracking |
+| `accounts` | Financial accounts for budget balance calculations |
 
 ## Budget Management Module Data Flow Diagram
 
@@ -42,19 +63,19 @@ graph TB
         CHATBOT[8.0 Chatbot]
     end
     
-    subgraph "Data Stores"
-        D1[(D1<br/>Budget Database)]
-        D2[(D2<br/>Category Database)]
-        D3[(D3<br/>Budget Templates)]
-        D4[(D4<br/>Spending Alerts)]
-        D5[(D5<br/>Budget History)]
+    subgraph "Data Stores (Supabase)"
+        D1[(budgets)]
+        D2[(income_categories<br/>expense_categories)]
+        D3[(transactions)]
+        D4[(budget_alerts)]
+        D5[(accounts)]
     end
     
     %% Budget Creation Flow
     USER -->|Budget Creation Request| CREATE
     AUTH -->|User Context| CREATE
     CREATE -->|Budget Template Request| TEMPLATE
-    TEMPLATE -->|Load Template| D3
+    TEMPLATE -->|Load Previous Budgets| D1
     TEMPLATE -->|Template Data| CREATE
     CREATE -->|Category Setup| CATEGORY
     CATEGORY -->|Category Rules| D2
@@ -83,9 +104,9 @@ graph TB
     
     %% Budget Analysis
     USER -->|Analysis Request| ANALYSIS
-    ANALYSIS -->|Historical Data| D5
-    ANALYSIS -->|Current Budget| D1
-    ANALYSIS -->|Transaction History| TRANS
+    ANALYSIS -->|Historical Budgets| D1
+    ANALYSIS -->|Transaction History| D3
+    ANALYSIS -->|Account Balances| D5
     ANALYSIS -->|Analysis Results| USER
     ANALYSIS -->|Provide Insights| REPORTS
     
@@ -93,7 +114,7 @@ graph TB
     USER -->|Budget Changes| EDIT
     EDIT -->|Validate Changes| D1
     EDIT -->|Update Budget| D1
-    EDIT -->|Archive Previous| D5
+    EDIT -->|Log Changes| D1
     EDIT -->|Change Notification| USER
     
     %% Family Budget Sharing
@@ -105,9 +126,8 @@ graph TB
     
     %% Period Rollover
     ROLLOVER -->|Period Check| D1
-    ROLLOVER -->|Archive Current| D5
     ROLLOVER -->|Create New Period| D1
-    ROLLOVER -->|Rollover Rules| D3
+    ROLLOVER -->|Copy Previous Settings| D1
     ROLLOVER -->|Rollover Complete| USER
     
     %% Integration with Other Modules
@@ -390,93 +410,77 @@ graph TB
 - Historical periods preserved for 2 years
 - New period inherits previous period's structure
 
-## Data Store Specifications
+## Data Store Specifications (Actual Supabase Tables)
 
-### D1 - Budget Database
-**Structure**:
-- Budget ID (Primary Key)
-- User ID (Foreign Key)
-- Budget Name
-- Total Amount
-- Period Type (monthly, quarterly, yearly)
-- Start Date / End Date
-- Status (active, completed, archived)
-- Rollover Rules
-- Category Allocations (JSON)
-- Current Spending (JSON)
-- Created Date / Modified Date
+### D1 - budgets
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique budget identifier |
+| `user_id` | UUID FK | References auth.users(id) |
+| `name` | TEXT | Budget display name |
+| `amount` | NUMERIC | Total budget amount for period |
+| `period` | TEXT | "weekly", "monthly", "quarterly", "yearly" |
+| `start_date` | DATE | Budget period start date |
+| `end_date` | DATE | Budget period end date |
+| `category_id` | UUID FK | References expense_categories(id) |
+| `spent_amount` | NUMERIC | Current spending against budget |
+| `family_id` | UUID FK | References families(id) for shared budgets |
+| `rollover_enabled` | BOOLEAN | Whether unused amounts carry forward |
+| `is_active` | BOOLEAN | Whether budget is currently active |
+| `created_at` | TIMESTAMPTZ | Budget creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
 
-**Access Patterns**:
-- Read: Budget retrieval, spending calculations
-- Write: Budget creation, spending updates
-- Update: Budget modifications, rollover processing
+### D2 - budget_alerts
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique alert identifier |
+| `budget_id` | UUID FK | References budgets(id) |
+| `user_id` | UUID FK | References auth.users(id) |
+| `threshold_percentage` | INTEGER | Alert trigger threshold (50, 75, 90, 100) |
+| `alert_type` | TEXT | "warning", "danger", "exceeded" |
+| `triggered_at` | TIMESTAMPTZ | When alert was triggered |
+| `acknowledged_at` | TIMESTAMPTZ | When user dismissed alert |
+| `notification_sent` | BOOLEAN | Whether email notification was sent |
+| `created_at` | TIMESTAMPTZ | Alert creation timestamp |
 
-### D2 - Category Database
-**Structure**:
-- Category ID (Primary Key)
-- User ID (Foreign Key)
-- Category Name
-- Parent Category ID (Self-Reference)
-- Default Allocation Percentage
-- Alert Thresholds
-- Auto-Assignment Rules
-- Icon/Color Settings
-- Created Date
+### D3 - income_categories
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique category identifier |
+| `user_id` | UUID FK | References auth.users(id), NULL for system |
+| `name` | TEXT | Category display name |
+| `icon` | TEXT | Icon identifier |
+| `color` | TEXT | Hex color code |
+| `is_system` | BOOLEAN | Whether system-provided |
+| `sort_order` | INTEGER | Display ordering |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
 
-**Access Patterns**:
-- Read: Category lookup, hierarchy navigation
-- Write: Category creation, rule updates
-- Update: Category modifications, hierarchy changes
+### D4 - expense_categories
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID PK | Unique category identifier |
+| `user_id` | UUID FK | References auth.users(id), NULL for system |
+| `name` | TEXT | Category display name |
+| `icon` | TEXT | Icon identifier |
+| `color` | TEXT | Hex color code |
+| `is_system` | BOOLEAN | Whether system-provided |
+| `parent_id` | UUID FK | References expense_categories(id) for hierarchy |
+| `sort_order` | INTEGER | Display ordering |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
 
-### D3 - Budget Templates
-**Structure**:
-- Template ID (Primary Key)
-- Template Name
-- Template Type (50/30/20, Zero-based, etc.)
-- Category Allocations (JSON)
-- Income Requirements
-- Description
-- Usage Count
-- Success Rating
-
-**Access Patterns**:
-- Read: Template selection, customization
-- Write: Template creation, updates
-- Analytics: Usage tracking, success metrics
-
-### D4 - Spending Alerts
-**Structure**:
-- Alert ID (Primary Key)
-- Budget ID (Foreign Key)
-- Category ID (Foreign Key)
-- Alert Type
-- Threshold Percentage
-- Alert Message
-- Triggered Date
-- Acknowledged Date
-- Delivery Status
-
-**Access Patterns**:
-- Write: Alert generation, acknowledgment
-- Read: Alert history, configuration
-- Cleanup: Purge old acknowledged alerts
-
-### D5 - Budget History
-**Structure**:
-- History ID (Primary Key)
-- Budget ID (Foreign Key)
-- Period Start/End Dates
-- Final Spending Totals (JSON)
-- Budget Performance Metrics
-- Variance Analysis
-- Achievement Status
-- Archived Date
-
-**Access Patterns**:
-- Write: Period closure, archival
-- Read: Historical analysis, reporting
-- Analytics: Performance trending, insights
-
+### D5 - transactions (Budget Tracking)
+| Column | Type | Description |
+| `id` | UUID PK | Transaction identifier |
+| `expense_category_id` | UUID FK | Category for budget tracking |
+| `amount` | NUMERIC | Transaction amount |
+| `transaction_date` | DATE | Date for period matching |
+| `budget_id` | UUID FK | References budgets(id) for budget tracking |
+| `description` | TEXT | Brief description of transaction |
+| `payment_method` | TEXT | Method used for transaction (e.g. credit card, cash) |
+| `receipt_available` | BOOLEAN | Whether receipt is available for transaction |
+| `created_at` | TIMESTAMPTZ | Transaction creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last modification timestamp |
+|--------|------|-------------|
 ## Integration Points
 
 ### Transaction Module Integration

@@ -86,10 +86,24 @@
 .landing-logo {
   display: flex;
   align-items: center;
-  font-weight: 700;
-  font-size: 1.5rem;
+  font-weight: 800;
+  font-size: 1.8rem;
+  letter-spacing: -0.5px;
   color: var(--landing-primary);
   z-index: 101;
+  gap: 0;
+}
+
+.landing-logo .rotate-n-15 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-logo span {
+  font-weight: 800;
+  font-size: 1.8rem;
+  letter-spacing: -0.5px;
 }
 
 .sticky-header .landing-logo {
@@ -129,13 +143,17 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  flex-wrap: nowrap;
 }
 
 /* Add styles for navigation buttons */
 .landing-menu .btn-primary,
 .landing-menu .btn-primary-outline {
-  padding: 0.6rem 1.2rem;
-  font-size: 0.9rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
 
 /* Style adjustments for sticky header buttons */
@@ -169,12 +187,11 @@
   color: var(--landing-dark);
   z-index: 101;
   padding: 0.4rem;
-  border-radius: 50%;
   transition: all 0.2s ease;
 }
 
 .mobile-menu-toggle:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: transparent;
 }
 
 .sticky-header .mobile-menu-toggle {
@@ -182,7 +199,7 @@
 }
 
 .sticky-header .mobile-menu-toggle:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: transparent;
 }
 
 /* Mobile Header Buttons */
@@ -190,6 +207,7 @@
   display: none;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: nowrap;
 }
 
 .mobile-login-btn,
@@ -452,65 +470,159 @@
   animation: float 7s infinite ease-in-out 0.5s;
 }
 
-/* Device Mockup */
-.device-mockup {
+/* Apple iPhone Device Mockup - White Frame */
+.apple-device-mockup {
   position: relative;
   z-index: 3;
   width: 320px;
-  height: 600px;
-  background: white;
-  border-radius: 36px;
+  height: 640px;
+  background: #ffffff;
+  border-radius: 40px;
   overflow: hidden;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  box-shadow: 
+    0 0 0 8px #f5f5f7,
+    0 0 0 10px #e8e8ed,
+    0 40px 80px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
   transform: perspective(800px) rotateY(-10deg) rotateX(5deg);
   animation: deviceAppear 1s ease-out forwards;
 }
 
-.device-screen {
+/* iPhone Side Buttons - White Frame */
+.device-buttons {
+  position: absolute;
+  top: 0;
+  left: -8px;
+  width: 8px;
+  height: 100%;
+  z-index: 5;
+}
+
+.button-volume-up {
+  position: absolute;
+  top: 80px;
+  left: 0;
+  width: 4px;
+  height: 40px;
+  background: #d1d1d6;
+  border-radius: 0 2px 2px 0;
+}
+
+.button-volume-down {
+  position: absolute;
+  top: 130px;
+  left: 0;
+  width: 4px;
+  height: 40px;
+  background: #d1d1d6;
+  border-radius: 0 2px 2px 0;
+}
+
+.button-power {
+  position: absolute;
+  top: 80px;
+  right: -4px;
+  width: 4px;
+  height: 60px;
+  background: #d1d1d6;
+  border-radius: 2px 0 0 2px;
+}
+
+.apple-device-mockup .device-screen {
   position: absolute;
   top: 10px;
   left: 10px;
   right: 10px;
   bottom: 10px;
-  background: #f8f9fc;
-  border-radius: 28px;
+  background: #000;
+  border-radius: 30px;
   overflow: hidden;
-  padding: 20px;
+  padding: 0;
 }
 
-/* Screen Content */
-.screen-content {
+/* iOS Status Bar - Adjusted for Dynamic Island */
+.ios-status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  z-index: 5;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.status-time {
+  color: #000;
+  font-weight: 600;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.status-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-icons i {
+  font-size: 14px;
+  color: #000;
+}
+
+.apple-device-mockup .screen-content {
   height: 100%;
   display: flex;
   flex-direction: column;
   position: relative;
+  background: #f8f9fc;
+  padding-top: 44px;
 }
 
-.screen-header {
+.apple-device-mockup .screen-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin: 20px;
+  margin-bottom: 15px;
 }
 
-.screen-title {
+.apple-device-mockup .screen-title {
   font-weight: 700;
   font-size: 18px;
   color: var(--landing-dark);
 }
 
-.screen-date {
+.apple-device-mockup .screen-date {
   font-size: 14px;
   color: var(--landing-gray-dark);
 }
 
-.screen-cards {
+.apple-device-mockup .screen-cards {
   display: flex;
   gap: 15px;
-  margin-bottom: 30px;
+  margin: 0 20px;
+  margin-bottom: 20px;
 }
 
-.screen-card {
+.apple-device-mockup .screen-card {
   flex: 1;
   background: white;
   border-radius: 12px;
@@ -521,94 +633,138 @@
   transform: translateY(20px);
 }
 
-.screen-card:first-child {
+.apple-device-mockup .screen-card:first-child {
   animation-delay: 0.3s;
 }
 
-.screen-card:last-child {
+.apple-device-mockup .screen-card:last-child {
   animation-delay: 0.5s;
 }
 
-.card-label {
+.apple-device-mockup .card-label {
   font-size: 12px;
   color: var(--landing-gray-dark);
 }
 
-.card-amount {
+.apple-device-mockup .card-amount {
   font-size: 18px;
   font-weight: 700;
   color: var(--landing-dark);
   margin: 5px 0;
 }
 
-.card-trend {
+.apple-device-mockup .card-trend {
   font-size: 12px;
   font-weight: 600;
   display: flex;
   align-items: center;
 }
 
-.card-trend::before {
-  content: "";
+.apple-device-mockup .card-trend::before {
+  content: '';
   display: inline-block;
   width: 0;
   height: 0;
-  margin-right: 4px;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
+  margin-right: 4px;
 }
 
-.card-trend.up {
-  color: #10b981;
+.apple-device-mockup .card-trend.up {
+  color: var(--landing-success);
 }
 
-.card-trend.up::before {
-  border-bottom: 6px solid #10b981;
+.apple-device-mockup .card-trend.up::before {
+  border-bottom: 6px solid var(--landing-success);
 }
 
-.card-trend.down {
-  color: #ef4444;
+.apple-device-mockup .card-trend.down {
+  color: var(--landing-danger);
 }
 
-.card-trend.down::before {
-  border-top: 6px solid #ef4444;
+.apple-device-mockup .card-trend.down::before {
+  border-top: 6px solid var(--landing-danger);
 }
 
-.screen-chart {
+.apple-device-mockup .screen-chart {
+  flex: 1;
   display: flex;
-  justify-content: space-around;
   align-items: flex-end;
-  height: 150px;
-  margin-top: auto;
+  justify-content: space-around;
+  padding: 0 20px;
+  margin-bottom: 20px;
 }
 
-.chart-bar {
+.apple-device-mockup .chart-bar {
   width: 30px;
-  background: linear-gradient(180deg, var(--landing-primary), var(--landing-primary-light));
-  border-radius: 6px;
-  opacity: 0;
-  animation: barGrow 1s ease-out forwards;
+  background: linear-gradient(180deg, var(--landing-primary) 0%, var(--landing-primary-dark) 100%);
+  border-radius: 4px 4px 0 0;
+  transition: height 0.5s ease, opacity 0.5s ease;
+  cursor: pointer;
 }
 
-.chart-bar:nth-child(1) {
-  animation-delay: 0.6s;
+/* Apple Device Interactive Effects - White Frame */
+.apple-device-mockup {
+  transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.chart-bar:nth-child(2) {
-  animation-delay: 0.8s;
+.hero-visual:hover .apple-device-mockup {
+  transform: perspective(800px) rotateY(-5deg) rotateX(2deg) translateY(-10px);
+  box-shadow: 
+    0 0 0 8px #f5f5f7,
+    0 0 0 10px #e8e8ed,
+    0 50px 100px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
-.chart-bar:nth-child(3) {
-  animation-delay: 1s;
+.apple-device-mockup .screen-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: pointer;
 }
 
-.chart-bar:nth-child(4) {
-  animation-delay: 1.2s;
+.apple-device-mockup:hover .screen-card {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
-.chart-bar:nth-child(5) {
-  animation-delay: 1.4s;
+.apple-device-mockup:hover .screen-card:first-child {
+  transform: translateY(-3px) rotate(-1deg);
 }
+
+.apple-device-mockup:hover .screen-card:last-child {
+  transform: translateY(-3px) rotate(1deg);
+}
+
+.apple-device-mockup .chart-bar {
+  transition: height 0.5s ease, opacity 0.5s ease;
+  cursor: pointer;
+}
+
+.apple-device-mockup:hover .chart-bar:nth-child(1) {
+  height: 65% !important;
+}
+
+.apple-device-mockup:hover .chart-bar:nth-child(2) {
+  height: 85% !important;
+}
+
+.apple-device-mockup:hover .chart-bar:nth-child(3) {
+  height: 45% !important;
+}
+
+.apple-device-mockup:hover .chart-bar:nth-child(4) {
+  height: 95% !important;
+}
+
+.apple-device-mockup:hover .chart-bar:nth-child(5) {
+  height: 75% !important;
+}
+
+.apple-device-mockup .chart-bar:hover {
+  opacity: 0.8;
+  filter: brightness(1.1);
+}
+
+/* Legacy Device Mockup Support */
 
 /* Floating Elements */
 .floating-elements {
@@ -804,9 +960,9 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   }
   
-  .device-mockup {
+  .apple-device-mockup {
     width: 240px;
-    height: 450px;
+    height: 520px;
   }
   
   .screen-cards {
@@ -830,6 +986,123 @@
   
   .chart-bar {
     width: 20px;
+  }
+}
+
+/* Apple Device Responsive Design - White Frame */
+@media (max-width: 768px) {
+  .apple-device-mockup {
+    transform: none;
+    width: 280px;
+    height: 560px;
+  }
+  
+  .apple-device-mockup .device-screen {
+    border-radius: 24px;
+  }
+  
+  .apple-device-mockup .screen-content {
+    padding-top: 40px;
+  }
+  
+  .ios-status-bar {
+    height: 40px;
+    padding: 0 15px;
+  }
+  
+  .status-time {
+    font-size: 13px;
+  }
+  
+  .status-icons i {
+    font-size: 12px;
+  }
+  
+  .apple-device-mockup .screen-header {
+    margin: 15px;
+    margin-bottom: 12px;
+  }
+  
+  .apple-device-mockup .screen-title {
+    font-size: 16px;
+  }
+  
+  .apple-device-mockup .screen-date {
+    font-size: 12px;
+  }
+  
+  .apple-device-mockup .screen-cards {
+    gap: 12px;
+    margin: 0 15px;
+    margin-bottom: 15px;
+  }
+  
+  .apple-device-mockup .screen-card {
+    padding: 12px;
+  }
+  
+  .apple-device-mockup .card-amount {
+    font-size: 16px;
+  }
+  
+  .apple-device-mockup .chart-bar {
+    width: 25px;
+  }
+}
+
+@media (max-width: 480px) {
+  .apple-device-mockup {
+    width: 240px;
+    height: 480px;
+  }
+  
+  .apple-device-mockup .device-screen {
+    border-radius: 20px;
+  }
+  
+  .apple-device-mockup .screen-content {
+    padding-top: 36px;
+  }
+  
+  .ios-status-bar {
+    height: 36px;
+    padding: 0 12px;
+  }
+  
+  .status-time {
+    font-size: 12px;
+  }
+  
+  .status-icons i {
+    font-size: 11px;
+  }
+  
+  .apple-device-mockup .screen-chart {
+    height: 120px;
+  }
+  
+  .apple-device-mockup .chart-bar {
+    width: 18px;
+  }
+  
+  .apple-device-mockup .screen-cards {
+    margin-bottom: 12px;
+  }
+  
+  .apple-device-mockup .screen-card {
+    padding: 10px;
+  }
+  
+  .apple-device-mockup .card-label {
+    font-size: 10px;
+  }
+  
+  .apple-device-mockup .card-amount {
+    font-size: 14px;
+  }
+  
+  .apple-device-mockup .card-trend {
+    font-size: 10px;
   }
 }
 
@@ -2687,10 +2960,11 @@ html {
 .social-buttons {
   display: flex;
   gap: 1rem;
+  width: 100%;
 }
 
 .social-btn {
-  flex: 1;
+  width: 100%;
   padding: 0.75rem;
   border-radius: 8px;
   border: 1px solid var(--landing-border);
@@ -2711,9 +2985,6 @@ html {
   color: #db4437;
 }
 
-.social-btn.facebook i {
-  color: #4267b2;
-}
 
 .social-btn:hover {
   background-color: #f3f4f6;
@@ -2913,7 +3184,7 @@ html {
     transition: all 0.3s ease-in-out;
     box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
     overflow-y: auto;
-    z-index: 100;
+    z-index: 102;
   }
   
   .sticky-header .landing-menu {
@@ -2932,13 +3203,17 @@ html {
   }
   
   .menu-buttons {
-    flex-direction: column;
+    flex-direction: row;
     width: 100%;
-    gap: 1rem;
+    gap: 0.75rem;
+    justify-content: center;
   }
   
   .landing-menu button {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 1rem;
+    white-space: nowrap;
   }
   
   .hero-text h1 {
@@ -3440,9 +3715,6 @@ html {
   border-color: #e33629;
 }
 
-.facebook:hover {
-  border-color: #3d5a98;
-}
 
 /* Loading state styling */
 .btn-primary.btn-block:disabled {
@@ -3635,8 +3907,8 @@ html {
 /* Social login buttons enhancement */
 .social-buttons {
   display: flex !important;
-  gap: 1rem !important;
   justify-content: center !important;
+  width: 100% !important;
 }
 
 .social-btn {
@@ -3652,7 +3924,6 @@ html {
   transition: all 0.3s ease !important;
   font-weight: 500 !important;
   width: 100% !important;
-  max-width: 160px !important;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05) !important;
 }
 
@@ -3665,13 +3936,33 @@ html {
   background-color: #f2f2f2 !important;
 }
 
-.social-btn.facebook:hover {
-  background-color: #f0f2f5 !important;
+.social-btn:disabled {
+  opacity: 0.7 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }
 
 .social-icon {
   width: 20px !important;
   height: 20px !important;
+}
+
+.oauth-spinner {
+  width: 20px !important;
+  height: 20px !important;
+  border: 3px solid #e5e7eb !important;
+  border-top-color: #6366f1 !important;
+  border-radius: 50% !important;
+  animation: spin-smooth 0.8s linear infinite !important;
+}
+
+@keyframes spin-smooth {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Form errors enhancement */
@@ -3872,6 +4163,137 @@ html {
 .reset-btn:disabled {
   opacity: 0.7 !important;
   cursor: not-allowed !important;
+  transform: none !important;
+}
+
+/* Password Requirements Styling */
+.password-requirements {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.1);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.requirements-list {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.requirement {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.125rem 0;
+  transition: all 0.2s ease;
+}
+
+.requirement.valid {
+  color: #22c55e;
+}
+
+.requirement.invalid {
+  color: #6b7280;
+}
+
+.requirement i {
+  font-size: 0.875rem;
+  width: 16px;
+  flex-shrink: 0;
+}
+
+/* Password Match Indicator */
+.password-match {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+}
+
+.password-match.match {
+  color: #22c55e;
+  background-color: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.password-match.no-match {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.password-match i {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Secondary button styling */
+.btn-secondary {
+  background: transparent !important;
+  color: var(--landing-gray-dark) !important;
+  border: 1px solid var(--landing-border) !important;
+  padding: 0.875rem 1.5rem !important;
+  border-radius: 0.5rem !important;
+  font-weight: 500 !important;
+  transition: all 0.3s ease !important;
+  text-decoration: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  cursor: pointer !important;
+}
+
+.btn-secondary:hover {
+  background: var(--landing-gray-light) !important;
+  border-color: var(--landing-gray-dark) !important;
+  color: var(--landing-dark) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+.btn-secondary:active {
+  transform: translateY(0) !important;
+}
+
+/* Verification actions layout */
+.verification-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.verification-actions button {
+  min-width: 140px;
+  flex: 1;
+}
+
+@media (max-width: 480px) {
+  .verification-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .verification-actions button {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .password-requirements {
+    padding: 0.5rem;
+  }
+  
+  .requirements-list {
+    gap: 0.125rem;
+  }
 }
 
 /* Description text in modal */

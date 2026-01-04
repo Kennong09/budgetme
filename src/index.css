@@ -1,11 +1,11 @@
+/* Import base styles - must come before @tailwind directives */
+@import './components/featureDetails/featureDetails.css';
+@import './assets/css/selector-components.css';
+
 /* Import Tailwind CSS */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Import base styles */
-@import './components/featureDetails/featureDetails.css';
-@import './assets/css/selector-components.css';
 
 :root {
   --primary-color: #6366f1; /* Indigo */
@@ -143,20 +143,6 @@ body {
 .app-container {
   display: flex;
   min-height: 100vh;
-}
-
-.sidebar {
-  width: 270px;
-  background-color: var(--primary-color);
-  color: white;
-  padding: 1.5rem 1rem;
-  transition: all 0.3s ease;
-  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-}
-
-.sidebar-collapsed {
-  width: 80px;
 }
 
 .main-content {
@@ -523,21 +509,209 @@ body {
   }
 }
 
+/* Family Goals Progress Bar Animations */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.goal-progress-bar.shimmer-effect::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 3s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 0.9;
+  }
+}
+
+.goal-progress-bar.pulse-animation {
+  animation: pulse 2s infinite;
+}
+
+/* Smooth transition for progress bar width changes */
+.goal-progress-bar {
+  position: relative;
+  transition: width 1s ease-in-out;
+  overflow: hidden;
+}
+
+/* Button micro-interactions */
+.btn-contribute {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-contribute:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-contribute:active {
+  transform: scale(0.98);
+}
+
+.btn-chart {
+  transition: transform 0.3s ease, color 0.2s ease;
+}
+
+.btn-chart:hover {
+  transform: rotate(15deg) scale(1.1);
+  color: var(--primary-color) !important;
+}
+
+.btn-chart:active {
+  transform: rotate(0deg) scale(1);
+}
+
+/* Success checkmark animation */
+@keyframes checkmark {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2) rotate(180deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(360deg);
+  }
+}
+
+.success-checkmark {
+  animation: checkmark 0.6s ease-in-out;
+}
+
+/* Goal status indicators with colors */
+.goal-status-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+}
+
+.goal-status-indicator.on-track {
+  background-color: #10b981;
+}
+
+.goal-status-indicator.needs-attention {
+  background-color: #f59e0b;
+}
+
+.goal-status-indicator.urgent {
+  background-color: #ef4444;
+  animation: pulse-border 2s infinite;
+}
+
+.goal-status-indicator.completed {
+  background-color: #fbbf24;
+}
+
+@keyframes pulse-border {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Loading skeleton for contributions */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-text {
+  height: 16px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.skeleton-circle {
+  border-radius: 50%;
+}
+
+/* Motivational badge animations */
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.motivational-badge {
+  animation: bounce-in 0.6s ease-out;
+}
+
+/* Smooth modal transitions */
+.modal-content {
+  animation: modal-slide-up 0.3s ease-out;
+}
+
+@keyframes modal-slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 768px) {
   .grid-cols-2,
   .grid-cols-3,
   .grid-cols-4 {
     grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    position: fixed;
-    left: -270px;
-    height: 100vh;
-  }
-
-  .sidebar.open {
-    left: 0;
   }
 
   .main-content {

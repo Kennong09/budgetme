@@ -1,0 +1,118 @@
+-- Update the password recovery email template to use RedirectTo for secure unauthenticated flow
+-- This ensures users are redirected to the reset password page without being automatically authenticated
+UPDATE auth.email_templates
+SET
+    subject = 'Reset Your Password - BudgetMe',
+    html_content = '<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Your Password - BudgetMe</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+</head>
+<body style="margin: 0; padding: 0; background-color: #f9fafb; font-family: \'Inter\', -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; line-height: 1.6; color: #1f2937;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%; background-color: #f9fafb;">
+        <tr>
+            <td style="padding: 40px 20px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); overflow: hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 30px 40px; text-align: center;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%;">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <div style="display: inline-block; width: 60px; height: 60px; background-color: rgba(255, 255, 255, 0.2); border-radius: 50%; line-height: 60px; margin-bottom: 15px; padding: 10px;">
+                                            <img src="https://noagsxfixjrgatexuwxm.supabase.co/storage/v1/object/public/assets/favicon.ico" alt="BudgetMe" style="width: 40px; height: 40px; display: block; margin: 0 auto;" />
+                                        </div>
+                                        <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 0; letter-spacing: -0.5px;">BudgetMe</h1>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <!-- Security Icon -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%; margin-bottom: 30px;">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <div style="display: inline-block; width: 80px; height: 80px; background-color: rgba(239, 68, 68, 0.1); border-radius: 50%; line-height: 80px; margin-bottom: 20px;">
+                                            <i class="fas fa-lock" style="color: #ef4444; font-size: 36px; line-height: 80px;"></i>
+                                        </div>
+                                        <h2 style="color: #1f2937; font-size: 24px; font-weight: 600; margin: 0; margin-bottom: 16px;">Reset Your Password</h2>
+                                        <p style="color: #6b7280; font-size: 16px; margin: 0; line-height: 1.6;">We received a request to reset the password for your BudgetMe account.</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- Main Message -->
+                            <div style="background-color: #fef2f2; border-radius: 8px; padding: 24px; margin-bottom: 30px; border-left: 4px solid #ef4444;">
+                                <p style="color: #374151; font-size: 16px; margin: 0; line-height: 1.6;">Click the button below to create a new password for your account. For security reasons, this link will expire in 1 hour.</p>
+                            </div>
+                            
+                            <!-- CTA Button -->
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width: 100%; margin-bottom: 30px;">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <a href="{{ .RedirectTo }}" style="display: inline-block; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px; padding: 14px 32px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3); transition: all 0.2s ease;">Reset My Password</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <!-- Alternative Link -->
+                            <div style="text-align: center; margin-bottom: 30px;">
+                                <p style="color: #6b7280; font-size: 14px; margin: 0; margin-bottom: 8px;">Having trouble with the button? Copy and paste this link into your browser:</p>
+                                <p style="color: #ef4444; font-size: 14px; margin: 0; word-break: break-all; background-color: #f3f4f6; padding: 8px; border-radius: 4px;">{{ .RedirectTo }}</p>
+                            </div>
+                            
+                            <!-- Security Notice -->
+                            <div style="background-color: #fef3c7; border-radius: 8px; padding: 16px; border-left: 4px solid #f59e0b;">
+                                <h3 style="color: #92400e; font-size: 16px; font-weight: 600; margin: 0; margin-bottom: 8px;">Security Notice</h3>
+                                <ul style="color: #92400e; font-size: 14px; margin: 0; padding-left: 20px; line-height: 1.5;">
+                                    <li>This password reset link expires in 1 hour</li>
+                                    <li>If you didn\'t request this reset, you can safely ignore this email</li>
+                                    <li>For additional security, consider enabling two-factor authentication</li>
+                                    <li>Never share your password or reset links with anyone</li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9fafb; padding: 30px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="color: #6b7280; font-size: 14px; margin: 0; margin-bottom: 8px;">This email was sent from BudgetMe Security</p>
+                            <p style="color: #9ca3af; font-size: 12px; margin: 0;">If you didn\'t request a password reset, please contact our support team immediately.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>',
+    text_content = 'Reset Your Password - BudgetMe
+
+We received a request to reset the password for your BudgetMe account.
+
+Click the link below to create a new password for your account. For security reasons, this link will expire in 1 hour.
+
+{{ .RedirectTo }}
+
+If you didn\'t request this reset, you can safely ignore this email.
+
+This email was sent from BudgetMe Security
+If you didn\'t request a password reset, please contact our support team immediately.'
+WHERE template_type = 'recovery';

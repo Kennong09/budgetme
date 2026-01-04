@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import React, { FC, memo } from "react";
 
 export interface FooterProps {
   className?: string;
@@ -29,14 +29,15 @@ const Footer: FC<FooterProps> = ({
   ].filter(Boolean).join(" ");
 
   return (
-    <footer className={footerClasses} style={style}>
-      <div className="container my-auto">
-        <div className="copyright text-center my-auto">
-          <span>{text || defaultText}</span>
+    <footer className={`${footerClasses} transition-all duration-300`} style={style}>
+      <div className="container my-auto px-3">
+        <div className="copyright text-center my-auto py-3">
+          <span className="text-gray-600 text-xs md:text-sm">{text || defaultText}</span>
         </div>
       </div>
     </footer>
   );
 };
 
-export default Footer;
+// Memoize Footer component for performance
+export default memo(Footer);

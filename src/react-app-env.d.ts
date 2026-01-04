@@ -23,3 +23,11 @@ declare module "*.json" {
   const content: any;
   export default content;
 }
+
+// Extend Window interface for debug functions
+declare global {
+  interface Window {
+    enableAuthDebug?: () => void;
+    disableAuthDebug?: () => void;
+  }
+}

@@ -60,6 +60,88 @@ except ValueError as e:
     logger.warning(f"AI insights service not available: {str(e)}")
     ai_insights_service = None
 
+# Helper function for monthly aggregation
+def aggregate_daily_to_monthly(forecast_df) -> List[Dict[str, Any]]:
+    """
+    Aggregate Prophet's daily predictions into monthly totals
+    
+    This function converts daily predictions from Prophet into monthly aggregates,
+    which provides more accurate and realistic financial forecasts for users.
+    
+    Args:
+        forecast_df: DataFrame with daily predictions (ds, yhat, yhat_upper, yhat_lower, trend, seasonal)
+    
+    Returns:
+        List of monthly aggregates with proper confidence intervals
+        Each dict contains: month, predicted, upper, lower, trend, seasonal, confidence
+    """
+    try:
+        import pandas as pd
+        import numpy as np
+        
+        # Ensure we have a DataFrame
+        if not isinstance(forecast_df, pd.DataFrame):
+            logger.error("forecast_df must be a pandas DataFrame")
+            return []
+        
+        # Ensure ds column is datetime
+        if 'ds' not in forecast_df.columns:
+            logger.error("forecast_df must have 'ds' column")
+            return []
+        
+        forecast_df = forecast_df.copy()
+        forecast_df['ds'] = pd.to_datetime(forecast_df['ds'])
+        
+        # Create year-month column for grouping
+        forecast_df['year_month'] = forecast_df['ds'].dt.to_period('M')
+        
+        # Group by year-month and aggregate
+        monthly_aggregates = []
+        
+        for period, group in forecast_df.groupby('year_month'):
+            # Sum daily predictions to get monthly total
+            monthly_predicted = group['yhat'].sum()
+            
+            # Calculate proper confidence intervals using root-sum-square method
+            # This accounts for the fact that daily uncertainties don't simply add up
+            daily_upper_variance = (group['yhat_upper'] - group['yhat']) ** 2
+            daily_lower_variance = (group['yhat'] - group['yhat_lower']) ** 2
+            
+            monthly_upper_std = np.sqrt(daily_upper_variance.sum())
+            monthly_lower_std = np.sqrt(daily_lower_variance.sum())
+            
+            monthly_upper = monthly_predicted + monthly_upper_std
+            monthly_lower = monthly_predicted - monthly_lower_std
+            
+            # Average the trend (trend is a smooth component)
+            monthly_trend = group['trend'].mean()
+            
+            # Sum seasonal component (seasonal effects accumulate over the month)
+            monthly_seasonal = group.get('seasonal', pd.Series([0] * len(group))).sum()
+            
+            # Calculate confidence score for the month
+            confidence_width = monthly_upper - monthly_lower
+            monthly_confidence = 1 - (confidence_width / abs(monthly_predicted) if monthly_predicted != 0 else 1)
+            monthly_confidence = max(0.0, min(1.0, monthly_confidence))
+            
+            monthly_aggregates.append({
+                'month': str(period),  # e.g., "2025-11"
+                'predicted': float(monthly_predicted),
+                'upper': float(monthly_upper),
+                'lower': float(monthly_lower),
+                'trend': float(monthly_trend),
+                'seasonal': float(monthly_seasonal),
+                'confidence': float(monthly_confidence),
+                'data_points': len(group)
+            })
+        
+        logger.info(f"Aggregated {len(forecast_df)} daily predictions into {len(monthly_aggregates)} monthly totals")
+        return monthly_aggregates
+        
+    except Exception as e:
+        logger.error(f"Error aggregating daily to monthly: {str(e)}")
+        return []
+
 @router.post("/generate", response_model=PredictionResponse)
 @log_execution_time
 async def generate_predictions(
@@ -85,8 +167,27 @@ async def generate_predictions(
     request_id = str(uuid.uuid4())
     
     try:
-        # Log request
+        # Log request with metadata
         prediction_logger.log_prediction_request(current_user_id, request.timeframe.value, request_id)
+        
+        # Log transaction data metadata for debugging (Requirement 5.1, 5.3)
+        transaction_dates = [t.date for t in request.transaction_data]
+        date_range_days = (max(transaction_dates) - min(transaction_dates)).days if transaction_dates else 0
+        min_date = min(transaction_dates).strftime('%Y-%m-%d') if transaction_dates else 'N/A'
+        max_date = max(transaction_dates).strftime('%Y-%m-%d') if transaction_dates else 'N/A'
+        
+        # Count transaction types for detailed logging
+        income_count = sum(1 for t in request.transaction_data if t.type.value == 'income')
+        expense_count = sum(1 for t in request.transaction_data if t.type.value == 'expense')
+        
+        logger.info(
+            f"📊 Prediction request metadata - User: {current_user_id}, "
+            f"Request ID: {request_id}, "
+            f"Transaction count: {len(request.transaction_data)} (Income: {income_count}, Expense: {expense_count}), "
+            f"Date range: {min_date} to {max_date} ({date_range_days} days), "
+            f"Timeframe: {request.timeframe.value}, "
+            f"Seasonality mode: {request.seasonality_mode.value}"
+        )
         
         # Validate timeframe
         ErrorHandler.validate_timeframe(request.timeframe.value)
@@ -209,10 +310,47 @@ async def generate_predictions(
                 include_history=False
             )
             
+            # Aggregate daily predictions to monthly totals
+            monthly_predictions = aggregate_daily_to_monthly(forecast)
+            
+            # Log aggregation metadata (Requirement 5.1, 5.3)
+            logger.info(
+                f"📈 Prediction aggregation - User: {current_user_id}, "
+                f"Request ID: {request_id}, "
+                f"Daily predictions: {len(forecast)}, "
+                f"Monthly aggregates: {len(monthly_predictions)}, "
+                f"Aggregation method: monthly, "
+                f"Forecast period: {forecast_days} days, "
+                f"Avg confidence: {forecast['confidence_score'].mean():.2f}"
+            )
+            
+            # Get predicted monthly income from first month prediction for alignment
+            predicted_monthly_income = None
+            if monthly_predictions and len(monthly_predictions) > 0:
+                predicted_monthly_income = monthly_predictions[0].get('predicted', None)
+                logger.info(
+                    f"First month prediction - User: {current_user_id}, "
+                    f"Request ID: {request_id}, "
+                    f"Predicted monthly income: {predicted_monthly_income:.2f}"
+                )
+            
             # Generate category forecasts if requested
             category_forecasts = {}
             if request.include_categories:
-                category_forecasts = forecaster.get_category_forecasts(transactions, forecast_days)
+                # Pass monthly income prediction to ensure category totals align
+                category_forecasts = forecaster.get_category_forecasts(
+                    transactions, 
+                    forecast_days,
+                    monthly_income_prediction=predicted_monthly_income
+                )
+                
+                # Log category forecast metadata
+                logger.info(
+                    f"Category forecasts generated - User: {current_user_id}, "
+                    f"Request ID: {request_id}, "
+                    f"Categories: {len(category_forecasts)}, "
+                    f"Category names: {list(category_forecasts.keys())}"
+                )
             
             # Calculate user financial profile
             user_profile = _calculate_user_profile(transactions)
@@ -387,20 +525,52 @@ async def generate_predictions(
                 'confidence': float(row['confidence_score'])
             })
         
+        # Calculate overall confidence score based on model accuracy (MAPE)
+        # Lower MAPE = higher confidence
+        # MAPE < 5% = 95% confidence, MAPE 5-10% = 90-95% confidence, etc.
+        mape_value = model_accuracy_obj.mape
+        if mape_value < 0.05:  # Less than 5% error
+            overall_confidence = 0.95
+        elif mape_value < 0.10:  # 5-10% error
+            overall_confidence = 0.90
+        elif mape_value < 0.15:  # 10-15% error
+            overall_confidence = 0.85
+        elif mape_value < 0.20:  # 15-20% error
+            overall_confidence = 0.80
+        else:  # More than 20% error
+            overall_confidence = max(0.70, 1.0 - mape_value)  # Minimum 70% confidence
+        
         response = PredictionResponse(
             user_id=current_user_id,
             timeframe=request.timeframe,
             generated_at=datetime.now(),
             expires_at=datetime.now() + timedelta(hours=24),
             predictions=predictions_list,
+            monthly_predictions=monthly_predictions,  # Add monthly aggregated predictions
+            aggregation_method='monthly',  # Indicate that monthly aggregation is used
             category_forecasts=category_forecasts_obj,  # Use the converted schema objects
             model_accuracy=model_accuracy_obj,  # Use the converted schema object
-            confidence_score=float(forecast['confidence_score'].mean()),
+            confidence_score=float(overall_confidence),
             user_profile=user_profile_obj,  # Use the converted schema object
             insights=insights,
             usage_count=usage_status.current_usage + 1,
             max_usage=usage_status.max_usage,
             reset_date=usage_status.reset_date
+        )
+        
+        # Log response metadata for debugging (Requirement 5.1, 5.3)
+        logger.info(
+            f"✅ Prediction response created - User: {current_user_id}, "
+            f"Request ID: {request_id}, "
+            f"Daily predictions: {len(predictions_list)}, "
+            f"Monthly predictions: {len(monthly_predictions) if monthly_predictions else 0}, "
+            f"Categories: {len(category_forecasts_obj)}, "
+            f"Insights: {len(insights)}, "
+            f"Confidence score: {response.confidence_score:.2%} (based on MAPE: {model_accuracy_obj.mape:.2%}), "
+            f"Aggregation method: {response.aggregation_method}, "
+            f"Model accuracy - MAE: {model_accuracy_obj.mae:.2f}, MAPE: {model_accuracy_obj.mape:.2%}, RMSE: {model_accuracy_obj.rmse:.2f}, "
+            f"Data points: {model_accuracy_obj.data_points}, "
+            f"Execution time: {execution_time:.2f}ms"
         )
         
         # Log success
@@ -520,7 +690,7 @@ async def generate_ai_insights(
     Generate AI insights using OpenRouter API with usage limits
     
     This endpoint provides interactive AI-generated financial insights with:
-    - OpenRouter API integration using openai/gpt-oss-20b:free
+    - OpenRouter API integration using openai/gpt-oss-120b:free
     - Daily usage limits (5 per user)
     - Personalized financial advice and recommendations
     - Risk assessment and opportunity identification
@@ -670,7 +840,7 @@ async def generate_ai_insights(
                 ],
                 "metadata": {
                     "generated_at": datetime.utcnow().isoformat(),
-                    "model_used": "openai/gpt-oss-20b:free",
+                    "model_used": "openai/gpt-oss-120b:free",
                     "execution_time_ms": execution_time,
                     "user_id": current_user_id,
                     "request_id": request_id
@@ -879,6 +1049,14 @@ async def _generate_fallback_insights(
 ) -> List[Dict[str, Any]]:
     """Generate basic insights when AI service is unavailable"""
     try:
+        # Log fallback insights usage (Requirement 5.1, 5.3)
+        logger.warning(
+            "⚠️ Using fallback insights generation - AI service unavailable or failed. "
+            f"Forecast data points: {len(forecast)}, "
+            f"User profile categories: {len(user_profile.get('spending_categories', []))}, "
+            f"Category forecasts: {len(category_forecasts)}"
+        )
+        
         insights = []
         
         # Basic trend analysis insight

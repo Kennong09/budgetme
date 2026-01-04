@@ -1,68 +1,11 @@
 /* Responsive Styles for BudgetMe Application */
 
-/* Sidebar Container Styles */
-.sidebar-container {
-  position: relative;
-  min-height: 100vh;
-  height: auto;
-  z-index: 1050;
-}
-
-.sidebar {
-  min-height: 100%;
-  height: auto;
-}
-
-.sidebar-open .sidebar {
-  transform: translateX(0) !important;
-}
-
-.sidebar-closed .sidebar {
-  transform: translateX(-100%) !important;
-}
-
-@media (min-width: 768px) {
-  .sidebar-closed .sidebar {
-    transform: translateX(0) !important;
-    width: 6.5rem !important;
-  }
-}
-
-/* Small devices (mobile phones, up to 576px) */
-@media (max-width: 576px) {
-  /* Mobile Sidebar */
-  .mobile-sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 85%;
-    height: 100vh;
-    z-index: 1050;
-    overflow-y: auto;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    transition: transform 0.3s ease-in-out;
-  }
-  
-  .mobile-sidebar.mobile-hidden {
-    transform: translateX(-100%);
-  }
-  
-  /* Mobile sidebar backdrop */
-  .sidebar-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
+/* Mobile devices (up to 992px - includes tablets) */
+@media (max-width: 991px) {
+  /* Main content adjustment for mobile */
+  #content-wrapper {
+    margin-left: 0 !important;
     width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 1045;
-    opacity: 1;
-    animation: fadeIn 0.3s ease-in-out;
-  }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
   }
   
   /* Dashboard content */
@@ -88,21 +31,14 @@
     width: 100%;
   }
 
-  /* Make sure the hamburger button is visible and styled properly */
-  #sidebarToggleTop {
-    display: block !important;
-    margin-right: 1rem;
-    z-index: 1060;
+  /* Content wrapper adjustments for mobile */
+  .content-wrapper {
+    transition: none !important;
   }
 }
 
 /* Medium devices (tablets, 576px to 768px) */
 @media (min-width: 576px) and (max-width: 768px) {
-  /* Adjusted sidebar width */
-  .sidebar {
-    width: 14rem !important;
-  }
-  
   /* Dashboard grid adjustments */
   .dashboard-grid {
     grid-template-columns: repeat(2, 1fr) !important;
@@ -120,47 +56,11 @@
   }
 }
 
-/* Large devices (desktops, 768px and up) */
-@media (min-width: 768px) {
-  /* Standard sidebar behavior */
-  .sidebar {
-    width: 16rem;
-    transition: width 0.3s ease-in-out;
-  }
-  
-  .sidebar.toggled {
-    width: 6.5rem !important;
-    overflow: hidden;
-  }
-  
-  /* Hide text in toggled sidebar */
-  .sidebar.toggled .sidebar-brand-text,
-  .sidebar.toggled .sidebar-heading,
-  .sidebar.toggled .nav-link span,
-  .sidebar.toggled .sidebar-user-details {
-    display: none;
-  }
-  
-  /* Center icons in toggled sidebar */
-  .sidebar.toggled .nav-item .nav-link {
-    text-align: center;
-    padding: 0.75rem 1rem;
-    width: 6.5rem;
-  }
-  
-  .sidebar.toggled .nav-item .nav-link i {
-    font-size: 1.25rem;
-    margin-right: 0;
-  }
-  
-  /* Content area responsive to sidebar */
+/* Large devices (desktops, 992px and up) */
+@media (min-width: 992px) {
+  /* Content area */
   .content-wrapper {
-    margin-left: 16rem;
     transition: margin 0.3s ease-in-out;
-  }
-  
-  .sidebar.toggled + .content-wrapper {
-    margin-left: 6.5rem;
   }
 }
 
@@ -266,246 +166,39 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Enhanced Sidebar Styles */
-/* Compact Sidebar */
-.sidebar-compact {
-  width: 5rem !important;
+/* Modal z-index fixes */
+.modal,
+.modal-backdrop,
+.modal-dialog {
+  z-index: 1050 !important;
 }
 
-.sidebar-compact .nav-item {
-  position: relative;
+.modal-backdrop {
+  z-index: 1040 !important;
 }
 
-.sidebar-compact .nav-link {
-  text-align: center;
-  padding: 1rem;
+/* React Modal and other modal libraries */
+.ReactModal__Overlay,
+.overlay,
+.popup-overlay {
+  z-index: 1050 !important;
 }
 
-.sidebar-compact .nav-link i {
-  font-size: 1.25rem;
-  margin-right: 0;
-  display: block;
-  width: 100%;
-  text-align: center;
-  margin-bottom: 0.5rem;
+.ReactModal__Content,
+.popup-content,
+.modal-content {
+  z-index: 1055 !important;
 }
 
-.sidebar-compact .sidebar-brand-text {
-  display: block;
-  text-align: center;
-  margin: 0;
+/* Dropdown menus */
+.dropdown-menu,
+.select-dropdown,
+.autocomplete-dropdown {
+  z-index: 1000 !important;
 }
 
-.sidebar-compact .user-profile-compact {
-  text-align: center;
-  padding: 0.75rem 0;
+/* Tooltips should be above everything */
+.tooltip,
+.popover {
+  z-index: 1070 !important;
 }
-
-.sidebar-compact .sidebar-heading {
-  text-align: center;
-  padding: 0.5rem 0;
-  font-size: 0.65rem;
-}
-
-/* Sidebar tooltips */
-.sidebar-tooltip {
-  position: absolute;
-  background-color: var(--primary-color);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.25rem;
-  font-size: 0.85rem;
-  z-index: 1060;
-  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
-  animation: fadeIn 0.2s;
-}
-
-.sidebar-tooltip:before {
-  content: '';
-  position: absolute;
-  left: -5px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-top: 5px solid transparent;
-  border-right: 5px solid var(--primary-color);
-  border-bottom: 5px solid transparent;
-}
-
-/* Submenu styles */
-.nav-item-container {
-  width: 100%;
-}
-
-.nav-link-collapse {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.8);
-  text-align: left;
-  padding: 0.75rem 1rem;
-  font-weight: 400;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-
-.nav-link-collapse:hover {
-  color: white;
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.nav-arrow {
-  margin-left: 0.5rem;
-}
-
-.transform-transition {
-  transition: transform 0.3s ease;
-}
-
-.rotate-180 {
-  transform: rotate(180deg);
-}
-
-.bg-submenu {
-  background-color: rgba(255, 255, 255, 0.05);
-  margin-left: 1.5rem;
-  margin-right: 0.5rem;
-}
-
-.collapse-item {
-  padding: 0.5rem 1rem;
-  margin: 0 0.5rem;
-  display: block;
-  color: rgba(255, 255, 255, 0.8);
-  text-decoration: none;
-  border-radius: 0.25rem;
-  white-space: nowrap;
-}
-
-.collapse-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  text-decoration: none;
-  color: white;
-}
-
-.collapse-item.active {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-/* Favorites section */
-.sidebar-favorites {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 0.5rem;
-  margin: 0 0.75rem;
-}
-
-.favorite-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  width: 45%;
-  transition: all 0.2s ease;
-}
-
-.favorite-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: white;
-  text-decoration: none;
-}
-
-.circle-icon {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.35rem;
-}
-
-.favorite-item:hover .circle-icon {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.favorite-item span {
-  font-size: 0.7rem;
-}
-
-/* Enhanced hover effects */
-.nav-item .nav-link,
-.nav-item .nav-link-collapse {
-  border-left: 4px solid transparent;
-  transition: all 0.2s ease;
-}
-
-.nav-item.active .nav-link,
-.nav-item.active .nav-link-collapse {
-  border-left-color: white;
-}
-
-.nav-item:hover .nav-link,
-.nav-item:hover .nav-link-collapse {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-/* Pulse border animation */
-.pulse-border {
-  width: 6px;
-  height: 6px;
-  background-color: white;
-  border-radius: 50%;
-  position: absolute;
-  right: 1rem;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.pulse-border:before {
-  content: "";
-  position: absolute;
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  background-color: rgba(255, 255, 255, 0.4);
-  left: -5px;
-  top: -5px;
-  animation: pulse-border 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse-border {
-  0% {
-    transform: scale(0.6);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1.4);
-    opacity: 0;
-  }
-}
-
-/* Compact profile adjustments */
-.compact-profile {
-  padding: 0.5rem 0;
-}
-
-.compact-profile img {
-  margin-bottom: 0 !important;
-}
-
-/* Animation for new features */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.animate__fadeIn {
-  animation: fadeIn 0.3s ease-in-out;
-} 

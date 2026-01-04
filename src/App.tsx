@@ -1,5 +1,5 @@
-import React, { Component, ReactNode, ErrorInfo, Suspense } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import React, { Component, ReactNode, ErrorInfo, Suspense, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import AppRoutes from "./AppRoutes";
 import { AuthProvider } from "./utils/AuthContext";
 import { ToastProvider } from "./utils/ToastContext";
@@ -115,20 +115,28 @@ const AppLoading = () => (
   </div>
 );
 
+const ChatbotWrapper: React.FC = () => {
+  const location = useLocation();
+  // Hide chatbot on any admin route
+  const isAdminRoute = location.pathname.startsWith("/admin");
+  if (isAdminRoute) return null;
+  return <FloatingChatbot />;
+};
+
 function App() {
   return (
     <ErrorBoundary>
       <Suspense fallback={<AppLoading />}>
-    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <ToastProvider>
-        <AuthProvider>
-          <CurrencyProvider>
-            <AppRoutes />
-            <FloatingChatbot />
-          </CurrencyProvider>
-        </AuthProvider>
-      </ToastProvider>
-    </Router>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <ToastProvider>
+            <AuthProvider>
+              <CurrencyProvider>
+                <AppRoutes />
+                <ChatbotWrapper />
+              </CurrencyProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </Router>
       </Suspense>
     </ErrorBoundary>
   );

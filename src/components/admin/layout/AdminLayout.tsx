@@ -1,56 +1,44 @@
-import React, { useState, useEffect, FC, ReactNode, useTransition } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, FC, ReactNode, useTransition, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../utils/AuthContext";
 import AdminHeader from "./AdminHeader";
 import AdminSidebar from "./AdminSidebar";
+import AdminMobileQuickNav from "./AdminMobileQuickNav";
 import Meta from "../../layout/Meta";
 import { isUserAdmin } from "../../../utils/adminHelpers";
 import "../admin.css";
-import { useResize } from "../../layout/shared/hooks";
 
 interface AdminLayoutProps {
   children: ReactNode;
   title?: string;
-  hideNav?: boolean; // Add this prop to control visibility of navigation elements
+  hideNav?: boolean;
 }
 
 const AdminLayout: FC<AdminLayoutProps> = ({ children, title, hideNav = false }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    // Get sidebar state from localStorage or default to true on desktop
-    try {
-      const savedState = localStorage.getItem('adminSidebarOpen');
-      // If we have a saved state, use it, otherwise default based on screen size
-      return savedState !== null ? savedState === 'true' : window.innerWidth >= 768;
-    } catch (e) {
-      console.error("Error accessing localStorage:", e);
-      return window.innerWidth >= 768; // Default to open on desktop
-    }
-  });
-  const resizeState = useResize(768, 992);
-  const isMobile = resizeState.isMobile;
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isTablet, setIsTablet] = useState(window.innerWidth >= 768 && window.innerWidth < 1024);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [adminCheckComplete, setAdminCheckComplete] = useState(false);
-  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth >= 768 && window.innerWidth < 1024);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const navigate = useNavigate();
   const { logout, user, loading: authLoading } = useAuth();
   
-  // Use a single loading state for better UX
   const isLoading = authLoading || loading || isPending;
   
-  // Check if user is admin only when auth is ready and user is available
+  // Check if user is admin
   useEffect(() => {
-    // Skip if already completed or still loading auth
     if (adminCheckComplete || authLoading) return;
     
-    // Skip admin check if user is not authenticated
     if (!user) {
       startTransition(() => {
         setLoading(false);
         setAdminCheckComplete(true);
       });
-      navigate('/admin/login', { replace: true });
+      navigate('/?login=true', { replace: true });
       return;
     }
     
@@ -58,96 +46,102 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children, title, hideNav = false })
     
     const checkAdmin = async () => {
       try {
-        // Perform admin check outside of state update
         const adminStatus = await isUserAdmin();
         
-        // Guard against unmounted component
         if (!isMounted) return;
         
-        // Use startTransition for state updates
         startTransition(() => {
           setIsAdmin(adminStatus);
           setLoading(false);
           setAdminCheckComplete(true);
         
           if (!adminStatus) {
-            navigate('/admin/login?access_denied=true', { replace: true });
+            navigate('/?access_denied=true', { replace: true });
           }
         });
       } catch (error) {
         console.error("Error checking admin status:", error);
         
-        // Guard against unmounted component
         if (!isMounted) return;
         
-        // Use startTransition for state updates
         startTransition(() => {
           setIsAdmin(false);
           setLoading(false);
           setAdminCheckComplete(true);
-          navigate('/admin/login?error=true', { replace: true });
+          navigate('/?error=true', { replace: true });
         });
       }
     };
     
-    // Call the async function
     checkAdmin();
     
-    // Cleanup function
     return () => {
       isMounted = false;
     };
   }, [user, navigate, adminCheckComplete, authLoading]);
   
-  // Update sidebar state on resize and save to localStorage
+  // Update mobile/tablet state based on screen size
   useEffect(() => {
-    if (resizeState.isMobile) {
-      // On mobile, always ensure sidebar is closed by default
-      setSidebarOpen(false);
-      try {
-        localStorage.setItem('adminSidebarOpen', 'false');
-      } catch (e) {
-        console.error("Error writing to localStorage:", e);
+    const handleResize = () => {
+      const width = window.innerWidth;
+      const mobile = width < 768;
+      const tablet = width >= 768 && width < 1024;
+      
+      setIsMobile(mobile);
+      setIsTablet(tablet);
+      
+      // Auto-collapse sidebar on tablet, close drawer on mobile
+      if (mobile) {
+        setSidebarOpen(false);
+        setSidebarCollapsed(false);
+      } else if (tablet) {
+        setSidebarOpen(false);
+        setSidebarCollapsed(true);
       }
-    }
-  }, [resizeState.isMobile]);
+    };
 
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate("/admin/login", { replace: true });
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Toggle sidebar on mobile
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev);
+  }, []);
+
+  // Close sidebar
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+  }, []);
+
+  // Handle sidebar collapse change
+  const handleCollapseChange = useCallback((collapsed: boolean) => {
+    setIsTransitioning(true);
+    setSidebarCollapsed(collapsed);
+    
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 400);
+  }, []);
+
+  // Calculate main content margin based on sidebar state
+  const getMainContentMargin = () => {
+    if (hideNav || isMobile) return "";
+    // Tablet always has collapsed sidebar (ml-20), desktop depends on state
+    if (isTablet) return "md:ml-20";
+    return sidebarCollapsed ? "lg:ml-20" : "lg:ml-64";
   };
 
-  // Toggle sidebar visibility and save state to localStorage
-  const toggleSidebar = () => {
-    setSidebarOpen(prevState => {
-      const newState = !prevState;
-      try {
-        localStorage.setItem('adminSidebarOpen', newState.toString());
-      } catch (e) {
-        console.error("Error writing to localStorage:", e);
-      }
-      return newState;
-    });
-  };
-
-  // Show loading state while checking admin status - spinner only without text
   if (isLoading) {
     return (
       <div className="admin-loading-indicator"></div>
     );
   }
 
-  // Prevent rendering content if not admin
   if (!isAdmin && adminCheckComplete) {
     return null;
   }
 
-  // If hideNav is true, return only the children without the layout
   if (hideNav) {
     return (
       <div className="admin-content-fullwidth">
@@ -159,46 +153,53 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children, title, hideNav = false })
   return (
     <>
       <Meta title={title || "Admin | BudgetMe"} />
-      <div id="wrapper" className="d-flex" style={{ transition: 'none' }}>
+      <div id="wrapper" className="flex min-h-screen bg-slate-50">
         {/* Admin Sidebar */}
-        <div className={`sidebar-container ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`} style={{ transition: 'none' }}>
-          <AdminSidebar 
-            isOpen={sidebarOpen} 
-            onToggleSidebar={toggleSidebar}
-            isMobile={isMobile}
-          />
-        </div>
-
-        {/* Overlay for mobile when sidebar is open */}
-        {sidebarOpen && isMobile && (
-          <div 
-            onClick={toggleSidebar}
-            aria-hidden="true"
-            className="sidebar-backdrop"
-          ></div>
-        )}
+        <AdminSidebar 
+          isOpen={isMobile ? sidebarOpen : true} 
+          onClose={closeSidebar}
+          isCollapsed={isTablet ? true : sidebarCollapsed}
+          onCollapseChange={handleCollapseChange}
+          isTransitioning={isTransitioning}
+          isTablet={isTablet}
+        />
 
         {/* Content Wrapper */}
-        <div id="content-wrapper" className={`d-flex flex-column ${sidebarOpen && !isMobile ? "" : "content-full"} flex-fill`} style={{ transition: 'none' }}>
+        <div 
+          className={`
+            flex flex-col flex-1 min-h-screen transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
+            ${getMainContentMargin()}
+          `}
+        >
           {/* Main Content */}
-          <div id="content" className="flex-fill">
+          <div id="content" className="flex-1 flex flex-col">
             {/* Topbar */}
-            <AdminHeader toggleSidebar={toggleSidebar} />
+            <div className="sticky top-0 z-30">
+              <AdminHeader onMenuToggle={toggleSidebar} />
+            </div>
 
             {/* Begin Page Content */}
-            <div className={`container-fluid admin-content pb-5 ${isMobile ? "has-mobile-nav" : ""}`}>
+            <main 
+              className={`
+                flex-1 container-fluid
+                ${isMobile ? "px-3 pt-2 pb-28" : "px-4 md:px-6 pt-4 pb-5"}
+              `}
+            >
               {children}
-            </div>
+            </main>
           </div>
 
           {/* Footer */}
-          <footer className={`sticky-footer bg-white mt-auto ${isMobile ? "d-none" : ""}`}>
-            <div className="container my-auto">
-              <div className="copyright text-center my-auto">
+          <footer className={`bg-white border-t border-slate-200 mt-auto ${isMobile ? "hidden" : ""}`}>
+            <div className="container mx-auto py-4">
+              <div className="text-center text-sm text-slate-500">
                 <span>Copyright &copy; BudgetMe Admin {new Date().getFullYear()}</span>
               </div>
             </div>
           </footer>
+
+          {/* Mobile Floating Quick Navigation */}
+          {isMobile && <AdminMobileQuickNav />}
         </div>
       </div>
     </>

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import AdminLayout from "./components/admin/layout/AdminLayout";
 import { AdminRoute } from "./components/admin";
+import PrivateRoute from "./components/auth/PrivateRoute";
 import LandingPage from "./components/landing/LandingPage";
 import AdminRedirect from "./components/admin/AdminRedirect";
 
@@ -37,13 +38,12 @@ const CreateFamily = lazy(() => import("./components/family/CreateFamily"));
 const EditFamily = lazy(() => import("./components/family/EditFamily"));
 const JoinFamily = lazy(() => import("./components/family/JoinFamily"));
 const InviteFamilyMember = lazy(() => import("./components/family/InviteFamilyMember"));
-const NotificationsPage = lazy(() => import("./components/notifications/NotificationsPage"));
 
 // Auth components
 const AuthCallback = lazy(() => import("./components/auth/AuthCallback"));
+const ResetPassword = lazy(() => import("./components/auth/ResetPassword"));
 
 // Admin components
-const AdminLogin = lazy(() => import("./components/admin/AdminLogin"));
 const AdminDashboard = lazy(() => import("./components/admin/dashboard/AdminDashboard"));
 const UserManagement = lazy(() => import("./components/admin/users/UserManagement"));
 const AdminBudgets = lazy(() => import("./components/admin/budget/AdminBudgets"));
@@ -52,7 +52,10 @@ const AdminTransactions = lazy(() => import("./components/admin/transactions/Adm
 const AdminFamily = lazy(() => import("./components/admin/family/AdminFamily"));
 const AdminReports = lazy(() => import("./components/admin/reports/AdminReports"));
 const AdminPredictions = lazy(() => import("./components/admin/predictions/AdminPredictions"));
+const AdminAIInsights = lazy(() => import("./components/admin/ai-insights/AdminAIInsights"));
 const AdminSettings = lazy(() => import("./components/admin/settings/AdminSettings"));
+const AdminChatbot = lazy(() => import("./components/admin/chatbot/AdminChatbot"));
+const AdminAccounts = lazy(() => import("./components/admin/accounts/AdminAccounts"));
 const AdminNotFound = lazy(() => import("./components/admin/layout/AdminNotFound"));
 
 // 404 component
@@ -73,6 +76,11 @@ const AppRoutes: React.FC = () => {
       <Route path="/auth/callback" element={
         <Suspense fallback={<LoadingFallback />}>
           <AuthCallback />
+        </Suspense>
+      } />
+      <Route path="/reset-password" element={
+        <Suspense fallback={<LoadingFallback />}>
+          <ResetPassword />
         </Suspense>
       } />
 
@@ -110,165 +118,202 @@ const AppRoutes: React.FC = () => {
 
       {/* Protected User Routes */}
       <Route path="/dashboard" element={
-        <Layout title="Dashboard">
-          <Suspense fallback={<LoadingFallback />}>
-            <Dashboard />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Dashboard">
+            <Suspense fallback={<LoadingFallback />}>
+              <Dashboard />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/transactions" element={
-        <Layout title="Transactions">
-          <Suspense fallback={<LoadingFallback />}>
-            <Transactions />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Transactions">
+            <Suspense fallback={<LoadingFallback />}>
+              <Transactions />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/transactions/:id" element={
-        <Layout title="Transaction Details">
-          <Suspense fallback={<LoadingFallback />}>
-            <TransactionDetails />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Transaction Details">
+            <Suspense fallback={<LoadingFallback />}>
+              <TransactionDetails />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/transactions/add" element={
-        <Layout title="Add Transaction">
-          <Suspense fallback={<LoadingFallback />}>
-            <AddTransaction />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Add Transaction">
+            <Suspense fallback={<LoadingFallback />}>
+              <AddTransaction />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/transactions/:id/edit" element={
-        <Layout title="Edit Transaction">
-          <Suspense fallback={<LoadingFallback />}>
-            <EditTransaction />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Edit Transaction">
+            <Suspense fallback={<LoadingFallback />}>
+              <EditTransaction />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/goals" element={
-        <Layout title="Financial Goals">
-          <Suspense fallback={<LoadingFallback />}>
-            <Goals />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Financial Goals">
+            <Suspense fallback={<LoadingFallback />}>
+              <Goals />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/goals/:id" element={
-        <Layout title="Goal Details">
-          <Suspense fallback={<LoadingFallback />}>
-            <GoalDetails />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Goal Details">
+            <Suspense fallback={<LoadingFallback />}>
+              <GoalDetails />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/goals/create" element={
-        <Layout title="Create Goal">
-          <Suspense fallback={<LoadingFallback />}>
-            <CreateGoal />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Create Goal">
+            <Suspense fallback={<LoadingFallback />}>
+              <CreateGoal />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/goals/:id/edit" element={
-        <Layout title="Edit Goal">
-          <Suspense fallback={<LoadingFallback />}>
-            <EditGoal />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Edit Goal">
+            <Suspense fallback={<LoadingFallback />}>
+              <EditGoal />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/goals/:id/contribute" element={
-        <Layout title="Contribute to Goal">
-          <Suspense fallback={<LoadingFallback />}>
-            <GoalContribution />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Contribute to Goal">
+            <Suspense fallback={<LoadingFallback />}>
+              <GoalContribution />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/budgets" element={
-        <Layout title="Budgets">
-          <Suspense fallback={<LoadingFallback />}>
-            <Budgets />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Budgets">
+            <Suspense fallback={<LoadingFallback />}>
+              <Budgets />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/budgets/:id" element={
-        <Layout title="Budget Details">
-          <Suspense fallback={<LoadingFallback />}>
-            <BudgetDetails />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Budget Details">
+            <Suspense fallback={<LoadingFallback />}>
+              <BudgetDetails />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/budgets/create" element={
-        <Layout title="Create Budget">
-          <Suspense fallback={<LoadingFallback />}>
-            <CreateBudget />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Create Budget">
+            <Suspense fallback={<LoadingFallback />}>
+              <CreateBudget />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/budgets/:id/edit" element={
-        <Layout title="Edit Budget">
-          <Suspense fallback={<LoadingFallback />}>
-            <EditBudget />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Edit Budget">
+            <Suspense fallback={<LoadingFallback />}>
+              <EditBudget />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/reports" element={
-        <Layout title="Financial Reports">
-          <Suspense fallback={<LoadingFallback />}>
-            <FinancialReports />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Financial Reports">
+            <Suspense fallback={<LoadingFallback />}>
+              <FinancialReports />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/predictions" element={
-        <Layout title="AI Financial Predictions">
-          <Suspense fallback={<LoadingFallback />}>
-            <AIPrediction />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="AI Financial Predictions">
+            <Suspense fallback={<LoadingFallback />}>
+              <AIPrediction />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/settings" element={
-        <Layout title="Settings">
-          <Suspense fallback={<LoadingFallback />}>
-            <Settings />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Settings">
+            <Suspense fallback={<LoadingFallback />}>
+              <Settings />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/family" element={
-        <Layout title="Family Dashboard">
-          <Suspense fallback={<LoadingFallback />}>
-            <FamilyDashboard />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Family Dashboard">
+            <Suspense fallback={<LoadingFallback />}>
+              <FamilyDashboard />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/family/create" element={
-        <Layout title="Create Family Group">
-          <Suspense fallback={<LoadingFallback />}>
-            <CreateFamily />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Create Family Group">
+            <Suspense fallback={<LoadingFallback />}>
+              <CreateFamily />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/family/:id/edit" element={
-        <Layout title="Edit Family Group">
-          <Suspense fallback={<LoadingFallback />}>
-            <EditFamily />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Edit Family Group">
+            <Suspense fallback={<LoadingFallback />}>
+              <EditFamily />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/family/join/:inviteCode" element={
-        <Layout title="Join Family Group">
-          <Suspense fallback={<LoadingFallback />}>
-            <JoinFamily />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Join Family Group">
+            <Suspense fallback={<LoadingFallback />}>
+              <JoinFamily />
+            </Suspense>
+          </Layout>
+        } />
       } />
       <Route path="/family/:id/invite" element={
-        <Layout title="Invite Family Member">
-          <Suspense fallback={<LoadingFallback />}>
-            <InviteFamilyMember />
-          </Suspense>
-        </Layout>
-      } />
-      <Route path="/notifications" element={
-        <Layout title="Notifications">
-          <Suspense fallback={<LoadingFallback />}>
-            <NotificationsPage />
-          </Suspense>
-        </Layout>
+        <PrivateRoute element={
+          <Layout title="Invite Family Member">
+            <Suspense fallback={<LoadingFallback />}>
+              <InviteFamilyMember />
+            </Suspense>
+          </Layout>
+        } />
       } />
 
       {/* Admin Root Redirect */}
@@ -278,12 +323,6 @@ const AppRoutes: React.FC = () => {
         </Suspense>
       } />
 
-      {/* Admin Login */}
-      <Route path="/admin/login" element={
-        <Suspense fallback={<LoadingFallback />}>
-          <AdminLogin />
-        </Suspense>
-      } />
 
       {/* Protected Admin Routes */}
       <Route path="/admin/dashboard" element={
@@ -358,11 +397,38 @@ const AppRoutes: React.FC = () => {
           </AdminLayout>
         } />
       } />
+      <Route path="/admin/ai-insights/*" element={
+        <AdminRoute element={
+          <AdminLayout title="AI Insights">
+            <Suspense fallback={<LoadingFallback />}>
+              <AdminAIInsights />
+            </Suspense>
+          </AdminLayout>
+        } />
+      } />
       <Route path="/admin/settings/*" element={
         <AdminRoute element={
           <AdminLayout title="Admin Settings">
             <Suspense fallback={<LoadingFallback />}>
               <AdminSettings />
+            </Suspense>
+          </AdminLayout>
+        } />
+      } />
+      <Route path="/admin/chatbot/*" element={
+        <AdminRoute element={
+          <AdminLayout title="Chatbot Management">
+            <Suspense fallback={<LoadingFallback />}>
+              <AdminChatbot />
+            </Suspense>
+          </AdminLayout>
+        } />
+      } />
+      <Route path="/admin/accounts/*" element={
+        <AdminRoute element={
+          <AdminLayout title="Account Management">
+            <Suspense fallback={<LoadingFallback />}>
+              <AdminAccounts />
             </Suspense>
           </AdminLayout>
         } />
@@ -376,6 +442,13 @@ const AppRoutes: React.FC = () => {
       {/* Redirect legacy paths */}
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route path="/signup" element={<Navigate to="/" replace />} />
+
+      {/* 404 page */}
+      <Route path="/404" element={
+        <Suspense fallback={<LoadingFallback />}>
+          <NotFound />
+        </Suspense>
+      } />
 
       {/* 404 catch-all */}
       <Route path="*" element={

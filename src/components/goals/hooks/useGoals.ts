@@ -212,6 +212,10 @@ export const useGoalFilters = (goals: Goal[]) => {
   const navigate = useNavigate();
   const [filteredGoals, setFilteredGoals] = useState<Goal[]>([]);
   const [isFiltering, setIsFiltering] = useState<boolean>(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Get URL parameters
   const location = window.location;
@@ -236,6 +240,10 @@ export const useGoalFilters = (goals: Goal[]) => {
     setTimeout(() => {
       const result = applyGoalFilters(dataToFilter, filter);
       setFilteredGoals(result);
+      
+      // Reset to first page when filters change
+      setCurrentPage(1);
+      
       setIsFiltering(false);
     }, 300);
   };
@@ -282,13 +290,40 @@ export const useGoalFilters = (goals: Goal[]) => {
     setFilteredGoals(goals);
   }, [goals]);
 
+  // Calculate pagination metadata
+  const totalItems = filteredGoals.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  
+  // Get paginated goals
+  const paginatedGoals = filteredGoals.slice(startIndex, endIndex);
+  
+  // Pagination handlers
+  const updatePage = (page: number) => {
+    setCurrentPage(page);
+  };
+  
+  const updatePageSize = (size: number) => {
+    setPageSize(size);
+    setCurrentPage(1); // Reset to first page when page size changes
+  };
+
   return {
     filter,
     setFilter,
-    filteredGoals,
+    filteredGoals: paginatedGoals,
     isFiltering,
     applyFilters,
-    resetFilters
+    resetFilters,
+    currentPage,
+    pageSize,
+    totalPages,
+    totalItems,
+    startIndex,
+    endIndex,
+    updatePage,
+    updatePageSize
   };
 };
 

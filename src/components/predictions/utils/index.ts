@@ -14,11 +14,10 @@ import {
 import { PredictionService } from '../../../services/database/predictionService';
 import { AIInsightsService } from '../../../services/database/aiInsightsService';
 
-/**
- * Placeholder function for getting transactions by date
- * TODO: Implement with actual Supabase query
- */
-// Transaction data is now handled by PredictionService.fetchUserTransactionData
+// Export validation logger utilities (TASK 5.2)
+export * from './validationLogger';
+
+
 
 /**
  * Generates Prophet model details and metadata
@@ -238,34 +237,90 @@ export const generateCategoryPredictions = async (userId?: string): Promise<Cate
 };
 
 /**
+ * Helper function to format month names
+ */
+const getMonthName = (date: Date): string => {
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+};
+
+/**
  * Generates prediction data for different timeframes
  */
-export const generatePredictionData = (userData: any): Record<TimeframeType, PredictionDataPoint[]> => {
+export const generatePredictionData = async (userId?: string): Promise<Record<TimeframeType, PredictionDataPoint[]>> => {
   // Get the current month for starting the predictions
   const today = new Date();
   
-  // Get user's average income and expenses from the last 3 months to use as a base
-  let baseIncome = 4200; // Default value
-  let baseExpenses = 3100; // Default value
+  // NO DEFAULT/MOCK VALUES - Only use real transaction data
+  let baseIncome = 0;
+  let baseExpenses = 0;
+  let hasRealData = false;
   
-  if (userData && userData.user) {
-    const userId = userData.user.id;
+  if (userId) {
+    const transactions = await PredictionService.fetchUserTransactionData(userId);
     
-    // TODO: Implement real user transaction data fetching for prediction data
-    // For now, using default values until this is integrated with PredictionService
-    console.log('generatePredictionData: Using default values for user:', userId);
-    
-    // In the future, this should use PredictionService.fetchUserTransactionData
-    // and calculate actual averages from user's transaction history
+    if (transactions && transactions.length > 0) {
+      // Get current month's transactions
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      
+      const currentMonthTransactions = transactions.filter(t => {
+        const transactionDate = new Date(t.date);
+        return transactionDate.getMonth() === currentMonth && 
+               transactionDate.getFullYear() === currentYear;
+      });
+      
+      // If no current month data, fall back to last 30 days
+      let relevantTransactions = currentMonthTransactions;
+      if (currentMonthTransactions.length === 0) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        relevantTransactions = transactions.filter(t => new Date(t.date) > thirtyDaysAgo);
+      }
+      
+      const incomeTransactions = relevantTransactions.filter(t => t.type === 'income');
+      const expenseTransactions = relevantTransactions.filter(t => t.type === 'expense');
+      
+      const totalIncome = incomeTransactions.reduce((sum, t) => sum + t.amount, 0);
+      const totalExpenses = expenseTransactions.reduce((sum, t) => sum + t.amount, 0);
+      
+      // Only use real data if we have transactions
+      if (relevantTransactions.length > 0) {
+        baseIncome = totalIncome;
+        baseExpenses = totalExpenses;
+        hasRealData = true;
+      }
+      
+      console.log('generatePredictionData: Using REAL transaction data:', {
+        currentMonth: getMonthName(new Date()),
+        currentMonthTransactions: currentMonthTransactions.length,
+        relevantTransactions: relevantTransactions.length,
+        totalIncome,
+        totalExpenses,
+        baseIncome,
+        baseExpenses,
+        hasRealData
+      });
+    }
+  }
+  
+  // If no real data, return empty prediction arrays
+  if (!hasRealData || (baseIncome === 0 && baseExpenses === 0)) {
+    console.log('generatePredictionData: No real transaction data found, returning empty arrays');
+    return {
+      "3months": [],
+      "6months": [],
+      "1year": []
+    };
   }
   
   // Create prediction data based on the starting point
   const createDataPoints = (months: number): PredictionDataPoint[] => {
     const points: PredictionDataPoint[] = [];
+    const currentDate = new Date();
     
-    // Start with "Current" month using real data if available
+    // Start with current month using real data if available
     points.push({
-      month: "Current",
+      month: getMonthName(currentDate),
       income: baseIncome,
       expenses: baseExpenses,
       savings: baseIncome - baseExpenses
@@ -276,6 +331,10 @@ export const generatePredictionData = (userData: any): Record<TimeframeType, Pre
     let currentExpenses = baseExpenses;
     
     for (let i = 1; i <= months; i++) {
+      // Create future month date
+      const futureDate = new Date(currentDate);
+      futureDate.setMonth(currentDate.getMonth() + i);
+      
       // Apply mild randomization and trend for predictions
       // Income tends to grow slightly faster than expenses in our model
       const incomeGrowth = 1 + (Math.random() * 0.04 + 0.01); // 1-5% growth
@@ -293,7 +352,7 @@ export const generatePredictionData = (userData: any): Record<TimeframeType, Pre
       const expensesLower = Math.round(expensesPrediction * (1 - 0.03 * Math.sqrt(i)));
       
       points.push({
-        month: `Month ${i}`,
+        month: getMonthName(futureDate),
         income: currentIncome,
         expenses: currentExpenses,
         savings: currentIncome - currentExpenses,
@@ -309,11 +368,11 @@ export const generatePredictionData = (userData: any): Record<TimeframeType, Pre
     return points;
   };
   
-  return {
+  const result = {
     "3months": createDataPoints(3),
     "6months": createDataPoints(6),
     "1year": [
-      { month: "Current", income: baseIncome, expenses: baseExpenses, savings: baseIncome - baseExpenses },
+      { month: getMonthName(new Date()), income: baseIncome, expenses: baseExpenses, savings: baseIncome - baseExpenses },
       ...Array.from({ length: 6 }, (_, i) => {
         const futureDate = new Date();
         futureDate.setMonth(today.getMonth() + (i+1) * 2);
@@ -336,7 +395,7 @@ export const generatePredictionData = (userData: any): Record<TimeframeType, Pre
         const expensesLower = Math.round(expensesPrediction * (1 - 0.04 * Math.sqrt(i+1)));
         
         return {
-          month: `Month ${(i+1) * 2}`,
+          month: getMonthName(futureDate),
           income: newIncome,
           expenses: newExpenses,
           savings: newIncome - newExpenses,
@@ -350,6 +409,17 @@ export const generatePredictionData = (userData: any): Record<TimeframeType, Pre
       })
     ]
   };
+  
+  console.log('generatePredictionData: Generated prediction data:', {
+    userId,
+    baseIncome,
+    baseExpenses,
+    resultKeys: Object.keys(result),
+    threeMonthsLength: result["3months"].length,
+    firstMonth: result["3months"][0]
+  });
+  
+  return result;
 };
 
 /**
@@ -359,20 +429,63 @@ export const calculateInsights = async (
   data: PredictionDataPoint[], 
   userId?: string
 ): Promise<PredictionInsights> => {
+  // Handle empty or invalid data
+  if (!data || data.length === 0) {
+    console.warn('calculateInsights: No data provided, returning default insights');
+    return { incomeGrowth: 0, expenseGrowth: 0, savingsGrowth: 0 };
+  }
+  
   const firstMonth = data[0];
   const lastMonth = data[data.length - 1];
   
-  const incomeGrowth = ((lastMonth.income - firstMonth.income) / firstMonth.income) * 100;
-  const expenseGrowth = ((lastMonth.expenses - firstMonth.expenses) / firstMonth.expenses) * 100;
-  const savingsGrowth = ((lastMonth.savings - firstMonth.savings) / firstMonth.savings) * 100;
+  // Handle cases where data properties might be undefined
+  if (!firstMonth || !lastMonth || 
+      firstMonth.income === undefined || firstMonth.expenses === undefined || firstMonth.savings === undefined ||
+      lastMonth.income === undefined || lastMonth.expenses === undefined || lastMonth.savings === undefined) {
+    console.warn('calculateInsights: Invalid data structure, returning default insights');
+    return { incomeGrowth: 0, expenseGrowth: 0, savingsGrowth: 0 };
+  }
+  
+  // Calculate growth rates with safe division
+  const incomeGrowth = firstMonth.income > 0 ? 
+    ((lastMonth.income - firstMonth.income) / firstMonth.income) * 100 : 0;
+  const expenseGrowth = firstMonth.expenses > 0 ? 
+    ((lastMonth.expenses - firstMonth.expenses) / firstMonth.expenses) * 100 : 0;
+  const savingsGrowth = firstMonth.savings > 0 ? 
+    ((lastMonth.savings - firstMonth.savings) / firstMonth.savings) * 100 : 0;
+  
+  console.log('calculateInsights: Calculated insights:', {
+    firstMonth: { income: firstMonth.income, expenses: firstMonth.expenses, savings: firstMonth.savings },
+    lastMonth: { income: lastMonth.income, expenses: lastMonth.expenses, savings: lastMonth.savings },
+    incomeGrowth, expenseGrowth, savingsGrowth
+  });
   
   return { incomeGrowth, expenseGrowth, savingsGrowth };
 };
 
 /**
- * Handles CSV export functionality
+ * Handles CSV export functionality (DEPRECATED - use handleExportPredictions instead)
  */
 export const handleExportCSV = (): void => {
   // In a real app, this would generate and download a CSV file
   alert("CSV file downloaded successfully!");
+};
+
+/**
+ * Export predictions history to CSV or JSON
+ * Implemented the same way as AI insights export
+ */
+export const handleExportPredictions = async (
+  userId: string,
+  format: 'csv' | 'json',
+  onSuccess: (message: string) => void,
+  onError: (message: string) => void
+): Promise<void> => {
+  try {
+    const { PredictionHistoryService } = await import('../../../services/database/predictionHistoryService');
+    await PredictionHistoryService.exportPredictionsHistory(userId, format);
+    onSuccess(`Predictions exported as ${format.toUpperCase()}`);
+  } catch (error: any) {
+    onError(error.message || 'Failed to export predictions');
+  }
 };

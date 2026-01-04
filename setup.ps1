@@ -262,7 +262,7 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
     Write-Host \"   docker-compose up -d\"
     Write-Host
     Write-Host \"4. Access the application:\"
-    Write-Host \"   Frontend: http://localhost:3000\"
+    Write-Host \"   Frontend: https://budgetme.site\"
     Write-Host \"   API:      http://localhost:8000\"
     Write-Host \"   API Docs: http://localhost:8000/docs\"
     Write-Host

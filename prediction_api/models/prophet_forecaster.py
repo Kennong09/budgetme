@@ -292,16 +292,23 @@ class ProphetFinancialForecaster:
     
     def get_category_forecasts(self, 
                               transactions: List[Dict[str, Any]],
-                              periods: int = 90) -> Dict[str, Dict[str, Any]]:
+                              periods: int = 90,
+                              monthly_income_prediction: Optional[float] = None) -> Dict[str, Dict[str, Any]]:
         """
-        Generate category-specific forecasts
+        Generate category-specific forecasts with monthly averages
+        
+        This method ensures category forecasts:
+        1. Return monthly averages (not daily or cumulative totals)
+        2. Align with monthly income predictions for consistency
+        3. Apply realistic 2-3% annual growth rates
         
         Args:
             transactions: List of transaction dictionaries with category information
-            periods: Number of periods to forecast
+            periods: Number of periods to forecast (in days)
+            monthly_income_prediction: Optional predicted monthly income to align expense categories
             
         Returns:
-            Dictionary with category forecasts
+            Dictionary with category forecasts (monthly averages)
         """
         try:
             df = pd.DataFrame(transactions)
@@ -311,6 +318,13 @@ class ProphetFinancialForecaster:
                 return {}
             
             category_forecasts = {}
+            
+            # Calculate number of months for the forecast period
+            forecast_months = max(1, periods / 30)
+            
+            # Separate expense categories from income categories
+            expense_categories = []
+            income_categories = []
             
             # Group by category and generate forecasts
             for category in df['category'].unique():
@@ -322,48 +336,96 @@ class ProphetFinancialForecaster:
                 if len(category_data) < 7:  # Skip categories with insufficient data
                     continue
                 
+                # Determine if this is an expense or income category
+                is_expense = (category_data['type'] == 'expense').any()
+                
                 try:
                     # Preprocess category data
                     category_prophet_df = self.preprocess_transaction_data(category_data.to_dict('records'))
                     
-                    # Create separate model for this category
-                    category_model = ProphetFinancialForecaster(
-                        seasonality_mode='additive',
-                        yearly_seasonality=False,
-                        weekly_seasonality=False,
-                        daily_seasonality=False
-                    )
+                    # Calculate historical monthly average
+                    date_range_days = (category_prophet_df['ds'].max() - category_prophet_df['ds'].min()).days
+                    historical_months = max(1, date_range_days / 30)
                     
-                    # Train and forecast
-                    training_result = category_model.train_model(category_prophet_df)
-                    forecast = category_model.generate_forecast(periods=periods, include_history=False)
+                    # For expenses, use absolute values; for income, use actual values
+                    if is_expense:
+                        historical_total = abs(category_data['amount'].sum())
+                    else:
+                        historical_total = category_data['amount'].sum()
                     
-                    # Calculate category metrics
-                    historical_avg = category_prophet_df['y'].mean()
-                    predicted_avg = forecast['yhat'].mean()
-                    confidence_avg = forecast['confidence_score'].mean()
+                    historical_monthly_avg = historical_total / historical_months
                     
-                    # Determine trend
+                    # Apply realistic 2-3% annual growth rate
+                    annual_growth_rate = 0.025  # 2.5% annual growth
+                    monthly_growth_rate = annual_growth_rate / 12
+                    
+                    # Calculate predicted monthly average with realistic growth
+                    # Growth is applied over the forecast period
+                    predicted_monthly_avg = historical_monthly_avg * (1 + monthly_growth_rate * forecast_months)
+                    
+                    # Cap growth at 3% annually to ensure realism
+                    max_growth = historical_monthly_avg * (1 + 0.03 * (forecast_months / 12))
+                    predicted_monthly_avg = min(predicted_monthly_avg, max_growth)
+                    
+                    # Determine trend based on monthly averages
                     trend = 'stable'
-                    if predicted_avg > historical_avg * 1.05:
+                    growth_rate = (predicted_monthly_avg - historical_monthly_avg) / historical_monthly_avg if historical_monthly_avg > 0 else 0
+                    
+                    if growth_rate > 0.05:  # >5% increase
                         trend = 'increasing'
-                    elif predicted_avg < historical_avg * 0.95:
+                    elif growth_rate < -0.05:  # >5% decrease
                         trend = 'decreasing'
                     
-                    category_forecasts[category] = {
-                        'historical_average': float(historical_avg),
-                        'predicted_average': float(predicted_avg),
-                        'confidence': float(confidence_avg),
+                    # Calculate confidence based on data consistency
+                    # More data points = higher confidence
+                    confidence = min(0.95, 0.6 + (len(category_data) / 100))
+                    
+                    category_forecast = {
+                        'historical_average': float(historical_monthly_avg),
+                        'predicted_average': float(predicted_monthly_avg),
+                        'confidence': float(confidence),
                         'trend': trend,
-                        'data_points': len(category_prophet_df),
-                        'forecast_data': forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].to_dict('records')
+                        'data_points': len(category_data),
+                        'is_expense': is_expense
                     }
+                    
+                    category_forecasts[category] = category_forecast
+                    
+                    # Track expense and income categories separately
+                    if is_expense:
+                        expense_categories.append(category_forecast)
+                    else:
+                        income_categories.append(category_forecast)
                     
                 except Exception as category_error:
                     logger.warning(f"Failed to forecast category {category}: {str(category_error)}")
                     continue
             
-            logger.info(f"Generated forecasts for {len(category_forecasts)} categories")
+            # Ensure category totals align with monthly income predictions
+            if monthly_income_prediction and expense_categories:
+                # Calculate total predicted expenses from all categories
+                total_predicted_expenses = sum(cat['predicted_average'] for cat in expense_categories)
+                
+                # If total expenses exceed 90% of predicted income, scale them down
+                # This ensures realistic expense predictions that align with income
+                max_reasonable_expenses = monthly_income_prediction * 0.90  # 90% of income
+                
+                if total_predicted_expenses > max_reasonable_expenses:
+                    scaling_factor = max_reasonable_expenses / total_predicted_expenses
+                    logger.info(f"Scaling expense categories by {scaling_factor:.2f} to align with income prediction")
+                    
+                    # Scale down all expense category predictions proportionally
+                    for category, forecast in category_forecasts.items():
+                        if forecast.get('is_expense', False):
+                            forecast['predicted_average'] = float(forecast['predicted_average'] * scaling_factor)
+                            # Update trend if scaling significantly changed the prediction
+                            new_growth = (forecast['predicted_average'] - forecast['historical_average']) / forecast['historical_average']
+                            if abs(new_growth) < 0.05:
+                                forecast['trend'] = 'stable'
+            
+            logger.info(f"Generated monthly average forecasts for {len(category_forecasts)} categories")
+            logger.info(f"Expense categories: {len(expense_categories)}, Income categories: {len(income_categories)}")
+            
             return category_forecasts
             
         except Exception as e:

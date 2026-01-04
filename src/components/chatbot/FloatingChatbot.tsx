@@ -27,6 +27,10 @@ const FloatingChatbot: React.FC = () => {
     "Help me set up a savings goal"
   ]);
   
+  // Rate limiting feedback state
+  const [rateLimitWarning, setRateLimitWarning] = useState(false);
+  const [retryCountdown, setRetryCountdown] = useState(0);
+  
   // Authentication and message limiting
   const isAuthenticated = !!user; // User is authenticated if user object exists
   const [messageCount, setMessageCount] = useState(() => {
@@ -41,26 +45,44 @@ const FloatingChatbot: React.FC = () => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
   
-  // Auto-show tooltip every 7 seconds when chat is closed
+  // Auto-show tooltip - less frequent on mobile to reduce annoyance
   useEffect(() => {
     if (!isOpen) {
+      // Check if mobile (screen width <= 768px)
+      const isMobile = window.innerWidth <= 768;
+      // Show less frequently on mobile (30s) vs desktop (12s)
+      const showInterval = isMobile ? 30000 : 12000;
+      // Show for shorter time on mobile (3s) vs desktop (5s)
+      const displayDuration = isMobile ? 3000 : 5000;
+      
       const autoShowInterval = setInterval(() => {
         if (!isHovering) {
           setIsTooltipVisible(true);
-          // Hide after 5 seconds if not hovering
           setTimeout(() => {
             if (!isHovering) {
               setIsTooltipVisible(false);
             }
-          }, 5000);
+          }, displayDuration);
         }
-      }, 7000);
+      }, showInterval);
 
       return () => clearInterval(autoShowInterval);
     } else {
       setIsTooltipVisible(false);
     }
   }, [isOpen, isHovering]);
+
+  // Countdown timer for rate limiting
+  useEffect(() => {
+    if (retryCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRetryCountdown(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setRateLimitWarning(false);
+    }
+  }, [retryCountdown]);
 
   // Update localStorage whenever message count changes
   useEffect(() => {
@@ -69,12 +91,20 @@ const FloatingChatbot: React.FC = () => {
     }
   }, [messageCount, isAuthenticated]);
 
-  const toggleChat = () => {
+  const toggleChat = async () => {
     if (!isOpen) {
       setIsOpen(true);
       setIsMinimized(false);
       // Load initial message if first time opening
       if (messages.length === 0) {
+        try {
+          // Initialize database session
+          await chatbotService.initializeSession(user as any || null);
+        } catch (error) {
+          console.error('Failed to initialize chat session:', error);
+          // Continue anyway - messages will work locally
+        }
+        
         const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '';
         const greeting = isAuthenticated && userName 
           ? `Hello ${userName}! I'm BudgetSense, your personal finance assistant. How can I help you manage your finances today?`
@@ -118,6 +148,11 @@ const FloatingChatbot: React.FC = () => {
       return;
     }
     
+    // Check if we're already processing a message
+    if (isLoading) {
+      return;
+    }
+    
     // Add user message to chat first
     const userMessage: ChatMessage = {
       role: 'user',
@@ -126,7 +161,6 @@ const FloatingChatbot: React.FC = () => {
     };
     
     setMessages(prev => [...prev, userMessage]);
-    
     
     setIsLoading(true);
     
@@ -146,13 +180,27 @@ const FloatingChatbot: React.FC = () => {
         };
         setMessages(prev => [...prev, assistantMessage]);
       } else {
-        const errorMessage: ChatMessage = {
-          role: 'assistant',
-          content: response.error || "I'm sorry, I couldn't process your request. Please try again.",
-          timestamp: Date.now(),
-          showSignInButton: !isAuthenticated
-        };
-        setMessages(prev => [...prev, errorMessage]);
+        // Handle rate limiting errors specifically
+        if (response.error?.includes('temporarily unavailable') || response.error?.includes('high demand')) {
+          setRateLimitWarning(true);
+          setRetryCountdown(30); // 30 second countdown
+          
+          const errorMessage: ChatMessage = {
+            role: 'assistant',
+            content: `${response.error} You can try again in ${retryCountdown} seconds.`,
+            timestamp: Date.now(),
+            showSignInButton: !isAuthenticated
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        } else {
+          const errorMessage: ChatMessage = {
+            role: 'assistant',
+            content: response.error || "I'm sorry, I couldn't process your request. Please try again.",
+            timestamp: Date.now(),
+            showSignInButton: !isAuthenticated
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        }
       }
     } catch (error) {
       const errorMessage: ChatMessage = {
@@ -171,7 +219,7 @@ const FloatingChatbot: React.FC = () => {
     sendMessage(suggestion);
   };
 
-  const clearChat = () => {
+  const clearChat = async () => {
     const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || '';
     const greeting = isAuthenticated && userName 
       ? `Hello ${userName}! I'm BudgetSense, your personal finance assistant. How can I help you manage your finances today?`
@@ -182,7 +230,7 @@ const FloatingChatbot: React.FC = () => {
       content: greeting,
       timestamp: Date.now()
     }]);
-    chatbotService.clearHistory();
+    await chatbotService.clearHistory();
     // Don't reset message count when clearing chat - it should persist
   };
 
@@ -201,7 +249,6 @@ const FloatingChatbot: React.FC = () => {
   };
   
   const handleLoginRedirect = () => {
-    // TODO: Implement actual login redirect
     window.location.href = '/login';
   };
   
@@ -284,6 +331,8 @@ const FloatingChatbot: React.FC = () => {
           isAuthenticated={isAuthenticated}
           remainingMessages={getRemainingMessages()}
           showLoginPrompt={showLoginPrompt}
+          rateLimitWarning={rateLimitWarning}
+          retryCountdown={retryCountdown}
           onSendMessage={sendMessage}
           onSuggestionClick={handleSuggestionClick}
           onMinimize={minimizeChat}

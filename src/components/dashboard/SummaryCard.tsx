@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import React, { FC, memo, useMemo } from "react";
 import { formatCurrency, formatPercentage } from "../../utils/helpers";
 
 interface SummaryCardProps {
@@ -10,7 +10,7 @@ interface SummaryCardProps {
   timeFrame?: string;
 }
 
-const SummaryCard: FC<SummaryCardProps> = ({
+const SummaryCard: FC<SummaryCardProps> = memo(({
   title,
   amount,
   icon,
@@ -18,8 +18,8 @@ const SummaryCard: FC<SummaryCardProps> = ({
   change,
   timeFrame = "from last month",
 }) => {
-  // Map color to style values
-  const getColor = (): string => {
+  // Memoize color calculation to prevent recalculation on every render
+  const colorValue = useMemo(() => {
     switch (color) {
       case "primary":
         return "#6366f1"; // Updated to violet
@@ -34,12 +34,17 @@ const SummaryCard: FC<SummaryCardProps> = ({
       default:
         return "#6366f1"; // Default to violet
     }
-  };
+  }, [color]);
 
-  // Get icon class
-  const getIconClass = (): string => {
-    return `fas ${icon}`;
-  };
+  // Memoize icon class
+  const iconClass = useMemo(() => `fas ${icon}`, [icon]);
+
+  // Memoize formatted values
+  const formattedAmount = useMemo(() => formatCurrency(amount), [amount]);
+  const formattedChange = useMemo(() => 
+    change !== undefined ? formatPercentage(change) : null, 
+    [change]
+  );
 
   return (
     <div className={`card border-left-${color} shadow h-100 py-2 animate__animated animate__fadeIn`}>
@@ -52,7 +57,7 @@ const SummaryCard: FC<SummaryCardProps> = ({
               {title}
             </div>
             <div className="h5 mb-0 font-weight-bold text-gray-800">
-              {formatCurrency(amount)}
+              {formattedAmount}
             </div>
             {change !== undefined && (
               <div
@@ -62,7 +67,7 @@ const SummaryCard: FC<SummaryCardProps> = ({
               >
                 <span>
                   {change >= 0 ? "+" : ""}
-                  {formatPercentage(change)}{" "}
+                  {formattedChange}{" "}
                   <i
                     className={`fas fa-${
                       change >= 0 ? "arrow-up" : "arrow-down"
@@ -77,12 +82,12 @@ const SummaryCard: FC<SummaryCardProps> = ({
             <div
               className="rounded-circle p-2"
               style={{
-                backgroundColor: `${getColor()}15`,
+                backgroundColor: `${colorValue}15`,
               }}
             >
               <i
-                className={getIconClass()}
-                style={{ color: getColor(), fontSize: "1.75rem" }}
+                className={iconClass}
+                style={{ color: colorValue, fontSize: "1.75rem" }}
               ></i>
             </div>
           </div>
@@ -90,6 +95,8 @@ const SummaryCard: FC<SummaryCardProps> = ({
       </div>
     </div>
   );
-};
+});
+
+SummaryCard.displayName = 'SummaryCard';
 
 export default SummaryCard;

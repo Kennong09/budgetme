@@ -120,8 +120,7 @@ CREATE TABLE public.profiles (
     email_verified BOOLEAN DEFAULT false,
     
     -- Preferences
-    currency_preference TEXT DEFAULT 'USD',
-    notification_preferences JSONB DEFAULT '{"email": true, "push": true, "sms": false}'::jsonb
+    currency_preference TEXT DEFAULT 'USD'
 );
 
 -- =====================================================

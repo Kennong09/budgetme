@@ -502,8 +502,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- =====================================================
 -- CONVENIENCE VIEWS
 -- =====================================================
-
--- Enhanced transaction details view
 CREATE OR REPLACE VIEW public.transaction_details AS
 SELECT
     t.id,

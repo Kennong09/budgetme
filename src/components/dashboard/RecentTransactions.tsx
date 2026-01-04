@@ -1,4 +1,4 @@
-import React, { FC, useMemo } from "react";
+import { FC, memo, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { formatCurrency, formatDate } from "../../utils/helpers";
 import { Transaction } from "../../types";
@@ -39,9 +39,8 @@ interface RecentTransactionsProps {
   userData?: UserData;
 }
 
-const RecentTransactions: FC<RecentTransactionsProps> = ({ 
+const RecentTransactions: FC<RecentTransactionsProps> = memo(({ 
   transactions,
-  categories = [],
   accounts = [],
   goals = [],
   userData
@@ -55,34 +54,49 @@ const RecentTransactions: FC<RecentTransactionsProps> = ({
 
   if (!sortedTransactions || sortedTransactions.length === 0) {
     return (
-      <div className="text-center py-5">
-        <div className="mb-3">
-          <i className="fas fa-receipt fa-3x text-gray-300"></i>
+      <div className="text-center py-3 md:py-5">
+        <div className="mb-1.5 md:mb-3">
+          <i className="fas fa-receipt text-xl md:text-3xl text-gray-300"></i>
         </div>
-        <h5 className="text-gray-700 mb-2">No Transactions Yet</h5>
-        <p className="text-gray-500 mb-4">Start tracking your income and expenses to see your recent transactions here.</p>
-        <Link to="/transactions/add" className="btn btn-primary btn-sm shadow-sm">
-          <i className="fas fa-plus fa-sm mr-2"></i>Add Your First Transaction
+        <h5 className="text-gray-700 mb-1.5 text-sm md:text-lg font-semibold">No Transactions Yet</h5>
+        <p className="text-gray-500 mb-2 md:mb-4 text-xs hidden md:block">Start tracking your income and expenses to see your recent transactions here.</p>
+        <Link 
+          to="/transactions/add" 
+          className="inline-block w-auto px-2 md:px-3 py-1.5 md:py-2 bg-[#4e73df] hover:bg-[#2e59d9] text-white text-xs md:text-sm font-normal rounded shadow-sm transition-colors"
+        >
+          <i className="fas fa-plus text-xs mr-1 md:mr-2"></i>
+          <span className="hidden md:inline">Add Your First </span>Transaction
         </Link>
       </div>
     );
   }
 
+  // Memoize icon mapping for better performance
+  const iconMap = useMemo<Record<string, string>>(() => ({
+    'Housing': 'fa-home',
+    'Utilities': 'fa-bolt',
+    'Groceries': 'fa-shopping-cart',
+    'Transportation': 'fa-truck',
+    'Dining Out': 'fa-coffee',
+    'Entertainment': 'fa-film',
+    'Healthcare': 'fa-heartbeat',
+    'Education': 'fa-book',
+    'Shopping': 'fa-shopping-bag',
+    'Personal Care': 'fa-user',
+    'Travel': 'fa-map-marker-alt',
+    'Subscriptions': 'fa-sync',
+    'Contribution': 'fa-piggy-bank',
+    'Goal Contribution': 'fa-piggy-bank',
+    'Other Expenses': 'fa-ellipsis-h',
+    'Salary': 'fa-money-bill-alt',
+    'Freelance': 'fa-briefcase',
+    'Investments': 'fa-chart-line',
+    'Gifts': 'fa-gift',
+    'Other Income': 'fa-plus-circle'
+  }), []);
+
   // Get proper category name using the same logic as TransactionTable
-  const getTransactionCategoryName = (transaction: Transaction): string => {
-    // Debug logging to understand what data we're getting
-    console.log('RecentTransactions Debug:', {
-      transactionId: transaction.id,
-      transactionType: transaction.type,
-      categoryId: transaction.category_id,
-      userData: {
-        hasIncomeCategories: userData?.incomeCategories?.length || 0,
-        hasExpenseCategories: userData?.expenseCategories?.length || 0,
-        incomeCategories: userData?.incomeCategories?.map(c => ({ id: c.id, name: c.category_name })),
-        expenseCategories: userData?.expenseCategories?.map(c => ({ id: c.id, name: c.category_name }))
-      }
-    });
-    
+  const getTransactionCategoryName = useCallback((transaction: Transaction): string => {
     // Handle goal contributions first
     if (transaction.goal_id) {
       return "Goal Contribution";
@@ -108,29 +122,21 @@ const RecentTransactions: FC<RecentTransactionsProps> = ({
         const category = userData.incomeCategories.find(c => c.id.toString() === categoryIdStr);
         if (category) {
           categoryName = category.category_name;
-          console.log('Found income category:', category.category_name);
-        } else {
-          console.log('Income category not found for ID:', categoryIdStr);
         }
       } else {
         // For expense and contribution transactions, check expense categories
         const category = userData.expenseCategories.find(c => c.id.toString() === categoryIdStr);
         if (category) {
           categoryName = category.category_name;
-          console.log('Found expense category:', category.category_name);
-        } else {
-          console.log('Expense category not found for ID:', categoryIdStr);
         }
       }
-    } else {
-      console.log('No category_id or userData available');
     }
     
     return categoryName;
-  };
+  }, [userData]);
 
   // Get proper account name using the same logic as TransactionTable
-  const getTransactionAccountName = (accountId: string | number): string => {
+  const getTransactionAccountName = useCallback((accountId: string | number): string => {
     if (!userData) {
       // Fallback to the old logic if userData is not available
       const accountIdStr = accountId.toString();
@@ -142,43 +148,20 @@ const RecentTransactions: FC<RecentTransactionsProps> = ({
     const accountIdStr = accountId.toString();
     const account = userData.accounts.find(a => a.id.toString() === accountIdStr);
     return account ? account.account_name : "Unknown Account";
-  };
+  }, [userData, accounts]);
 
   // Get goal name from goal_id
-  const getGoalName = (goalId?: string | number): string => {
+  const getGoalName = useCallback((goalId?: string | number): string => {
     if (!goalId) return "Unknown Goal";
     const goalIdStr = goalId.toString();
     const goal = goals.find(g => g.id.toString() === goalIdStr);
     return goal ? goal.goal_name : "Unknown Goal";
-  };
+  }, [goals]);
 
-  // Map common category names to Font Awesome icons
-  const getIconForCategory = (categoryName: string): string => {
-    const iconMap: Record<string, string> = {
-      'Housing': 'fa-home',
-      'Utilities': 'fa-bolt',
-      'Groceries': 'fa-shopping-cart',
-      'Transportation': 'fa-truck',
-      'Dining Out': 'fa-coffee',
-      'Entertainment': 'fa-film',
-      'Healthcare': 'fa-heartbeat',
-      'Education': 'fa-book',
-      'Shopping': 'fa-shopping-bag',
-      'Personal Care': 'fa-user',
-      'Travel': 'fa-map-marker-alt',
-      'Subscriptions': 'fa-sync',
-      'Contribution': 'fa-piggy-bank',
-      'Goal Contribution': 'fa-piggy-bank',
-      'Other Expenses': 'fa-ellipsis-h',
-      'Salary': 'fa-money-bill-alt',
-      'Freelance': 'fa-briefcase',
-      'Investments': 'fa-chart-line',
-      'Gifts': 'fa-gift',
-      'Other Income': 'fa-plus-circle'
-    };
-    
+  // Map common category names to Font Awesome icons - using memoized iconMap
+  const getIconForCategory = useCallback((categoryName: string): string => {
     return iconMap[categoryName] || 'fa-tag';
-  };
+  }, [iconMap]);
 
   return (
     <div className="transaction-list">
@@ -238,42 +221,56 @@ const RecentTransactions: FC<RecentTransactionsProps> = ({
           <Link
             key={transaction.id}
             to={`/transactions/${transaction.id}`}
-            className={`transaction-item animate__animated animate__fadeIn ${isUnusuallyLarge ? 'border-warning-color border-2' : ''}`}
+            className={`transaction-item animate__animated animate__fadeIn py-2 md:py-3 px-2 md:px-3 ${isUnusuallyLarge ? 'border-warning-color border-2' : ''}`}
             style={{ animationDelay: `${index * 0.05}s` }}
           >
-            <div className={`transaction-icon ${getTypeClass()}`}>
+            <div className={`transaction-icon ${getTypeClass()} w-7 h-7 md:w-10 md:h-10 text-xs md:text-sm`}>
               <i className={`fas ${getTransactionIcon()}`}></i>
             </div>
 
-            <div className="transaction-details">
-              <div className="transaction-title">
+            <div className="transaction-details flex-1 min-w-0 ml-2 md:ml-3">
+              <div className="transaction-title text-[11px] md:text-sm truncate">
                 {getTransactionDescription()}
                 {isUnusuallyLarge && 
-                  <span className="text-warning-color ml-2">
+                  <span className="text-warning-color ml-1 md:ml-2 hidden md:inline">
                     <i className="fas fa-exclamation-triangle" title="Unusually large transaction"></i>
                   </span>
                 }
               </div>
-              <div className="transaction-category">
+              <div className="transaction-category text-[9px] md:text-xs truncate">
                 {categoryName}
-                {transaction.account_id ? ` • ${getTransactionAccountName(transaction.account_id)}` : ''}
+                {transaction.account_id ? (
+                  <span className="hidden md:inline"> • {getTransactionAccountName(transaction.account_id)}</span>
+                ) : ''}
               </div>
             </div>
 
-            <div className={`transaction-amount ${getTypeClass()}`}>
+            <div className={`transaction-amount ${getTypeClass()} text-[11px] md:text-sm font-semibold`}>
               {transaction.type === "income" ? "+" : "-"}
               {formatCurrency(transaction.amount)}
             </div>
 
-            <div className="transaction-date">
+            <div className="transaction-date hidden md:flex text-xs text-gray-500 ml-3">
               <i className="fas fa-calendar-alt text-muted mr-1"></i>
               {formatDate(transaction.date)}
             </div>
           </Link>
         );
       })}
+
+      {/* View All Transactions Button - Hidden on mobile since it's in the tabbed header */}
+      <div className="text-center mt-4 py-3 hidden md:block">
+        <Link
+          to="/transactions"
+          className="inline-block w-auto px-3 py-2 bg-[#4e73df] hover:bg-[#2e59d9] text-white text-sm font-normal rounded shadow-sm transition-colors"
+        >
+          View All Transactions
+        </Link>
+      </div>
     </div>
   );
-};
+});
+
+RecentTransactions.displayName = 'RecentTransactions';
 
 export default RecentTransactions;

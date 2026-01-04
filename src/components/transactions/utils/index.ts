@@ -504,6 +504,8 @@ export const createDefaultFilter = (queryParams?: URLSearchParams): FilterState 
     year: defaultYear,
     search: defaultSearch,
     scope: "all",
-    goal_id: defaultGoalId
+    goal_id: defaultGoalId,
+    currentPage: 1,
+    pageSize: 10
   };
 };

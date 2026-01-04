@@ -258,6 +258,15 @@ const MembersTab: React.FC<MembersTabProps> = ({
     }
   };
 
+  const getMobileRoleBadgeClass = (role: string) => {
+    switch (role) {
+      case 'admin': return 'bg-indigo-100 text-indigo-600';
+      case 'member': return 'bg-emerald-100 text-emerald-600';
+      case 'viewer': return 'bg-gray-100 text-gray-600';
+      default: return 'bg-gray-100 text-gray-500';
+    }
+  };
+
   const canManageMember = (member: FamilyMember): boolean => {
     if (!roleState.canManageRoles || !user) return false;
     
@@ -270,6 +279,96 @@ const MembersTab: React.FC<MembersTabProps> = ({
     
     return true;
   };
+
+  // Mobile Member Card Component
+  const MobileMemberCard: React.FC<{ member: FamilyMember }> = ({ member }) => {
+    const isCurrentUser = member.user_id === user?.id;
+    const isTargetOwner = familyData && member.user_id === familyData.created_by;
+    const canManage = canManageMember(member);
+
+    return (
+      <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm mb-2">
+        <div className="flex items-start gap-3">
+          <img 
+            className="w-10 h-10 rounded-full object-cover" 
+            src={member.avatar_url || member.user?.avatar_url || `../images/placeholder.png`} 
+            alt={member.full_name || member.user?.full_name || member.email || "User"} 
+          />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <h4 className="text-sm font-semibold text-gray-800 truncate">
+                {member.full_name || member.user?.full_name || member.email || member.user?.email || "Unknown User"}
+              </h4>
+              {isCurrentUser && <span className="text-[9px] text-gray-400">(You)</span>}
+              {isTargetOwner && <i className="fas fa-crown text-amber-500 text-[10px]" title="Family Owner"></i>}
+            </div>
+            <p className="text-[10px] text-gray-500 truncate mb-1.5">{member.email || member.user?.email || "No email"}</p>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold ${getMobileRoleBadgeClass(member.role)}`}>
+                {isTargetOwner ? 'Owner' : member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+              </span>
+              <span className="text-[9px] text-gray-400">
+                Joined {member.created_at ? formatDate(member.created_at) : "N/A"}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-2 pt-2 mt-2 border-t border-gray-100">
+          {canManage && (
+            <button
+              onClick={() => openRoleModal(member)}
+              className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center hover:bg-indigo-100 transition-colors"
+              title="Manage Role"
+            >
+              <i className="fas fa-user-cog text-[10px]"></i>
+            </button>
+          )}
+          
+          {roleState.isOwner && !isCurrentUser && (member.role === 'admin' || member.role === 'member') && (
+            <button
+              onClick={() => openTransferModal(member)}
+              className="w-7 h-7 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center hover:bg-amber-100 transition-colors"
+              title="Transfer Ownership"
+            >
+              <i className="fas fa-crown text-[10px]"></i>
+            </button>
+          )}
+          
+          {roleState.isOwner && !isCurrentUser && (
+            <button 
+              onClick={() => openAssignFeaturesModal(member)} 
+              className="w-7 h-7 rounded-full bg-cyan-50 text-cyan-500 flex items-center justify-center hover:bg-cyan-100 transition-colors"
+              title="Assign Features"
+            >
+              <i className="fas fa-cogs text-[10px]"></i>
+            </button>
+          )}
+          
+          {canManage && (
+            <button 
+              onClick={() => openDeleteModal(member)} 
+              className="w-7 h-7 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-colors"
+              title="Remove Member"
+            >
+              <i className="fas fa-user-times text-[10px]"></i>
+            </button>
+          )}
+          
+          {isCurrentUser && !roleState.isOwner && (
+            <button 
+              onClick={openLeaveModal} 
+              className="w-7 h-7 rounded-full bg-gray-50 text-gray-500 flex items-center justify-center hover:bg-gray-100 transition-colors"
+              title="Leave Family"
+            >
+              <i className="fas fa-sign-out-alt text-[10px]"></i>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
   return (
     <div className="animate__animated animate__fadeIn">
       {/* Pending Join Requests Section (only visible to admins) */}
@@ -277,143 +376,183 @@ const MembersTab: React.FC<MembersTabProps> = ({
         <JoinRequestsSection familyId={familyData.id} />
       )}
 
-      <div className="d-flex justify-content-between align-items-center mb-4 mt-4">
-        <h5 className="text-primary font-weight-bold">Family Members</h5>
-        <Link to={`/family/${familyId}/invite`} className="btn btn-sm btn-primary">
-          <i className="fas fa-user-plus mr-2"></i> Invite Member
-        </Link>
-      </div>
-      
-      {members.length > 0 ? (
-        <div className="table-responsive">
-          <table className="table table-bordered" width="100%" cellSpacing="0">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Role</th>
-                <th>Join Date</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => {
-                const isCurrentUser = member.user_id === user?.id;
-                const isTargetOwner = familyData && member.user_id === familyData.created_by;
-                const canManage = canManageMember(member);
-                
-                return (
-                  <tr key={member.id}>
-                    <td>
-                      <div className="d-flex align-items-center">
-                        <img 
-                          className="img-profile rounded-circle mr-3" 
-                          src={member.avatar_url || member.user?.avatar_url || `../images/placeholder.png`} 
-                          alt={member.full_name || member.user?.full_name || member.email || "User"} 
-                          width="40" 
-                          height="40" 
-                        />
-                        <div>
-                          <div className="font-weight-bold">
-                            {member.full_name || member.user?.full_name || member.email || member.user?.email || "Unknown User"}
-                            {isCurrentUser && <span className="text-muted ml-1">(You)</span>}
-                            {isTargetOwner && <i className="fas fa-crown text-warning ml-2" title="Family Owner"></i>}
-                          </div>
-                          <div className="small text-gray-600">{member.email || member.user?.email || "No email"}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{getMemberRoleBadge(member.role, familyData ? member.user_id === familyData.created_by : false)}</td>
-                    <td>{member.created_at ? formatDate(member.created_at) : "N/A"}</td>
-                    <td>
-                      <div className="btn-group btn-group-sm">
-                        {/* Role Management Button */}
-                        {canManage && (
-                          <button
-                            onClick={() => openRoleModal(member)}
-                            className="btn btn-outline-primary"
-                            title="Manage Role"
-                          >
-                            <i className="fas fa-user-cog"></i>
-                          </button>
-                        )}
-                        
-                        {/* Transfer Ownership Button - Only for owner */}
-                        {roleState.isOwner && !isCurrentUser && (member.role === 'admin' || member.role === 'member') && (
-                          <button
-                            onClick={() => openTransferModal(member)}
-                            className="btn btn-outline-warning"
-                            title="Transfer Ownership"
-                          >
-                            <i className="fas fa-crown"></i>
-                          </button>
-                        )}
-                        
-                        {/* Assign Features Button - Only for owners managing others */}
-                        {roleState.isOwner && !isCurrentUser && (
-                          <button 
-                            onClick={() => openAssignFeaturesModal(member)} 
-                            className="btn btn-outline-info" 
-                            title="Assign Features"
-                          >
-                            <i className="fas fa-cogs"></i>
-                          </button>
-                        )}
-                        
-                        {/* Remove Member Button - Only for owners/admins managing others */}
-                        {canManage && (
-                          <button 
-                            onClick={() => openDeleteModal(member)} 
-                            className="btn btn-outline-danger" 
-                            title="Remove Member"
-                          >
-                            <i className="fas fa-user-times"></i>
-                          </button>
-                        )}
-                        
-                        {/* Leave Family Button - For current user (non-owners) */}
-                        {isCurrentUser && !roleState.isOwner && (
-                          <button 
-                            onClick={openLeaveModal} 
-                            className="btn btn-outline-secondary" 
-                            title="Leave Family"
-                          >
-                            <i className="fas fa-sign-out-alt"></i>
-                          </button>
-                        )}
-                        
-                        {/* Show message for restricted users */}
-                        {!roleState.canManageRoles && !isCurrentUser && (
-                          <span className="badge badge-secondary" title="You don't have permission to manage roles">
-                            <i className="fas fa-lock"></i>
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="text-center p-4">
-          <div className="mb-3">
-            <i className="fas fa-users fa-3x text-gray-300"></i>
-          </div>
-          <h5 className="text-gray-500 font-weight-light">No family members yet</h5>
-          <p className="text-gray-500 mb-0 small">
-            Invite your family members to join and collaborate on your finances.
-          </p>
-          <Link to={`/family/${familyId}/invite`} className="btn btn-sm btn-primary mt-3">
-            <i className="fas fa-user-plus fa-sm mr-1"></i> Invite Family Member
+      {/* Mobile Members View */}
+      <div className="block md:hidden">
+        <div className="flex items-center justify-between mb-3 mt-3">
+          <h5 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+            <i className="fas fa-users text-indigo-500 text-xs"></i>
+            Family Members
+            <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full text-[9px]">{members.length}</span>
+          </h5>
+          <Link 
+            to={`/family/${familyId}/invite`} 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500 text-white text-[11px] font-medium rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            <i className="fas fa-user-plus text-[10px]"></i>
+            Invite
           </Link>
         </div>
-      )}
+
+        {members.length > 0 ? (
+          <div className="space-y-2">
+            {members.map((member) => (
+              <MobileMemberCard key={member.id} member={member} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 bg-white rounded-xl border border-gray-100">
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+              <i className="fas fa-users text-gray-400 text-lg"></i>
+            </div>
+            <h5 className="text-sm text-gray-500 font-medium mb-1">No family members yet</h5>
+            <p className="text-[11px] text-gray-400 mb-3">
+              Invite your family members to join
+            </p>
+            <Link 
+              to={`/family/${familyId}/invite`} 
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors"
+            >
+              <i className="fas fa-user-plus text-xs"></i>
+              Invite Family Member
+            </Link>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Members View */}
+      <div className="d-none d-md-block">
+        <div className="d-flex justify-content-between align-items-center mb-4 mt-4">
+          <h5 className="text-primary font-weight-bold">Family Members</h5>
+          <Link to={`/family/${familyId}/invite`} className="btn btn-sm btn-primary">
+            <i className="fas fa-user-plus mr-2"></i> Invite Member
+          </Link>
+        </div>
+        
+        {members.length > 0 ? (
+          <div className="table-responsive">
+            <table className="table table-bordered" width="100%" cellSpacing="0">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Join Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member) => {
+                  const isCurrentUser = member.user_id === user?.id;
+                  const isTargetOwner = familyData && member.user_id === familyData.created_by;
+                  const canManage = canManageMember(member);
+                  
+                  return (
+                    <tr key={member.id}>
+                      <td>
+                        <div className="d-flex align-items-center">
+                          <img 
+                            className="img-profile rounded-circle mr-3" 
+                            src={member.avatar_url || member.user?.avatar_url || `../images/placeholder.png`} 
+                            alt={member.full_name || member.user?.full_name || member.email || "User"} 
+                            width="40" 
+                            height="40" 
+                          />
+                          <div>
+                            <div className="font-weight-bold">
+                              {member.full_name || member.user?.full_name || member.email || member.user?.email || "Unknown User"}
+                              {isCurrentUser && <span className="text-muted ml-1">(You)</span>}
+                              {isTargetOwner && <i className="fas fa-crown text-warning ml-2" title="Family Owner"></i>}
+                            </div>
+                            <div className="small text-gray-600">{member.email || member.user?.email || "No email"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td>{getMemberRoleBadge(member.role, familyData ? member.user_id === familyData.created_by : false)}</td>
+                      <td>{member.created_at ? formatDate(member.created_at) : "N/A"}</td>
+                      <td>
+                        <div className="btn-group btn-group-sm">
+                          {canManage && (
+                            <button
+                              onClick={() => openRoleModal(member)}
+                              className="btn btn-outline-primary"
+                              title="Manage Role"
+                            >
+                              <i className="fas fa-user-cog"></i>
+                            </button>
+                          )}
+                          
+                          {roleState.isOwner && !isCurrentUser && (member.role === 'admin' || member.role === 'member') && (
+                            <button
+                              onClick={() => openTransferModal(member)}
+                              className="btn btn-outline-warning"
+                              title="Transfer Ownership"
+                            >
+                              <i className="fas fa-crown"></i>
+                            </button>
+                          )}
+                          
+                          {roleState.isOwner && !isCurrentUser && (
+                            <button 
+                              onClick={() => openAssignFeaturesModal(member)} 
+                              className="btn btn-outline-info" 
+                              title="Assign Features"
+                            >
+                              <i className="fas fa-cogs"></i>
+                            </button>
+                          )}
+                          
+                          {canManage && (
+                            <button 
+                              onClick={() => openDeleteModal(member)} 
+                              className="btn btn-outline-danger" 
+                              title="Remove Member"
+                            >
+                              <i className="fas fa-user-times"></i>
+                            </button>
+                          )}
+                          
+                          {isCurrentUser && !roleState.isOwner && (
+                            <button 
+                              onClick={openLeaveModal} 
+                              className="btn btn-outline-secondary" 
+                              title="Leave Family"
+                            >
+                              <i className="fas fa-sign-out-alt"></i>
+                            </button>
+                          )}
+                          
+                          {!roleState.canManageRoles && !isCurrentUser && (
+                            <span className="badge badge-secondary" title="You don't have permission to manage roles">
+                              <i className="fas fa-lock"></i>
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center p-4">
+            <div className="mb-3">
+              <i className="fas fa-users fa-3x text-gray-300"></i>
+            </div>
+            <h5 className="text-gray-500 font-weight-light">No family members yet</h5>
+            <p className="text-gray-500 mb-0 small">
+              Invite your family members to join and collaborate on your finances.
+            </p>
+            <Link to={`/family/${familyId}/invite`} className="btn btn-sm btn-primary mt-3">
+              <i className="fas fa-user-plus fa-sm mr-1"></i> Invite Family Member
+            </Link>
+          </div>
+        )}
+      </div>
 
       {/* Role Change Modal */}
       {roleState.showRoleModal && roleState.targetMember && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
+        <div className="modal" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Manage Role</h5>
@@ -474,8 +613,8 @@ const MembersTab: React.FC<MembersTabProps> = ({
 
       {/* Ownership Transfer Modal */}
       {roleState.showTransferModal && roleState.targetMember && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
+        <div className="modal" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title text-warning">
@@ -547,8 +686,8 @@ const MembersTab: React.FC<MembersTabProps> = ({
 
       {/* Delete Member Modal */}
       {roleState.showDeleteModal && roleState.targetMember && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
+        <div className="modal" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title text-danger">
@@ -636,8 +775,8 @@ const MembersTab: React.FC<MembersTabProps> = ({
 
       {/* Leave Family Modal */}
       {roleState.showLeaveModal && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
+        <div className="modal" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title text-warning">
@@ -686,8 +825,8 @@ const MembersTab: React.FC<MembersTabProps> = ({
 
       {/* Assign Features Modal */}
       {roleState.showAssignFeaturesModal && roleState.targetMember && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog">
+        <div className="modal" style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title text-info">

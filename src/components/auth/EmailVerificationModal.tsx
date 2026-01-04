@@ -152,6 +152,13 @@ const EmailVerificationModal: FC<EmailVerificationModalProps> = ({
             We've sent a verification email to: <strong>{email}</strong>
           </p>
           
+          <div className="verification-status mb-4">
+            <div className="status-item">
+              <i className="bx bx-info-circle"></i>
+              <span>You must verify your email before you can sign in</span>
+            </div>
+          </div>
+          
           {/* Delivery Status Indicator */}
           {deliveryStatus === 'delayed' && (
             <div className="auth-warning-message mb-4">

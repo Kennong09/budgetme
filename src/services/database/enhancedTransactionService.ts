@@ -212,16 +212,6 @@ export class EnhancedTransactionService extends TransactionService {
       mapped.category_id = dbTransaction.category_id || '';
     }
 
-    // Debug logging
-    console.log('EnhancedTransactionService mapping transaction:', {
-      id: dbTransaction.id,
-      type: dbTransaction.type,
-      income_category_id: dbTransaction.income_category_id,
-      expense_category_id: dbTransaction.expense_category_id,
-      legacy_category_id: dbTransaction.category_id,
-      mapped_category_id: mapped.category_id
-    });
-
     return mapped;
   }
 

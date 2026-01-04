@@ -56,19 +56,39 @@ class JoinRequestService {
         throw new Error('You are already a member of a family');
       }
 
-      // 3. Check for existing pending request
-      const { data: existingRequest, error: requestError } = await supabase
+      // 3. Check for existing request (any status)
+      const { data: existingRequests, error: requestError } = await supabase
         .from('family_join_requests')
         .select('id, status')
         .eq('family_id', data.family_id)
-        .eq('user_id', userId)
-        .single();
+        .eq('user_id', userId);
 
-      if (!requestError && existingRequest) {
-        if (existingRequest.status === 'pending') {
+      if (requestError && requestError.code !== 'PGRST116') {
+        console.warn('Error checking existing requests:', requestError);
+        // Continue with creation attempt
+      }
+
+      if (existingRequests && existingRequests.length > 0) {
+        const activeRequest = existingRequests.find(req => req.status === 'pending');
+        const approvedRequest = existingRequests.find(req => req.status === 'approved');
+        
+        if (activeRequest) {
           throw new Error('You already have a pending request to join this family');
-        } else if (existingRequest.status === 'approved') {
+        } else if (approvedRequest) {
           throw new Error('You are already approved to join this family');
+        }
+        
+        // If there are only denied/cancelled requests, we can create a new one
+        // But first, let's delete the old ones to avoid constraint violations
+        const oldRequestIds = existingRequests
+          .filter(req => req.status === 'denied' || req.status === 'cancelled')
+          .map(req => req.id);
+          
+        if (oldRequestIds.length > 0) {
+          await supabase
+            .from('family_join_requests')
+            .delete()
+            .in('id', oldRequestIds);
         }
       }
 
@@ -88,13 +108,7 @@ class JoinRequestService {
         throw new Error(`Failed to create join request: ${createError.message}`);
       }
 
-      // 5. Notify family admins (placeholder for future implementation)
-      try {
-        await this.notifyFamilyAdmins(data.family_id, userId);
-      } catch (notificationError) {
-        console.warn('Failed to notify family admins:', notificationError);
-        // Don't fail the request creation if notification fails
-      }
+      // Join request created successfully - no notification system
 
       return request;
     } catch (error) {
@@ -167,13 +181,7 @@ class JoinRequestService {
         throw new Error(`Failed to approve join request: ${approveError.message}`);
       }
 
-      // 5. Send approval notification
-      try {
-        await this.sendApprovalNotification(request.family_id, request.user_id);
-      } catch (notificationError) {
-        console.warn('Failed to send approval notification:', notificationError);
-        // Don't fail the approval if notification fails
-      }
+      // Join request approved successfully - no notification system
     } catch (error) {
       console.error('Error in approveJoinRequest:', error);
       throw error;
@@ -226,13 +234,7 @@ class JoinRequestService {
         throw new Error(`Failed to deny join request: ${updateError.message}`);
       }
 
-      // 4. Send denial notification
-      try {
-        await this.sendDenialNotification(request.family_id, request.user_id);
-      } catch (notificationError) {
-        console.warn('Failed to send denial notification:', notificationError);
-        // Don't fail the denial if notification fails
-      }
+      // Join request denied successfully - no notification system
     } catch (error) {
       console.error('Error in denyJoinRequest:', error);
       throw error;
@@ -440,38 +442,6 @@ class JoinRequestService {
     }
   }
 
-  /**
-   * Notify family admins about new join request (placeholder)
-   */
-  private async notifyFamilyAdmins(familyId: string, requesterId: string): Promise<void> {
-    // TODO: Implement notification system
-    console.log('Family admin notification would be sent here:', {
-      familyId,
-      requesterId
-    });
-  }
-
-  /**
-   * Send approval notification (placeholder)
-   */
-  private async sendApprovalNotification(familyId: string, userId: string): Promise<void> {
-    // TODO: Implement notification system
-    console.log('Approval notification would be sent here:', {
-      familyId,
-      userId
-    });
-  }
-
-  /**
-   * Send denial notification (placeholder)
-   */
-  private async sendDenialNotification(familyId: string, userId: string): Promise<void> {
-    // TODO: Implement notification system
-    console.log('Denial notification would be sent here:', {
-      familyId,
-      userId
-    });
-  }
 }
 
 // Export singleton instance

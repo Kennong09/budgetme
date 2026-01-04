@@ -27,7 +27,7 @@ class AIInsightsService:
     Service for generating AI-powered insights from Prophet predictions
     """
     
-    def __init__(self, api_key: str, model: str = "openai/gpt-oss-20b:free"):
+    def __init__(self, api_key: str, model: str = "openai/gpt-oss-120b:free"):
         """
         Initialize AI insights service
         
@@ -637,6 +637,6 @@ def create_ai_insights_service() -> AIInsightsService:
     if not api_key:
         raise ValueError("OPENROUTER_API_KEY must be set in environment")
     
-    model = os.getenv('OPENROUTER_MODEL', 'openai/gpt-oss-20b:free')
+    model = os.getenv('OPENROUTER_MODEL', 'openai/gpt-oss-120b:free')
     
     return AIInsightsService(api_key=api_key, model=model)

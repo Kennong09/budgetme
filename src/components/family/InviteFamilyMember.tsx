@@ -250,7 +250,20 @@ const InviteFamilyMember: FC = () => {
   if (loading) {
     return (
       <div className="container-fluid">
-        <div className="text-center my-5">
+        {/* Mobile Loading State */}
+        <div className="block md:hidden py-12 animate__animated animate__fadeIn">
+          <div className="flex flex-col items-center justify-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <p className="mt-3 text-xs text-gray-500 font-medium">Checking permissions...</p>
+          </div>
+        </div>
+
+        {/* Desktop Loading State */}
+        <div className="text-center my-5 hidden md:block">
           <div className="spinner-border text-primary" role="status">
             <span className="sr-only">Loading...</span>
           </div>
@@ -263,92 +276,180 @@ const InviteFamilyMember: FC = () => {
   if (viewMode === "review") {
     return (
       <div className="container-fluid animate__animated animate__fadeIn">
-        <div className="d-sm-flex align-items-center justify-content-between mb-4">
-          <h1 className="h3 mb-0 text-gray-800">Review Invitation</h1>
-          <Link to="/family" className="btn btn-sm btn-secondary shadow-sm">
-            <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
-          </Link>
+        {/* Mobile Review View */}
+        <div className="block md:hidden">
+          {/* Mobile Page Heading */}
+          <div className="mb-3">
+            <div className="flex items-center justify-between">
+              <h1 className="text-base font-bold text-gray-800">Review Invitation</h1>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setViewMode("form")}
+                  className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+                  aria-label="Back to edit"
+                >
+                  <i className="fas fa-arrow-left text-xs"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Summary Card */}
+          <div className="bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-2xl p-4 mb-3 shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-white/80 text-xs font-medium">Invitation</span>
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                <i className="fas fa-paper-plane text-white text-sm"></i>
+              </div>
+            </div>
+            <div className="text-white text-lg font-bold mb-1 truncate">{invite.email}</div>
+            <div className="text-white/70 text-xs">To: {userFamily?.family_name || "Your Family"}</div>
+          </div>
+
+          {/* Mobile Details Grid */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center mb-2">
+                <i className="fas fa-user-shield text-blue-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Role</p>
+              <p className="text-xs font-bold text-gray-800 capitalize">{invite.role}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
+              <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center mb-2">
+                <i className="fas fa-home text-emerald-500 text-xs"></i>
+              </div>
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide">Family</p>
+              <p className="text-xs font-bold text-gray-800 truncate">{userFamily?.family_name || "Your Family"}</p>
+            </div>
+          </div>
+
+          {/* Mobile Message Card */}
+          {invite.message && (
+            <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 mb-3">
+              <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wide mb-1">Message</p>
+              <p className="text-xs text-gray-700">{invite.message}</p>
+            </div>
+          )}
+
+          {/* Mobile Action Buttons */}
+          <div className="flex gap-2 mb-4">
+            <button 
+              onClick={() => setViewMode("form")} 
+              className="flex-1 py-3 bg-gray-100 text-gray-700 text-sm font-medium rounded-xl hover:bg-gray-200 transition-colors"
+            >
+              <i className="fas fa-arrow-left mr-2 text-xs"></i>
+              Edit
+            </button>
+            <button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting}
+              className="flex-1 py-3 bg-emerald-500 text-white text-sm font-medium rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <i className="fas fa-spinner fa-spin mr-2 text-xs"></i>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-paper-plane mr-2 text-xs"></i>
+                  Send
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="row">
-          <div className="col-lg-8 mx-auto">
-            <div className="card shadow mb-4">
-              <div className="card-header py-3">
-                <h6 className="m-0 font-weight-bold text-primary">Invitation Details</h6>
-              </div>
-              <div className="card-body">
-                <div className="row mb-4">
-                  <div className="col-md-6 mb-4 mb-md-0">
-                    <div className="card border-left-primary shadow h-100 py-2">
-                      <div className="card-body">
-                        <div className="row no-gutters align-items-center">
-                          <div className="col mr-2">
-                            <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                              Email
+        {/* Desktop Review View */}
+        <div className="hidden md:block">
+          <div className="d-sm-flex align-items-center justify-content-between mb-4">
+            <h1 className="h3 mb-0 text-gray-800">Review Invitation</h1>
+            <Link to="/family" className="btn btn-sm btn-secondary shadow-sm">
+              <i className="fas fa-arrow-left fa-sm mr-2"></i> Cancel
+            </Link>
+          </div>
+
+          <div className="row">
+            <div className="col-lg-8 mx-auto">
+              <div className="card shadow mb-4">
+                <div className="card-header py-3">
+                  <h6 className="m-0 font-weight-bold text-primary">Invitation Details</h6>
+                </div>
+                <div className="card-body">
+                  <div className="row mb-4">
+                    <div className="col-md-6 mb-4 mb-md-0">
+                      <div className="card border-left-primary shadow h-100 py-2">
+                        <div className="card-body">
+                          <div className="row no-gutters align-items-center">
+                            <div className="col mr-2">
+                              <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Email
+                              </div>
+                              <div className="h5 mb-0 font-weight-bold text-gray-800">{invite.email}</div>
                             </div>
-                            <div className="h5 mb-0 font-weight-bold text-gray-800">{invite.email}</div>
+                            <div className="col-auto">
+                              <i className="fas fa-envelope fa-2x text-gray-300"></i>
+                            </div>
                           </div>
-                          <div className="col-auto">
-                            <i className="fas fa-envelope fa-2x text-gray-300"></i>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="col-md-6">
+                      <div className="card border-left-info shadow h-100 py-2">
+                        <div className="card-body">
+                          <div className="row no-gutters align-items-center">
+                            <div className="col mr-2">
+                              <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Role
+                              </div>
+                              <div className="h5 mb-0 font-weight-bold text-gray-800 text-capitalize">{invite.role}</div>
+                            </div>
+                            <div className="col-auto">
+                              <i className="fas fa-user-shield fa-2x text-gray-300"></i>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-6">
-                    <div className="card border-left-info shadow h-100 py-2">
+
+                  <div className="card bg-light mb-4">
                       <div className="card-body">
-                        <div className="row no-gutters align-items-center">
-                          <div className="col mr-2">
-                            <div className="text-xs font-weight-bold text-info text-uppercase mb-1">
-                              Role
-                            </div>
-                            <div className="h5 mb-0 font-weight-bold text-gray-800 text-capitalize">{invite.role}</div>
-                          </div>
-                          <div className="col-auto">
-                            <i className="fas fa-user-shield fa-2x text-gray-300"></i>
-                          </div>
+                        <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                          Family
                         </div>
+                        <p className="mb-0">{userFamily?.family_name || "Your Family"}</p>
                       </div>
-                    </div>
                   </div>
-                </div>
 
-                <div className="card bg-light mb-4">
-                    <div className="card-body">
-                      <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                        Family
+                  <div className="card bg-light mb-4">
+                      <div className="card-body">
+                        <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                          Message
+                        </div>
+                        <p className="mb-0">{invite.message}</p>
                       </div>
-                      <p className="mb-0">{userFamily?.family_name || "Your Family"}</p>
-                    </div>
-                </div>
+                  </div>
 
-                <div className="card bg-light mb-4">
-                    <div className="card-body">
-                      <div className="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                        Message
-                      </div>
-                      <p className="mb-0">{invite.message}</p>
-                    </div>
-                </div>
-
-                <div className="text-center mt-4">
-                  <button onClick={() => setViewMode("form")} className="btn btn-light btn-icon-split mr-2">
-                    <span className="icon text-gray-600">
-                      <i className="fas fa-arrow-left"></i>
-                    </span>
-                    <span className="text">Back to Edit</span>
-                  </button>
-                  <button 
-                    onClick={handleSubmit} 
-                    disabled={isSubmitting}
-                    className="btn btn-success btn-icon-split"
-                  >
-                    <span className="icon text-white-50">
-                      <i className={isSubmitting ? "fas fa-spinner fa-spin" : "fas fa-check"}></i>
-                    </span>
-                    <span className="text">{isSubmitting ? "Sending..." : "Send Invitation"}</span>
-                  </button>
+                  <div className="text-center mt-4">
+                    <button onClick={() => setViewMode("form")} className="btn btn-light btn-icon-split mr-2">
+                      <span className="icon text-gray-600">
+                        <i className="fas fa-arrow-left"></i>
+                      </span>
+                      <span className="text">Back to Edit</span>
+                    </button>
+                    <button 
+                      onClick={handleSubmit} 
+                      disabled={isSubmitting}
+                      className="btn btn-success btn-icon-split"
+                    >
+                      <span className="icon text-white-50">
+                        <i className={isSubmitting ? "fas fa-spinner fa-spin" : "fas fa-check"}></i>
+                      </span>
+                      <span className="text">{isSubmitting ? "Sending..." : "Send Invitation"}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -360,54 +461,193 @@ const InviteFamilyMember: FC = () => {
 
   return (
     <div className="container-fluid animate__animated animate__fadeIn">
-      <div className="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 className="h3 mb-0 text-gray-800">Invite Family Member</h1>
-        <Link to="/family" className="btn btn-sm btn-secondary shadow-sm">
-          <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Family
-        </Link>
+      {/* Mobile Form View */}
+      <div className="block md:hidden">
+        {/* Mobile Page Heading */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-base font-bold text-gray-800">Invite Member</h1>
+            <Link
+              to="/family"
+              className="w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center shadow-sm transition-all active:scale-95"
+              aria-label="Back"
+            >
+              <i className="fas fa-arrow-left text-xs"></i>
+            </Link>
+          </div>
+        </div>
+
+        {/* Mobile Info Card */}
+        <div className="bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 rounded-2xl p-4 mb-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+              <i className="fas fa-user-plus text-white text-lg"></i>
+            </div>
+            <div>
+              <h3 className="text-white text-sm font-bold">Invite to Family</h3>
+              <p className="text-white/70 text-xs">{userFamily?.family_name || "Your Family"}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile Form Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <h6 className="text-xs font-bold text-gray-800 flex items-center gap-2">
+              <i className="fas fa-envelope text-emerald-500 text-[10px]"></i>
+              Invitation Details
+            </h6>
+          </div>
+          <div className="p-4">
+            {error && (
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 mb-4">
+                <p className="text-xs text-rose-600 flex items-start gap-2">
+                  <i className="fas fa-exclamation-circle mt-0.5"></i>
+                  <span>{error}</span>
+                </p>
+              </div>
+            )}
+            <form onSubmit={handleReview}>
+              <div className="mb-4">
+                <label htmlFor="email_mobile" className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                  User's Email <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  id="email_mobile"
+                  name="email"
+                  value={invite.email}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-all"
+                  placeholder="Enter email address"
+                  required
+                />
+                <p className="text-[10px] text-gray-400 mt-1">User must have a BudgetMe account.</p>
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="role_mobile" className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                  Assign Role <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  id="role_mobile"
+                  name="role"
+                  value={invite.role}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-all"
+                  required
+                >
+                  <option value="member">Member</option>
+                  <option value="viewer">Viewer</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+
+              {/* Mobile Role Info */}
+              <div className="bg-blue-50 rounded-xl p-3 mb-4">
+                <p className="text-[10px] font-bold text-blue-700 mb-2">Role Permissions:</p>
+                <div className="space-y-1">
+                  <p className="text-[10px] text-blue-600"><span className="font-semibold">Member:</span> Standard access, contribute to goals</p>
+                  <p className="text-[10px] text-blue-600"><span className="font-semibold">Viewer:</span> Read-only access</p>
+                  <p className="text-[10px] text-blue-600"><span className="font-semibold">Admin:</span> Full management privileges</p>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label htmlFor="message_mobile" className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">
+                  Message (Optional)
+                </label>
+                <textarea
+                  id="message_mobile"
+                  name="message"
+                  value={invite.message}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition-all resize-none"
+                  rows={3}
+                  placeholder="Add a personal message"
+                ></textarea>
+              </div>
+
+              <button 
+                type="submit" 
+                className="w-full py-3 bg-emerald-500 text-white text-sm font-medium rounded-xl hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2"
+              >
+                Continue to Review
+                <i className="fas fa-arrow-right text-xs"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Mobile Tips Cards */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 text-center">
+            <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center mx-auto mb-2">
+              <i className="fas fa-user-check text-rose-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] font-semibold text-gray-700">Account</p>
+            <p className="text-[8px] text-gray-400">Required</p>
+          </div>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 text-center">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center mx-auto mb-2">
+              <i className="fas fa-user-shield text-amber-500 text-xs"></i>
+            </div>
+            <p className="text-[9px] font-semibold text-gray-700">Assign</p>
+            <p className="text-[8px] text-gray-400">Roles</p>
+          </div>
+        </div>
       </div>
 
-      {/* Tooltip */}
-      {activeTip && tooltipPosition && (
-        <div 
-          className="tip-box light" 
-          style={{ 
-            position: "absolute",
-            top: `${tooltipPosition.top}px`, 
-            left: `${tooltipPosition.left}px`,
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            background: "white",
-            padding: "12px 15px",
-            borderRadius: "8px",
-            boxShadow: "0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15)",
-            maxWidth: "300px",
-            border: "1px solid rgba(0, 0, 0, 0.05)"
-          }}
-        >
-          {activeTip && (
-            <>
-              <div className="font-weight-bold mb-2">{tooltipContent[activeTip as keyof typeof tooltipContent].title}</div>
-              <p className="mb-0">{tooltipContent[activeTip as keyof typeof tooltipContent].description}</p>
-            </>
-          )}
+      {/* Desktop Form View */}
+      <div className="hidden md:block">
+        <div className="d-sm-flex align-items-center justify-content-between mb-4">
+          <h1 className="h3 mb-0 text-gray-800">Invite Family Member</h1>
+          <Link to="/family" className="btn btn-sm btn-secondary shadow-sm">
+            <i className="fas fa-arrow-left fa-sm mr-2"></i> Back to Family
+          </Link>
         </div>
-      )}
 
-      <div className="row">
-        <div className="col-lg-8 mx-auto">
-          <div className="card shadow mb-4">
-            <div className="card-header py-3">
-              <h6 className="m-0 font-weight-bold text-primary">
-                Invitation Information
-                <i 
-                  className="fas fa-info-circle ml-1 text-gray-400"
-                  style={{ cursor: 'pointer' }}
-                  onClick={(e) => toggleTip('invitation-info', e)}
-                ></i>
-              </h6>
-            </div>
-            <div className="card-body">
+        {/* Tooltip */}
+        {activeTip && tooltipPosition && (
+          <div 
+            className="tip-box light" 
+            style={{ 
+              position: "absolute",
+              top: `${tooltipPosition.top}px`, 
+              left: `${tooltipPosition.left}px`,
+              transform: "translateX(-50%)",
+              zIndex: 1000,
+              background: "white",
+              padding: "12px 15px",
+              borderRadius: "8px",
+              boxShadow: "0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15)",
+              maxWidth: "300px",
+              border: "1px solid rgba(0, 0, 0, 0.05)"
+            }}
+          >
+            {activeTip && (
+              <>
+                <div className="font-weight-bold mb-2">{tooltipContent[activeTip as keyof typeof tooltipContent].title}</div>
+                <p className="mb-0">{tooltipContent[activeTip as keyof typeof tooltipContent].description}</p>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="row">
+          <div className="col-lg-8 mx-auto">
+            <div className="card shadow mb-4">
+              <div className="card-header py-3">
+                <h6 className="m-0 font-weight-bold text-primary">
+                  Invitation Information
+                  <i 
+                    className="fas fa-info-circle ml-1 text-gray-400"
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => toggleTip('invitation-info', e)}
+                  ></i>
+                </h6>
+              </div>
+              <div className="card-body">
               {error && <div className="alert alert-danger">{error}</div>}
               <form onSubmit={handleReview}>
                 <div className="form-group">
@@ -539,6 +779,7 @@ const InviteFamilyMember: FC = () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

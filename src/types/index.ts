@@ -280,14 +280,8 @@ export interface DatabaseUpdate {
 }
 
 // Component props types
-export interface SidebarProps {
-  isOpen: boolean;
-  onToggleSidebar?: () => void;
-  isMobile?: boolean;
-}
-
 export interface HeaderProps {
-  toggleSidebar: () => void;
+  // No props needed after sidebar removal
 }
 
 export interface UserData {

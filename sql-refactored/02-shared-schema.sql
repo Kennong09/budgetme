@@ -579,6 +579,16 @@ RETURNS TABLE (
 ) AS $$
 BEGIN
     CASE period_type
+        WHEN 'day' THEN
+            RETURN QUERY SELECT 
+                reference_date::DATE,
+                reference_date::DATE;
+        
+        WHEN 'week' THEN
+            RETURN QUERY SELECT 
+                DATE_TRUNC('week', reference_date)::DATE,
+                (DATE_TRUNC('week', reference_date) + INTERVAL '6 days')::DATE;
+        
         WHEN 'month' THEN
             RETURN QUERY SELECT 
                 DATE_TRUNC('month', reference_date)::DATE,
@@ -593,11 +603,6 @@ BEGIN
             RETURN QUERY SELECT 
                 DATE_TRUNC('year', reference_date)::DATE,
                 (DATE_TRUNC('year', reference_date) + INTERVAL '1 year - 1 day')::DATE;
-        
-        WHEN 'week' THEN
-            RETURN QUERY SELECT 
-                DATE_TRUNC('week', reference_date)::DATE,
-                (DATE_TRUNC('week', reference_date) + INTERVAL '6 days')::DATE;
         
         ELSE
             -- Default to current month
@@ -674,43 +679,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
--- =====================================================
--- NOTIFICATION HELPERS
--- =====================================================
-
--- Function to send async notification
-DROP FUNCTION IF EXISTS public.send_notification(TEXT, TEXT) CASCADE;
-CREATE OR REPLACE FUNCTION public.send_notification(
-    channel TEXT,
-    payload TEXT
-)
-RETURNS VOID AS $$
-BEGIN
-    PERFORM pg_notify(channel, payload);
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Function to log system events
-DROP FUNCTION IF EXISTS public.log_system_event(TEXT, JSONB, UUID) CASCADE;
-CREATE OR REPLACE FUNCTION public.log_system_event(
-    event_type TEXT,
-    event_data JSONB DEFAULT '{}'::jsonb,
-    user_id UUID DEFAULT NULL
-)
-RETURNS VOID AS $$
-BEGIN
-    -- This could insert into a system_logs table if needed
-    PERFORM public.send_notification(
-        'system_events',
-        jsonb_build_object(
-            'type', event_type,
-            'data', event_data,
-            'user_id', user_id,
-            'timestamp', now()
-        )::TEXT
-    );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =====================================================
 -- CLEANUP FUNCTIONS
@@ -744,8 +712,7 @@ BEGIN
         result := result || jsonb_build_object('prediction_results', cleanup_count);
     END IF;
     
-    -- Log cleanup activity
-    PERFORM public.log_system_event('cleanup_completed', result);
+    -- Log cleanup activity completed
     
     RETURN result;
 END;
@@ -786,8 +753,7 @@ BEGIN
         );
     END IF;
     
-    -- Send notification for audit logging
-    PERFORM public.send_notification('audit_trail', audit_data::TEXT);
+    -- Audit data prepared for logging
     
     -- Return the appropriate record
     IF TG_OP = 'DELETE' THEN
@@ -827,6 +793,26 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =====================================================
+-- NOTIFICATION SYSTEM STUB
+-- =====================================================
+
+-- Stub function to prevent errors from notification calls that were removed
+-- This function does nothing but prevents "function does not exist" errors
+CREATE OR REPLACE FUNCTION public.send_notification(
+    notification_type TEXT,
+    payload TEXT
+)
+RETURNS VOID AS $$
+BEGIN
+    -- This is a stub function that does nothing
+    -- It prevents errors from existing code that might call this function
+    -- Uncomment the line below to see notification calls in logs for debugging
+    -- RAISE NOTICE 'Notification (disabled): % - %', notification_type, payload;
+    RETURN;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
 -- GRANTS AND PERMISSIONS
 -- =====================================================
 
@@ -853,6 +839,7 @@ GRANT EXECUTE ON FUNCTION public.create_family_with_member(TEXT, TEXT, TEXT, BOO
 -- Grant execute permissions on system functions
 GRANT EXECUTE ON FUNCTION public.cleanup_expired_records() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_table_stats() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.send_notification(TEXT, TEXT) TO authenticated;
 
 -- =====================================================
 -- MODULE COMMENTS

@@ -10,9 +10,10 @@ import {
   PredictionContext
 } from '../../types';
 import { supabase } from '../../utils/supabaseClient';
+import { env } from '../../utils/env';
 
 // Configuration for Prophet API
-const PROPHET_API_BASE_URL = process.env.REACT_APP_PROPHET_API_URL || 'https://prediction-api-rust.vercel.app';
+const PROPHET_API_BASE_URL = env.PROPHET_API_URL;
 
 interface ProphetAIInsightRequest {
   predictions: ProphetPrediction[];
@@ -78,61 +79,77 @@ export class AIInsightsService {
   /**
    * Generates AI insights with SQL schema integration
    */
-  static async generateInsights(request: AIInsightRequest): Promise<AIInsightResponse> {
+  static async generateInsights(request: AIInsightRequest, forceRegenerate: boolean = false): Promise<AIInsightResponse> {
     const startTime = Date.now();
     let insightId: string | null = null;
     
     try {
-      // Step 1: Check usage limits for AI insights
-      const usageCheck = await this.checkAIInsightsUsage(request.userContext);
-      if (!usageCheck.can_request) {
-        throw new Error(`RATE_LIMIT: AI insights limit exceeded. ${usageCheck.remaining} requests remaining.`);
+      // Step 1: Check usage limits for AI insights (skip if no user context)
+      const userId = (request.userContext as any)?.userId || 
+                    (request.userContext as any)?.user_id || 
+                    (request.userContext as any)?.id;
+      
+      console.log('🔍 Extracted user ID for AI insights:', userId);
+      console.log('🔍 User context keys:', Object.keys(request.userContext || {}));
+      
+      if (userId) {
+        console.log('✅ User ID found, proceeding with database storage');
+        const usageCheck = await this.checkAIInsightsUsage(request.userContext);
+        if (!usageCheck.can_request) {
+          throw new Error(`RATE_LIMIT: AI insights limit exceeded. ${usageCheck.remaining} requests remaining.`);
+        }
+      } else {
+        console.warn('⚠️ WARNING: No user ID found in request.userContext, insights will NOT be saved to database');
+        console.log('UserContext received:', request.userContext);
       }
 
-      // Step 2: Check cache in database first
-      const cacheKey = this.generateCacheKey(request);
-      const cachedInsight = await this.getCachedInsightFromDB(cacheKey);
+      // Step 2: Check cache in database first (only if user exists and not forcing regenerate)
+      let cacheKey: string | null = null;
+      let cachedInsight: AIInsightResponse | null = null;
       
-      if (cachedInsight) {
-        console.log('Returning cached AI insight');
-        return cachedInsight;
+      if (userId && !forceRegenerate) {
+        cacheKey = this.generateCacheKey(request);
+        cachedInsight = await this.getCachedInsightFromDB(cacheKey);
+        
+        if (cachedInsight) {
+          console.log('Returning cached AI insight');
+          return cachedInsight;
+        }
+      } else if (forceRegenerate) {
+        console.log('🔄 Force regenerate enabled - bypassing cache and generating fresh AI insights');
+        cacheKey = this.generateCacheKey(request);
+      } else {
+        cacheKey = this.generateCacheKey(request);
       }
 
       let insights: AIInsightResponse | null = null;
       let aiService = 'fallback';
       let modelUsed = 'local';
 
-      // Step 3: Try interactive AI insights endpoint
+      // Use OpenRouter API via chatbot service for AI insights generation
+      console.log('Using OpenRouter API via chatbot service for AI insights generation');
+      
+      // Step 3: Try OpenRouter API via chatbot service first
       try {
-        const interactiveResult = await this.generateInteractiveAIInsights(request);
-        if (interactiveResult) {
-          insights = interactiveResult;
-          aiService = 'openrouter';
-          modelUsed = 'openai/gpt-oss-120b:free';
-          console.log('Generated insights using OpenRouter API');
-        } else {
-          throw new Error('OpenRouter returned null response');
-        }
-      } catch (apiError: any) {
-        console.warn('OpenRouter API failed, trying Prophet API:', apiError.message);
+        insights = await this.generateChatbotInsights(request);
+        aiService = 'openrouter';
+        modelUsed = 'openai/gpt-oss-20b:free';
+        console.log('✅ Successfully generated AI insights via OpenRouter API');
+      } catch (chatbotError: any) {
+        console.warn('⚠️ OpenRouter API via chatbot service failed, trying direct API:', chatbotError.message);
         
-        // Step 4: Try Prophet API
+        // Step 4: Try Prophet API with OpenRouter as backup
         try {
-          const prophetResult = await this.generateProphetAIInsights(request);
-          if (prophetResult) {
-            insights = prophetResult;
-            aiService = 'prophet';
-            modelUsed = 'prophet-ai';
-          } else {
-            throw new Error('Prophet API returned null response');
-          }
+          insights = await this.generateProphetAIInsights(request);
+          aiService = 'prophet-openrouter';
+          modelUsed = 'openrouter-gpt-4o-mini';
+          console.log('✅ Successfully generated AI insights via Prophet API');
         } catch (prophetError: any) {
-          console.warn('Prophet AI failed, using chatbot fallback:', prophetError.message);
-          
-          // Step 5: Fallback to chatbot service
-          insights = await this.generateChatbotInsights(request);
-          aiService = 'chatbot';
-          modelUsed = 'chatbot-service';
+          console.warn('⚠️ Prophet API also failed, using enhanced fallback:', prophetError.message);
+          // Generate enhanced fallback insights with better logic
+          insights = this.generateEnhancedFallbackInsights(request);
+          aiService = 'fallback';
+          modelUsed = 'local-enhanced';
         }
       }
 
@@ -144,28 +161,32 @@ export class AIInsightsService {
         modelUsed = 'local-fallback';
       }
 
-      // Step 6: Store insights in database
+      // Step 6: Store insights in database (only if user exists)
       const generationTime = Date.now() - startTime;
       
-      // Extract userId from request context
-      const userId = (request.userContext as any).userId || 
-                    (request.userContext as any).user_id || 
-                    'anonymous';
-      
-      insightId = await this.storeAIInsightsToDB(
-        userId,
-        null, // No prediction ID for standalone insights
-        insights,
-        aiService,
-        modelUsed,
-        generationTime,
-        cacheKey
-      );
+      if (userId && cacheKey) {
+        console.log('💾 Attempting to store AI insights to database...');
+        console.log('💾 Storage params:', { userId, aiService, modelUsed, generationTime, cacheKey });
+        
+        insightId = await this.storeAIInsightsToDB(
+          userId,
+          null, // No prediction ID for standalone insights
+          insights,
+          aiService,
+          modelUsed,
+          generationTime,
+          cacheKey
+        );
 
-      // Step 7: Increment usage counter
-      await this.incrementAIInsightsUsage(request.userContext);
+        // Step 7: Increment usage counter
+        await this.incrementAIInsightsUsage(request.userContext);
+        
+        console.log(`✅ SUCCESS: AI insights stored in database with ID: ${insightId}`);
+      } else {
+        console.error('❌ FAILED: Cannot store AI insights - missing userId or cacheKey');
+        console.log('Debug info:', { userId, cacheKey, hasInsights: !!insights });
+      }
 
-      console.log(`AI insights generated and stored with ID: ${insightId}`);
       return insights;
 
     } catch (error: any) {
@@ -279,12 +300,29 @@ export class AIInsightsService {
     cacheKey: string
   ): Promise<string> {
     try {
+      console.log('📝 storeAIInsightsToDB called with:', {
+        userId,
+        predictionId,
+        aiService,
+        modelUsed,
+        generationTimeMs,
+        cacheKey,
+        hasInsights: !!insights
+      });
+      
       // Ensure userId is available from context if not provided
       if (!userId && insights && typeof insights === 'object') {
         const insightsAny = insights as any;
         userId = insightsAny.userId || insightsAny.user_id || '';
+        console.log('📝 Extracted userId from insights object:', userId);
+      }
+      
+      if (!userId) {
+        console.error('❌ Cannot store AI insights: userId is null or undefined');
+        return `fallback-${Date.now()}`;
       }
 
+      console.log('📝 Calling store_ai_insights RPC function...');
       const { data, error } = await supabase.rpc('store_ai_insights', {
         p_user_id: userId,
         p_prediction_id: predictionId,
@@ -296,11 +334,17 @@ export class AIInsightsService {
       });
 
       if (error) {
-        console.error('Error storing AI insights:', error);
+        console.error('❌ Error storing AI insights to database:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         return `fallback-${Date.now()}`;
       }
 
-      console.log(`AI insights stored successfully with ID: ${data}`);
+      console.log(`✅ AI insights stored successfully in database with ID: ${data}`);
       return data;
     } catch (error) {
       console.error('Database error storing AI insights:', error);
@@ -349,21 +393,42 @@ export class AIInsightsService {
   }
 
   /**
-   * Generate AI insights using chatbot service (fallback)
+   * Generate AI insights using OpenRouter API via chatbot service
    */
   private static async generateChatbotInsights(request: AIInsightRequest): Promise<AIInsightResponse> {
     try {
+      console.log('🚀 Starting AI insights generation via OpenRouter API...');
+      
       const prompt = this.buildFinancialAnalysisPrompt(request);
+      console.log('📝 Built comprehensive financial analysis prompt');
+      
       const response = await chatbotService.sendMessage(prompt);
+      console.log('🌍 OpenRouter API response received:', { success: response.success });
       
       if (!response.success) {
-        throw new Error(response.error || 'Chatbot service failed');
+        console.error('❌ OpenRouter API failed:', response.error);
+        throw new Error(response.error || 'OpenRouter API service failed');
       }
 
-      return this.parseInsightResponse(response.message || '');
+      if (!response.message || response.message.trim().length === 0) {
+        console.error('❌ Empty response from OpenRouter API');
+        throw new Error('Empty response from OpenRouter API');
+      }
+
+      console.log('✅ Successfully received AI insights from OpenRouter API, parsing response...');
+      const parsedInsights = this.parseInsightResponse(response.message);
+      
+      console.log('✅ AI insights parsed successfully:', {
+        summary: parsedInsights.summary.substring(0, 100) + '...',
+        recommendationsCount: parsedInsights.recommendations.length,
+        riskLevel: parsedInsights.riskAssessment.level,
+        confidence: parsedInsights.confidenceLevel
+      });
+      
+      return parsedInsights;
     } catch (error) {
-      console.error('Chatbot insights generation failed:', error);
-      return this.generateFallbackInsights(request);
+      console.error('❌ Chatbot insights generation failed:', error);
+      throw error; // Re-throw to allow fallback handling
     }
   }
 
@@ -440,27 +505,23 @@ export class AIInsightsService {
       // Transform API response to our format
       const insightsData = response.data.insights;
       
-      // Create comprehensive insights from the API response
+      // Create comprehensive insights from the API response - NO LIMITS
       const recommendations = insightsData
         .filter((insight: any) => insight.recommendation)
-        .map((insight: any) => insight.recommendation)
-        .slice(0, 5); // Top 5 recommendations
+        .map((insight: any) => insight.recommendation);
 
       const riskFactors = insightsData
         .filter((insight: any) => insight.category === 'risk')
-        .map((insight: any) => insight.description)
-        .slice(0, 3);
+        .map((insight: any) => insight.description);
 
       const opportunities = insightsData
         .filter((insight: any) => insight.category === 'opportunity')
-        .map((insight: any) => insight.description)
-        .slice(0, 3);
+        .map((insight: any) => insight.description);
 
       const mitigationSuggestions = insightsData
         .filter((insight: any) => insight.category === 'risk')
         .map((insight: any) => insight.recommendation)
-        .filter((rec: string) => rec)
-        .slice(0, 3);
+        .filter((rec: string) => rec);
 
       // Determine overall risk level
       const riskInsights = insightsData.filter((insight: any) => insight.category === 'risk');
@@ -580,51 +641,65 @@ export class AIInsightsService {
   }
 
   /**
-   * Builds a comprehensive prompt for financial analysis
+   * Builds a comprehensive prompt for financial analysis using OpenRouter API
    */
   private static buildFinancialAnalysisPrompt(request: AIInsightRequest): string {
-    const { predictionData, categoryForecasts, userContext, timeframe } = request;
+    const { predictionData, categoryForecasts, userContext, timeframe, customPrompt } = request;
     
     const timeframeName = this.getTimeframeName(timeframe);
+    const monthlyIncome = userContext.avgMonthlyIncome || 0;
+    const monthlyExpenses = userContext.avgMonthlyExpenses || 0;
+    const savingsRate = userContext.savingsRate || 0;
+    const monthlyBalance = monthlyIncome - monthlyExpenses;
     
-    return `As a financial advisor AI, analyze the following financial predictions and provide actionable insights.
+    // Calculate key financial metrics
+    const debtToIncomeRatio = monthlyIncome > 0 ? (monthlyExpenses / monthlyIncome * 100).toFixed(1) : '0';
+    const emergencyFundMonths = monthlyExpenses > 0 && monthlyBalance > 0 ? (monthlyBalance / monthlyExpenses * 12).toFixed(1) : '0';
+    
+    return `You are an expert financial advisor analyzing a user's financial data from BudgetMe, a personal finance app. Provide specific, actionable insights based on their actual financial situation.
 
-USER FINANCIAL PROFILE:
-- Average Monthly Income: ₱${userContext.avgMonthlyIncome.toFixed(2)}
-- Average Monthly Expenses: ₱${userContext.avgMonthlyExpenses.toFixed(2)}
-- Current Savings Rate: ${userContext.savingsRate.toFixed(1)}%
-- Active Budget Categories: ${userContext.budgetCategories.join(', ')}
-- Financial Goals: ${userContext.financialGoals.length} active goals
+📊 FINANCIAL PROFILE ANALYSIS:
+• Monthly Income: ₱${monthlyIncome.toLocaleString()}
+• Monthly Expenses: ₱${monthlyExpenses.toLocaleString()}
+• Net Cash Flow: ₱${monthlyBalance.toLocaleString()}
+• Current Savings Rate: ${savingsRate.toFixed(1)}%
+• Expense-to-Income Ratio: ${debtToIncomeRatio}%
+• Emergency Fund Potential: ${emergencyFundMonths} months of expenses
+• Budget Categories: ${userContext.budgetCategories.join(', ')}
+• Active Financial Goals: ${userContext.financialGoals.length}
 
-FINANCIAL PREDICTIONS (${timeframeName}):
+📈 CATEGORY SPENDING ANALYSIS (${timeframeName}):
+${this.formatDetailedCategoryAnalysis(categoryForecasts)}
+
+🔮 MONTHLY PREDICTIONS:
 ${this.formatPredictionData(predictionData)}
 
-CATEGORY SPENDING FORECASTS:
-${this.formatCategoryForecasts(categoryForecasts)}
+💡 KEY INSIGHTS FROM CATEGORY DATA:
+${this.generateCategoryInsights(categoryForecasts)}
 
-Please provide a comprehensive financial analysis that includes:
+${customPrompt ? `\n🎯 SPECIFIC FOCUS: ${customPrompt}\n` : ''}
 
-1. FINANCIAL TREND SUMMARY (2-3 sentences):
-   - Key trends in income, expenses, and savings
-   - Overall financial trajectory
 
-2. TOP 3 ACTIONABLE RECOMMENDATIONS:
-   - Specific, practical steps the user can take
-   - Focus on highest impact areas
+Please provide a comprehensive financial analysis in the following format:
 
-3. RISK ASSESSMENT:
-   - Identify potential financial risks (low/medium/high)
-   - Specific risk factors and warning signs
+**FINANCIAL SUMMARY** (2-3 sentences):
+Analyze the user's overall financial health, current trends, and trajectory. Be specific about their cash flow situation and what it means for their financial goals.
 
-4. OPPORTUNITY AREAS:
-   - 2-3 areas where the user could improve their financial position
-   - Potential for increased savings or income
+**TOP 3 PRIORITIES** (EXACTLY 3 RECOMMENDATIONS - NO MORE, NO LESS):
+• Priority 1: [Most important action based on their specific situation]
+• Priority 2: [Second most impactful recommendation]
+• Priority 3: [Additional optimization opportunity]
 
-5. CONFIDENCE ASSESSMENT:
-   - Rate your confidence in these predictions (1-100%)
-   - Factors that could affect accuracy
+**RISK ASSESSMENT: [HIGH/MEDIUM/LOW]**
+• Risk factors: [List 2-3 specific risks based on their data]
+• Mitigation strategies: [Specific steps to address these risks]
 
-Format your response as natural, conversational advice. Be encouraging and specific. Focus on actionable insights rather than general advice. Keep the tone supportive and professional.`;
+**OPPORTUNITY AREAS**:
+• [2-3 specific opportunities for financial improvement]
+
+**CONFIDENCE LEVEL**: [X]% - [Brief explanation of confidence factors]
+
+IMPORTANT: Base your advice entirely on the provided financial data. Use Philippine peso amounts and local context. Be encouraging but realistic. Focus on actionable steps they can implement in BudgetMe. Avoid generic advice - make it personal to their situation.`;
   }
 
   /**
@@ -636,19 +711,89 @@ Format your response as natural, conversational advice. Be encouraging and speci
     // Always format as PHP now
     const formatCurrency = (amount: number) => `₱${amount.toFixed(2)}`;
     
-    return predictions.slice(0, 6).map((pred, index) => {
+    return predictions.map((pred, index) => {
       const monthName = new Date(pred.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
       return `${monthName}: Predicted ${formatCurrency(pred.predicted)} (Range: ${formatCurrency(pred.lower)} - ${formatCurrency(pred.upper)}, Confidence: ${(pred.confidence * 100).toFixed(0)}%)`;
     }).join('\n');
   }
 
   /**
-   * Formats category forecast data for the AI prompt
+   * Formats detailed category analysis for the AI prompt
+   */
+  private static formatDetailedCategoryAnalysis(forecasts: CategoryForecast[]): string {
+    if (forecasts.length === 0) return 'No category forecasts available';
+
+    const analysis = forecasts.map(forecast => {
+      const change = forecast.predicted - forecast.historicalAverage;
+      const changePercent = ((change / forecast.historicalAverage) * 100).toFixed(1);
+      const trendIcon = forecast.trend === 'increasing' ? '↑' : forecast.trend === 'decreasing' ? '↓' : '→';
+      const severity = Math.abs(parseFloat(changePercent)) > 20 ? 'SIGNIFICANT' : 
+                      Math.abs(parseFloat(changePercent)) > 10 ? 'MODERATE' : 'MINOR';
+      
+      return `• ${forecast.category}:
+   Current Month: ₱${forecast.historicalAverage.toLocaleString()}
+   Next Month Prediction: ₱${forecast.predicted.toLocaleString()}
+   Change: ${changePercent}% ${trendIcon} (₱${Math.abs(change).toLocaleString()})
+   Impact Level: ${severity}`;
+    }).join('\n\n');
+    
+    return analysis;
+  }
+  
+  /**
+   * Generate key insights from category data for AI prompt
+   */
+  private static generateCategoryInsights(forecasts: CategoryForecast[]): string {
+    if (forecasts.length === 0) return 'No category data for analysis';
+    
+    const insights = [];
+    
+    // Find highest increasing category
+    const increasingCategories = forecasts.filter(f => f.predicted > f.historicalAverage);
+    if (increasingCategories.length > 0) {
+      const highest = increasingCategories.reduce((max, cat) => 
+        ((cat.predicted - cat.historicalAverage) / cat.historicalAverage) > 
+        ((max.predicted - max.historicalAverage) / max.historicalAverage) ? cat : max
+      );
+      const increasePercent = (((highest.predicted - highest.historicalAverage) / highest.historicalAverage) * 100).toFixed(1);
+      insights.push(`• HIGHEST RISK: ${highest.category} spending is predicted to increase by ${increasePercent}% (₱${(highest.predicted - highest.historicalAverage).toLocaleString()} more)`);
+    }
+    
+    // Find highest decreasing category
+    const decreasingCategories = forecasts.filter(f => f.predicted < f.historicalAverage);
+    if (decreasingCategories.length > 0) {
+      const lowest = decreasingCategories.reduce((min, cat) => 
+        ((cat.historicalAverage - cat.predicted) / cat.historicalAverage) > 
+        ((min.historicalAverage - min.predicted) / min.historicalAverage) ? cat : min
+      );
+      const decreasePercent = (((lowest.historicalAverage - lowest.predicted) / lowest.historicalAverage) * 100).toFixed(1);
+      insights.push(`• BIGGEST OPPORTUNITY: ${lowest.category} spending is predicted to decrease by ${decreasePercent}% (₱${(lowest.historicalAverage - lowest.predicted).toLocaleString()} saved)`);
+    }
+    
+    // Calculate total predicted vs current
+    const totalCurrent = forecasts.reduce((sum, f) => sum + f.historicalAverage, 0);
+    const totalPredicted = forecasts.reduce((sum, f) => sum + f.predicted, 0);
+    const overallChange = totalPredicted - totalCurrent;
+    const overallChangePercent = ((overallChange / totalCurrent) * 100).toFixed(1);
+    
+    if (overallChange > 0) {
+      insights.push(`• OVERALL TREND: Total spending is predicted to increase by ₱${overallChange.toLocaleString()} (${overallChangePercent}%) next month`);
+    } else if (overallChange < 0) {
+      insights.push(`• OVERALL TREND: Total spending is predicted to decrease by ₱${Math.abs(overallChange).toLocaleString()} (${Math.abs(parseFloat(overallChangePercent))}%) next month`);
+    } else {
+      insights.push(`• OVERALL TREND: Total spending is predicted to remain stable next month`);
+    }
+    
+    return insights.join('\n');
+  }
+  
+  /**
+   * Legacy method for backward compatibility
    */
   private static formatCategoryForecasts(forecasts: CategoryForecast[]): string {
     if (forecasts.length === 0) return 'No category forecasts available';
 
-    return forecasts.slice(0, 8).map(forecast => {
+    return forecasts.map(forecast => {
       const change = forecast.predicted - forecast.historicalAverage;
       const changePercent = ((change / forecast.historicalAverage) * 100).toFixed(1);
       const trendIcon = forecast.trend === 'increasing' ? '↑' : forecast.trend === 'decreasing' ? '↓' : '→';
@@ -735,25 +880,53 @@ Format your response as natural, conversational advice. Be encouraging and speci
   }
 
   /**
-   * Parses recommendations from text
+   * Parses recommendations from text - ALWAYS returns exactly 3 recommendations
    */
   private static parseRecommendations(text: string): string[] {
     const recommendations: string[] = [];
     
-    // Look for numbered or bulleted lists
-    const listItems = text.match(/(?:[-•*]|\d+\.)\s*([^\n\r]+)/g);
+    // Enhanced regex to catch more bullet styles and formatting
+    const listItems = text.match(/(?:[\s\u2022\u2023\u25E6\u25AA\u25AB\u25A0\u25A1-]|\d+\.|Priority\s*\d+)[:\s]*([^\n\r]+)/gi);
     
     if (listItems) {
-      recommendations.push(...listItems.map(item => 
-        item.replace(/^(?:[-•*]|\d+\.)\s*/, '').trim()
-      ));
+      recommendations.push(...listItems.map(item => {
+        // More aggressive cleaning of bullets, numbers, and priority labels
+        return item.replace(/^[\s\u2022\u2023\u25E6\u25AA\u25AB\u25A0\u25A1-]*\s*/, '')
+                  .replace(/^\d+[\.:)]\s*/, '')
+                  .replace(/^Priority\s*\d+[\s\-\u2013\u2014:]*\s*/i, 'Priority ' + (recommendations.length + 1) + ' – ')
+                  .replace(/\n/g, ' ')
+                  .replace(/\r/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+      }));
     } else {
-      // Split by sentences if no list found
+      // Split by sentences if no list found - NO LIMIT
       const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
-      recommendations.push(...sentences.slice(0, 3).map(s => s.trim()));
+      recommendations.push(...sentences.map((s, index) => {
+        return `Priority ${index + 1} – ${s.trim()}`;
+      }));
     }
 
-    return recommendations.slice(0, 3);
+    // Return all recommendations - NO LIMIT
+    const filtered = recommendations.filter(rec => rec.length > 0);
+    
+    // Fill with default recommendations only if we have less than 3
+    while (filtered.length < 3) {
+      const defaultRecs = [
+        'Review and optimize your highest spending categories to identify potential savings',
+        'Set up automated savings to consistently build your emergency fund each month',
+        'Track your monthly expenses more closely to stay within your budget targets'
+      ];
+      
+      const missingIndex = filtered.length;
+      if (missingIndex < defaultRecs.length) {
+        filtered.push(defaultRecs[missingIndex]);
+      } else {
+        filtered.push('Monitor your financial progress regularly and adjust your budget as needed');
+      }
+    }
+
+    return filtered;
   }
 
   /**
@@ -815,7 +988,7 @@ Format your response as natural, conversational advice. Be encouraging and speci
       ));
     }
     
-    return items.slice(0, 3);
+    return items; // Return all items - NO LIMIT
   }
 
   /**
@@ -846,7 +1019,221 @@ Format your response as natural, conversational advice. Be encouraging and speci
   }
 
   /**
-   * Generates fallback insights when AI service fails
+   * Generates enhanced fallback insights with better analysis
+   */
+  private static generateEnhancedFallbackInsights(request: AIInsightRequest): AIInsightResponse {
+    console.log('🔄 Generating enhanced fallback insights...');
+    const { userContext, categoryForecasts, predictionData } = request;
+    
+    // Enhanced analysis based on actual data
+    const monthlyIncome = userContext.avgMonthlyIncome || 0;
+    const monthlyExpenses = userContext.avgMonthlyExpenses || 0;
+    const savingsRate = userContext.savingsRate || 0;
+    const monthlyBalance = monthlyIncome - monthlyExpenses;
+    
+    // Calculate financial health score
+    const healthScore = this.calculateFinancialHealthScore(monthlyIncome, monthlyExpenses, savingsRate);
+    
+    // Build contextual summary based on actual data
+    let summary = `Your monthly income of ₱${monthlyIncome.toLocaleString()} `;
+    
+    if (monthlyBalance > 0) {
+      summary += `exceeds your expenses of ₱${monthlyExpenses.toLocaleString()}, leaving you with a positive cash flow of ₱${monthlyBalance.toLocaleString()}. `;
+    } else if (monthlyBalance < 0) {
+      summary += `is currently below your expenses of ₱${monthlyExpenses.toLocaleString()}, creating a deficit of ₱${Math.abs(monthlyBalance).toLocaleString()}. `;
+    } else {
+      summary += `exactly matches your expenses of ₱${monthlyExpenses.toLocaleString()}, leaving no room for savings. `;
+    }
+    
+    // Add trend analysis if prediction data is available
+    if (predictionData && predictionData.length > 0) {
+      const avgPrediction = predictionData.reduce((sum, pred) => sum + pred.predicted, 0) / predictionData.length;
+      const trend = avgPrediction > monthlyExpenses ? 'increasing' : 'decreasing';
+      summary += `Future projections suggest your expenses may be ${trend}, with an average predicted amount of ₱${avgPrediction.toLocaleString()}.`;
+    }
+    
+    // Generate smart recommendations based on financial situation
+    const recommendations = this.generateSmartRecommendations(monthlyIncome, monthlyExpenses, savingsRate, categoryForecasts);
+    
+    // Determine risk level based on multiple factors
+    const riskAssessment = this.assessFinancialRisk(monthlyIncome, monthlyExpenses, savingsRate, healthScore);
+    
+    // Identify opportunity areas
+    const opportunityAreas = this.identifyOpportunityAreas(monthlyIncome, monthlyExpenses, savingsRate, categoryForecasts);
+    
+    console.log('✅ Enhanced fallback insights generated with health score:', healthScore);
+    
+    return {
+      summary,
+      recommendations,
+      riskAssessment,
+      opportunityAreas,
+      confidenceLevel: 0.85, // Higher confidence for enhanced analysis
+      timestamp: new Date()
+    };
+  }
+  
+  /**
+   * Calculate financial health score (0-100)
+   */
+  private static calculateFinancialHealthScore(income: number, expenses: number, savingsRate: number): number {
+    if (income === 0) return 0;
+    
+    let score = 0;
+    
+    // Income vs expenses (40 points)
+    const balance = income - expenses;
+    if (balance > 0) {
+      score += Math.min(40, (balance / income) * 100);
+    }
+    
+    // Savings rate (40 points)
+    if (savingsRate >= 20) score += 40;
+    else if (savingsRate >= 10) score += 30;
+    else if (savingsRate >= 5) score += 20;
+    else if (savingsRate > 0) score += 10;
+    
+    // Emergency fund potential (20 points)
+    const emergencyFundMonths = balance > 0 ? (balance / expenses) * 12 : 0;
+    if (emergencyFundMonths >= 6) score += 20;
+    else if (emergencyFundMonths >= 3) score += 15;
+    else if (emergencyFundMonths >= 1) score += 10;
+    else if (emergencyFundMonths > 0) score += 5;
+    
+    return Math.min(100, Math.round(score));
+  }
+  
+  /**
+   * Generate smart recommendations based on financial situation - ALWAYS returns exactly 3 recommendations
+   */
+  private static generateSmartRecommendations(income: number, expenses: number, savingsRate: number, categoryForecasts: any[]): string[] {
+    const recommendations: string[] = [];
+    const balance = income - expenses;
+    
+    // Priority 1: Most critical financial issue
+    if (income === 0) {
+      recommendations.push('**Priority 1 – Add your income sources** – Record all income streams in BudgetMe to get accurate financial insights and better track your financial progress.');
+    } else if (balance < 0) {
+      recommendations.push('**Priority 1 – Address spending deficit immediately** – Your expenses exceed income. Review your highest spending categories and identify areas to cut back.');
+    } else if (savingsRate < 5) {
+      recommendations.push('**Priority 1 – Build emergency savings** – Start with saving at least 5% of your income to create a financial safety net for unexpected expenses.');
+    } else {
+      recommendations.push('**Priority 1 – Optimize your highest spending category** – Focus on your largest expense category to find the biggest potential savings.');
+    }
+    
+    // Priority 2: Savings and growth
+    if (savingsRate < 15 && recommendations.length === 1) {
+      recommendations.push('**Priority 2 – Increase your savings rate** – Aim for at least 15-20% of income. Use BudgetMe\'s automated tracking to monitor your progress.');
+    } else if (categoryForecasts && categoryForecasts.length > 0 && recommendations.length === 1) {
+      const highestCategory = categoryForecasts.reduce((max, cat) => 
+        cat.predicted > max.predicted ? cat : max
+      );
+      recommendations.push(`**Priority 2 – Monitor ${highestCategory.category} spending** – This is your highest predicted expense category. Track it closely and look for optimization opportunities.`);
+    } else {
+      recommendations.push('**Priority 2 – Set monthly spending limits** – Create realistic budgets for each expense category and track your progress weekly.');
+    }
+    
+    // Priority 3: Long-term optimization
+    if (recommendations.length === 2) {
+      if (balance > 0 && savingsRate >= 10) {
+        recommendations.push('**Priority 3 – Explore investment opportunities** – With positive cash flow and good savings habits, consider growing your wealth through investments.');
+      } else if (categoryForecasts && categoryForecasts.length > 1) {
+        recommendations.push('**Priority 3 – Rebalance your spending categories** – Review all expense categories to ensure optimal allocation of your income.');
+      } else {
+        recommendations.push('**Priority 3 – Use BudgetMe\'s tracking features** – Set up automated transaction categorization and monthly budget reviews to stay on track.');
+      }
+    }
+    
+    // Ensure exactly 3 recommendations with fallbacks
+    const defaultRecs = [
+      '**Priority 1 – Track all your transactions** – Complete transaction tracking is essential for accurate financial insights and better budgeting decisions.',
+      '**Priority 2 – Set realistic monthly budgets** – Create achievable spending limits for each category and review them regularly to stay on track.',
+      '**Priority 3 – Build your emergency fund** – Aim to save 3-6 months of expenses for unexpected situations and financial security.'
+    ];
+    
+    // Fill any missing slots only if we have less than 3
+    while (recommendations.length < 3) {
+      const missingIndex = recommendations.length;
+      recommendations.push(defaultRecs[missingIndex]);
+    }
+    
+    return recommendations; // Return all recommendations - NO LIMIT
+  }
+  
+  /**
+   * Assess financial risk based on multiple factors
+   */
+  private static assessFinancialRisk(income: number, expenses: number, savingsRate: number, healthScore: number): any {
+    let level: 'low' | 'medium' | 'high' = 'medium';
+    const factors: string[] = [];
+    const mitigationSuggestions: string[] = [];
+    
+    // Determine risk level
+    if (healthScore >= 70) {
+      level = 'low';
+    } else if (healthScore >= 40) {
+      level = 'medium';
+    } else {
+      level = 'high';
+    }
+    
+    // Identify risk factors
+    if (income === 0) {
+      factors.push('No recorded income sources');
+      mitigationSuggestions.push('Add all income sources to BudgetMe for complete financial tracking');
+    }
+    
+    if (expenses > income) {
+      factors.push('Expenses exceed income');
+      mitigationSuggestions.push('Create a debt reduction plan and identify expense cuts');
+    }
+    
+    if (savingsRate < 5) {
+      factors.push('Very low savings rate');
+      mitigationSuggestions.push('Build an emergency fund starting with small, consistent amounts');
+    }
+    
+    // Default factors if none identified
+    if (factors.length === 0) {
+      factors.push('Normal market volatility', 'Potential unexpected expenses');
+    }
+    
+    if (mitigationSuggestions.length === 0) {
+      mitigationSuggestions.push('Continue monitoring expenses regularly', 'Consider increasing emergency fund when possible');
+    }
+    
+    return {
+      level,
+      factors,
+      mitigationSuggestions
+    };
+  }
+  
+  /**
+   * Identify financial opportunity areas
+   */
+  private static identifyOpportunityAreas(income: number, expenses: number, savingsRate: number, categoryForecasts: any[]): string[] {
+    const opportunities: string[] = [];
+    
+    if (savingsRate < 20) {
+      opportunities.push('**Savings rate improvement** – Increase from ' + savingsRate.toFixed(1) + '% to at least 20%');
+    }
+    
+    if (expenses > 0 && income > expenses) {
+      opportunities.push('**Budget optimization** – Fine-tune spending categories to maximize savings potential');
+    }
+    
+    if (categoryForecasts && categoryForecasts.length > 1) {
+      opportunities.push('**Category rebalancing** – Redistribute spending across categories for better financial health');
+    } else {
+      opportunities.push('**Expense tracking enhancement** – Add more detailed transaction categories for better insights');
+    }
+    
+    return opportunities; // Return all opportunities - NO LIMIT
+  }
+  
+  /**
+   * Legacy fallback insights method (kept for compatibility)
    */
   private static generateFallbackInsights(request: AIInsightRequest): AIInsightResponse {
     const { userContext, categoryForecasts } = request;

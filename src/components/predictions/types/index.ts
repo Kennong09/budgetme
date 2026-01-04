@@ -23,6 +23,16 @@ export interface CategoryPrediction {
   isEmptyState?: boolean;
 }
 
+export interface TransactionTypePrediction {
+  type: 'Income' | 'Expense' | 'Savings' | 'Total';
+  current: number;
+  predicted: number;
+  change: number;
+  changePercent: number;
+  isEmptyState?: boolean;
+  lowConfidence?: boolean; // Indicates if prediction was capped due to unrealistic growth
+}
+
 export interface ModelAccuracy {
   metric: string;
   value: number;
@@ -48,6 +58,7 @@ export interface PredictionInsights {
   incomeGrowth: number;
   expenseGrowth: number;
   savingsGrowth: number;
+  confidenceScore?: number; // Overall prediction confidence (0-100)
 }
 
 // Additional prediction types
@@ -117,7 +128,10 @@ export interface ProphetParameters {
 export interface PredictionHeaderProps {
   showModelDetails: boolean;
   onToggleModelDetails: () => void;
-  onExportCSV: () => void;
+  onExportCSV?: () => void; // DEPRECATED - use onExportPredictions instead
+  onExportPredictions?: (format: 'csv' | 'json') => void;
+  onViewHistory?: () => void;
+  onExportInsights?: (format: 'csv' | 'json') => void;
   usageStatus?: UsageStatus | null;
   onGeneratePredictions?: () => Promise<void>;
   generating?: boolean;
@@ -169,6 +183,13 @@ export interface CategoryPredictionsTableProps {
   onToggleTip: (tipId: string, event?: React.MouseEvent) => void;
 }
 
+export interface TransactionTypeForecastTableProps {
+  transactionTypePredictions: TransactionTypePrediction[];
+  activeTip: string | null;
+  tooltipPosition: TooltipPosition | null;
+  onToggleTip: (tipId: string, event?: React.MouseEvent) => void;
+}
+
 export interface AIInsightsCardProps {
   insights: PredictionInsights;
   timeframe: TimeframeType;
@@ -178,7 +199,7 @@ export interface AIInsightsCardProps {
   onToggleTip: (tipId: string, event?: React.MouseEvent) => void;
   // Enhanced props for AI integration (optional for backward compatibility)
   predictionData?: any[];
-  categoryForecasts?: any[];
+  transactionTypePredictions?: TransactionTypePrediction[];
   userProfile?: {
     avgMonthlyIncome: number;
     avgMonthlyExpenses: number;

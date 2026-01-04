@@ -17,8 +17,6 @@ model UserProfile {
   profilePicture   String?  @map("profile_picture")
   currency         String   @default("PHP")
   language         String   @default("en")
-  notificationEmail Boolean @default(true) @map("notification_email")
-  notificationPush  Boolean @default(true) @map("notification_push")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 

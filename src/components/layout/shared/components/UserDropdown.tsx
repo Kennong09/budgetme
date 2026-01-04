@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import React, { FC, memo, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 export interface UserInfo {
@@ -41,21 +41,33 @@ const UserDropdown: FC<UserDropdownProps> = ({
 
   const links = isUserVariant ? userLinks : adminLinks;
 
+  // Memoize rendered links
+  const renderedLinks = useMemo(() => (
+    links.map((link) => (
+      <Link 
+        key={link.path} 
+        className="dropdown-item flex items-center px-4 py-2 hover:bg-gray-50 transition-colors duration-150" 
+        to={link.path}
+      >
+        <i className={`fas ${link.icon} fa-sm fa-fw mr-3 text-gray-400`}></i>
+        <span className="text-sm">{link.label}</span>
+      </Link>
+    ))
+  ), [links]);
+
   return (
     <li className={`nav-item dropdown no-arrow ${className}`} style={style}>
       <button
-        className="nav-link dropdown-toggle btn btn-link d-flex align-items-center"
+        className="nav-link dropdown-toggle flex items-center px-2 py-1 hover:bg-gray-50 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-200"
         type="button"
         id="userDropdown"
         aria-haspopup="true"
         aria-expanded={isOpen}
         onClick={onToggle}
       >
-        <span className="mr-2 d-none d-lg-inline text-gray-600 small">
-          {userInfo.name}
-        </span>
+        {/* Name hidden - display only avatar */}
         <img
-          className="img-profile rounded-circle border-2 shadow-sm"
+          className="img-profile rounded-circle border-2 shadow-sm ring-2 ring-gray-100"
           src={userInfo.profilePicture}
           alt={userInfo.name}
           style={{ width: "32px", height: "32px" }}
@@ -90,25 +102,16 @@ const UserDropdown: FC<UserDropdownProps> = ({
           </div>
           <div className="dropdown-divider"></div>
           
-          {links.map((link) => (
-            <Link 
-              key={link.path} 
-              className="dropdown-item" 
-              to={link.path}
-            >
-              <i className={`fas ${link.icon} fa-sm fa-fw mr-2 text-gray-400`}></i>
-              {link.label}
-            </Link>
-          ))}
+          {renderedLinks}
           
           <div className="dropdown-divider"></div>
           <button
-            className="dropdown-item"
+            className="dropdown-item flex items-center px-4 py-2 hover:bg-red-50 text-red-600 hover:text-red-700 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-red-200"
             type="button"
             onClick={onLogout}
           >
-            <i className="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>
-            Logout
+            <i className="fas fa-sign-out-alt fa-sm fa-fw mr-3"></i>
+            <span className="text-sm font-medium">Logout</span>
           </button>
         </div>
       )}
@@ -116,4 +119,5 @@ const UserDropdown: FC<UserDropdownProps> = ({
   );
 };
 
-export default UserDropdown;
+// Memoize UserDropdown component for performance
+export default memo(UserDropdown);

@@ -35,11 +35,11 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
         // Redirect if not an admin
         if (!profile || profile.role !== 'admin') {
           console.log("Unauthorized access attempt to admin area");
-          navigate("/dashboard", { replace: true });
+          navigate("/?access_denied=true", { replace: true });
         }
       } catch (error) {
         console.error("Error checking admin role:", error);
-        navigate("/dashboard", { replace: true });
+        navigate("/?error=true", { replace: true });
       }
     };
 
@@ -115,46 +115,6 @@ const AdminLayout: FC<AdminLayoutProps> = ({ children }) => {
                 >
                   <i className="fas fa-search fa-fw"></i>
                 </a>
-              </li>
-
-              {/* Nav Item - Alerts */}
-              <li className="nav-item dropdown no-arrow mx-1">
-                <a
-                  className="nav-link dropdown-toggle"
-                  href="#"
-                  id="alertsDropdown"
-                  role="button"
-                  data-toggle="dropdown"
-                  aria-haspopup="true"
-                  aria-expanded="false"
-                >
-                  <i className="fas fa-bell fa-fw"></i>
-                  {/* Counter - Alerts */}
-                  <span className="badge badge-danger badge-counter">3+</span>
-                </a>
-                {/* Dropdown - Alerts */}
-                <div
-                  className="dropdown-list dropdown-menu dropdown-menu-right shadow animated--grow-in"
-                  aria-labelledby="alertsDropdown"
-                >
-                  <h6 className="dropdown-header">Alerts Center</h6>
-                  <a className="dropdown-item d-flex align-items-center" href="#">
-                    <div className="mr-3">
-                      <div className="icon-circle bg-danger">
-                        <i className="fas fa-file-alt text-white"></i>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="small text-gray-500">Today</div>
-                      <span className="font-weight-bold">
-                        A new monthly report is ready to download!
-                      </span>
-                    </div>
-                  </a>
-                  <a className="dropdown-item text-center small text-gray-500" href="#">
-                    Show All Alerts
-                  </a>
-                </div>
               </li>
 
               {/* Nav Item - User Information */}
